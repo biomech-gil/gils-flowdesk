@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tmux 웹 컨트롤러</title>
+<style>
+  :root {
+    --bg: #2e3440; --bg2: #3b4252; --bg3: #434c5e;
+    --fg: #d8dee9; --fg2: #e5e9f0;
+    --blue: #88c0d0; --green: #a3be8c; --red: #bf616a;
+    --yellow: #ebcb8b; --purple: #b48ead; --orange: #d08770;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    background: var(--bg); color: var(--fg);
+    min-height: 100vh; padding: 20px;
+  }
+  h1 { color: var(--blue); margin-bottom: 6px; font-size: 1.5em; }
+  .subtitle { color: var(--fg); opacity: 0.6; margin-bottom: 20px; font-size: 0.9em; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--bg2); border-radius: 10px; padding: 18px;
+    border: 1px solid var(--bg3);
+  }
+  .card h2 {
+    font-size: 1em; color: var(--blue); margin-bottom: 12px;
+    border-bottom: 1px solid var(--bg3); padding-bottom: 8px;
+  }
+
+  button {
+    background: var(--bg3); color: var(--fg); border: 1px solid var(--bg3);
+    padding: 8px 16px; border-radius: 6px; cursor: pointer;
+    font-size: 0.9em; transition: all 0.15s;
+  }
+  button:hover { background: var(--blue); color: var(--bg); }
+  button:active { transform: scale(0.96); }
+  button.danger:hover { background: var(--red); }
+  button.green:hover { background: var(--green); }
+
+  .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+
+  input, select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--bg3);
+    padding: 8px 12px; border-radius: 6px; font-size: 0.9em; width: 100%;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--blue); }
+
+  .form-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .form-row label { white-space: nowrap; font-size: 0.85em; color: var(--fg); opacity: 0.8; min-width: 60px; }
+
+  #status-panel {
+    background: var(--bg); border-radius: 8px; padding: 12px;
+    font-family: 'Consolas', 'D2Coding', monospace; font-size: 0.85em;
+    max-height: 300px; overflow-y: auto; line-height: 1.6;
+  }
+  .pane-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 8px; border-radius: 4px; margin-bottom: 4px;
+  }
+  .pane-item:hover { background: var(--bg3); }
+  .pane-badge {
+    background: var(--blue); color: var(--bg); padding: 2px 8px;
+    border-radius: 10px; font-size: 0.8em; font-weight: bold;
+  }
+  .window-badge {
+    background: var(--green); color: var(--bg); padding: 2px 8px;
+    border-radius: 10px; font-size: 0.8em; font-weight: bold;
+  }
+  .active-badge { background: var(--yellow); }
+
+  #log {
+    background: var(--bg); border-radius: 8px; padding: 12px;
+    font-family: 'Consolas', 'D2Coding', monospace; font-size: 0.8em;
+    max-height: 200px; overflow-y: auto; line-height: 1.5;
+  }
+  .log-ok { color: var(--green); }
+  .log-err { color: var(--red); }
+  .log-time { color: var(--fg); opacity: 0.4; }
+
+  .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .preset-btn {
+    display: flex; flex-direction: column; align-items: center; padding: 12px 8px;
+    background: var(--bg); border-radius: 8px; border: 2px solid var(--bg3);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .preset-btn:hover { border-color: var(--blue); background: var(--bg2); }
+  .preset-icon { font-size: 1.8em; margin-bottom: 4px; }
+  .preset-label { font-size: 0.75em; opacity: 0.8; }
+
+  .full-width { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<nav style="display:flex;gap:0;background:var(--bg2);border-bottom:1px solid var(--bg3);margin-bottom:16px">
+  <a href="/" style="color:var(--fg);text-decoration:none;padding:12px 24px;font-size:0.9em;border-bottom:2px solid transparent">캔버스</a>
+  <a href="/chat.html" style="color:var(--fg);text-decoration:none;padding:12px 24px;font-size:0.9em;border-bottom:2px solid transparent">채팅</a>
+  <a href="/index.html" style="color:var(--blue);text-decoration:none;padding:12px 24px;font-size:0.9em;border-bottom:2px solid var(--blue)">컨트롤러</a>
+</nav>
+
+<div style="display:flex;align-items:center;gap:16px;padding:0 20px">
+  <h1>tmux 웹 컨트롤러</h1>
+  <button onclick="resetSession()" style="background:var(--red);color:var(--fg2);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.85em">&#x21BB; 세션 리셋</button>
+</div>
+<p class="subtitle" style="padding:0 20px">브라우저에서 tmux 세션을 제어합니다 &mdash; WSL 서버 연동</p>
+<script>
+async function resetSession(){
+  if(!confirm('tmux 세션을 완전히 리셋합니다. 계속?'))return;
+  const r=await fetch(API+'/api/reset-session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  const d=await r.json();
+  if(d.ok){alert('리셋 완료! 페이지를 새로고침합니다.');location.reload();}
+  else alert('리셋 실패');
+}
+</script>
+
+<div class="grid">
+
+  <!-- 프리셋 레이아웃 -->
+  <div class="card">
+    <h2>프리셋 레이아웃</h2>
+    <div class="preset-grid">
+      <div class="preset-btn" onclick="applyPreset(1, 'even-horizontal')">
+        <div class="preset-icon">[ ]</div>
+        <div class="preset-label">1 패널</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset(2, 'even-horizontal')">
+        <div class="preset-icon">[ | ]</div>
+        <div class="preset-label">2 좌우</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset(2, 'even-vertical')">
+        <div class="preset-icon">[&mdash;]</div>
+        <div class="preset-label">2 상하</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset(3, 'main-horizontal')">
+        <div class="preset-icon">[T]</div>
+        <div class="preset-label">3 메인+하단</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset(3, 'main-vertical')">
+        <div class="preset-icon">[E]</div>
+        <div class="preset-label">3 메인+우측</div>
+      </div>
+      <div class="preset-btn" onclick="applyPreset(4, 'tiled')">
+        <div class="preset-icon">[+]</div>
+        <div class="preset-label">4 타일</div>
+      </div>
+    </div>
+    <div style="margin-top: 12px;">
+      <div class="form-row">
+        <label>커스텀</label>
+        <input type="number" id="custom-count" min="1" max="9" value="2" style="width:60px">
+        <select id="custom-layout" style="width:auto; flex:1">
+          <option value="tiled">타일</option>
+          <option value="even-horizontal">균등 좌우</option>
+          <option value="even-vertical">균등 상하</option>
+          <option value="main-horizontal">메인 + 하단</option>
+          <option value="main-vertical">메인 + 우측</option>
+        </select>
+        <button class="green" onclick="applyPreset(+document.getElementById('custom-count').value, document.getElementById('custom-layout').value)">적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 현재 상태 -->
+  <div class="card">
+    <h2>현재 상태 <button onclick="refreshStatus()" style="float:right;padding:4px 10px;font-size:0.8em">새로고침</button></h2>
+    <div id="status-panel">연결 중...</div>
+  </div>
+
+  <!-- 명령어 전송 -->
+  <div class="card">
+    <h2>명령어 전송</h2>
+    <div class="form-row">
+      <label>패널</label>
+      <select id="cmd-pane" style="width: 80px; flex: none">
+        <option value="all">ALL</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>명령</label>
+      <input type="text" id="cmd-input" placeholder="실행할 명령어 입력 (예: htop, ls -la)"
+             onkeydown="if(event.key==='Enter')sendCommand()">
+      <button class="green" onclick="sendCommand()">실행</button>
+    </div>
+    <div class="btn-row" style="margin-top: 8px;">
+      <button onclick="quickCmd('claude --dangerously-skip-permissions')" style="border-color:var(--orange);color:var(--orange);font-weight:bold">Claude Auto</button>
+      <button onclick="quickCmd('htop')">htop</button>
+      <button onclick="quickCmd('ls -la')">ls -la</button>
+      <button onclick="quickCmd('df -h')">df -h</button>
+      <button onclick="quickCmd('free -h')">free -h</button>
+      <button onclick="quickCmd('top')">top</button>
+    </div>
+  </div>
+
+  <!-- 수동 분할 & 제어 -->
+  <div class="card">
+    <h2>패널 제어</h2>
+    <div class="btn-row">
+      <button onclick="splitPane('h')">세로 분할 |</button>
+      <button onclick="splitPane('v')">가로 분할 &mdash;</button>
+    </div>
+    <h2 style="margin-top:12px">레이아웃 변경</h2>
+    <div class="btn-row">
+      <button onclick="setLayout('even-horizontal')">균등 좌우</button>
+      <button onclick="setLayout('even-vertical')">균등 상하</button>
+      <button onclick="setLayout('main-horizontal')">메인+하단</button>
+      <button onclick="setLayout('main-vertical')">메인+우측</button>
+      <button onclick="setLayout('tiled')">타일</button>
+    </div>
+    <h2 style="margin-top:12px">패널 종료</h2>
+    <div class="form-row">
+      <label>패널</label>
+      <select id="kill-pane" style="width:80px;flex:none">
+        <option value="0">0</option>
+      </select>
+      <button class="danger" onclick="killPane()">종료</button>
+    </div>
+  </div>
+
+  <!-- 윈도우 관리 -->
+  <div class="card">
+    <h2>윈도우 관리</h2>
+    <div class="form-row">
+      <label>이름</label>
+      <input type="text" id="new-window-name" placeholder="새 윈도우 이름 (선택)">
+      <button class="green" onclick="newWindow()">새 윈도우</button>
+    </div>
+    <div id="window-list" style="margin-top: 10px;"></div>
+  </div>
+
+  <!-- 로그 -->
+  <div class="card">
+    <h2>실행 로그 <button onclick="document.getElementById('log').innerHTML=''" style="float:right;padding:4px 10px;font-size:0.8em">지우기</button></h2>
+    <div id="log"></div>
+  </div>
+
+</div>
+
+<script>
+const API = `http://${location.hostname}:8888`;
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(API + path, opts);
+    const data = await res.json();
+    logMsg(path, data.ok);
+    if (data.ok) refreshStatus();
+    return data;
+  } catch (e) {
+    logMsg(path + ' - 서버 연결 실패', false);
+    return { ok: false, error: e.message };
+  }
+}
+
+function logMsg(msg, ok) {
+  const el = document.getElementById('log');
+  const time = new Date().toLocaleTimeString('ko-KR');
+  const cls = ok ? 'log-ok' : 'log-err';
+  const icon = ok ? 'OK' : 'ERR';
+  el.innerHTML = `<div><span class="log-time">${time}</span> <span class="${cls}">[${icon}]</span> ${msg}</div>` + el.innerHTML;
+}
+
+async function refreshStatus() {
+  const data = await api('GET', '/api/status');
+  const panel = document.getElementById('status-panel');
+  if (!data.ok && !data.sessions) {
+    panel.innerHTML = '<div style="color:var(--red)">서버에 연결할 수 없습니다</div>';
+    return;
+  }
+
+  let html = '';
+
+  // 윈도우
+  if (data.windows) {
+    html += '<div style="margin-bottom:8px;color:var(--yellow);font-weight:bold">윈도우</div>';
+    data.windows.forEach(w => {
+      const badge = w.active ? 'window-badge active-badge' : 'window-badge';
+      html += `<div class="pane-item">
+        <span>${w.active ? '>' : ' '} ${w.index}: ${w.name} (패널 ${w.panes}개)</span>
+        <span class="${badge}">${w.active ? '활성' : 'win'} ${w.index}</span>
+      </div>`;
+    });
+  }
+
+  // 패널
+  if (data.panes) {
+    html += '<div style="margin:8px 0;color:var(--blue);font-weight:bold">패널 (현재 윈도우)</div>';
+    data.panes.forEach(p => {
+      html += `<div class="pane-item">
+        <span>#${p.index} [${p.size}] ${p.command}</span>
+        <span class="pane-badge">${p.index}</span>
+      </div>`;
+    });
+    updatePaneSelects(data.panes);
+  }
+
+  // 윈도우 목록
+  if (data.windows) {
+    const wl = document.getElementById('window-list');
+    wl.innerHTML = data.windows.map(w =>
+      `<div class="pane-item">
+        <span>${w.active ? '>' : ' '} ${w.index}: ${w.name}</span>
+        <button onclick="selectWindow(${w.index})" style="padding:3px 10px;font-size:0.8em">선택</button>
+      </div>`
+    ).join('');
+  }
+
+  panel.innerHTML = html || '세션 정보 없음';
+}
+
+function updatePaneSelects(panes) {
+  // cmd-pane: ALL 옵션 + 개별 패널
+  const cmdSel = document.getElementById('cmd-pane');
+  const cmdCur = cmdSel.value;
+  cmdSel.innerHTML = '<option value="all">ALL (전체)</option>' +
+    panes.map(p => `<option value="${p.index}">${p.index}</option>`).join('');
+  if ([...cmdSel.options].some(o => o.value === cmdCur)) cmdSel.value = cmdCur;
+
+  // kill-pane: 개별 패널만
+  const killSel = document.getElementById('kill-pane');
+  const killCur = killSel.value;
+  killSel.innerHTML = panes.map(p =>
+    `<option value="${p.index}">${p.index}</option>`
+  ).join('');
+  if ([...killSel.options].some(o => o.value === killCur)) killSel.value = killCur;
+}
+
+function splitPane(dir) { api('POST', '/api/split', { direction: dir }); }
+function setLayout(l) { api('POST', '/api/layout', { layout: l }); }
+function killPane() { api('POST', '/api/kill-pane', { pane: document.getElementById('kill-pane').value }); }
+function newWindow() {
+  const name = document.getElementById('new-window-name').value;
+  api('POST', '/api/new-window', { name });
+  document.getElementById('new-window-name').value = '';
+}
+function selectWindow(idx) { api('POST', '/api/select-window', { index: idx }); }
+
+function sendCommand() {
+  const input = document.getElementById('cmd-input');
+  const pane = document.getElementById('cmd-pane').value;
+  if (input.value.trim()) {
+    api('POST', '/api/send-command', { pane, command: input.value });
+    input.value = '';
+  }
+  input.focus();
+}
+function quickCmd(cmd) {
+  const pane = document.getElementById('cmd-pane').value;
+  api('POST', '/api/send-command', { pane, command: cmd });
+}
+
+function applyPreset(count, layout) {
+  api('POST', '/api/preset', { count, layout });
+}
+
+// 자동 새로고침
+refreshStatus();
+setInterval(refreshStatus, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tmux 채팅</title>
+<style>
+:root{--bg-0:#0d0d14;--bg-1:#13131f;--bg-2:#1a1a2e;--bg-3:#222236;--bg-4:#2a2a3e;--border:#333355;--text:#e0e0e0;--text-dim:#888899;--text-muted:#666677;--accent:#4CAF50;--blue:#2196F3;--red:#F44336;--user-bg:#1e3a5f;--radius:8px;--mono:'Consolas','D2Coding',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.nav{display:flex;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0}
+.nav a{color:var(--text-dim);text-decoration:none;padding:10px 20px;font-size:.85em;border-bottom:2px solid transparent;transition:.15s}
+.nav a:hover{color:var(--text);background:var(--bg-3)}.nav a.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tb{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0}
+.tb input{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:.82em}
+.tb button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.82em}.tb button:hover{background:var(--bg-4)}
+.tb .lbl{font-size:.75em;color:var(--text-muted)}.tb .sep{width:1px;height:16px;background:var(--border)}
+.chat-area{flex:1;display:flex;overflow:hidden}
+.node-list{width:200px;border-right:1px solid var(--border);background:var(--bg-1);overflow-y:auto;flex-shrink:0}
+.nl-item{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:.1s;font-size:.82em}
+.nl-item:hover{background:var(--bg-3)}.nl-item.active{background:var(--bg-3);border-left:3px solid var(--accent)}
+.nl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.nl-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nl-badge{font-size:.65em;padding:1px 5px;border-radius:8px;background:var(--bg-4);color:var(--text-muted)}
+.chat-panel{flex:1;display:flex;flex-direction:column;background:var(--bg-0)}
+.chat-header{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.85em;font-weight:600;display:flex;align-items:center;gap:8px}
+.chat-messages{flex:1;overflow-y:auto;padding:14px}
+.msg{margin-bottom:12px;max-width:85%}
+.msg.user{margin-left:auto}.msg.assistant{margin-right:auto}
+.msg-label{font-size:.65em;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase}
+.msg.user .msg-label{text-align:right}
+.msg-bubble{padding:10px 14px;border-radius:var(--radius);font-size:.85em;line-height:1.5;white-space:pre-wrap;word-break:break-word;font-family:var(--mono)}
+.msg.user .msg-bubble{background:var(--user-bg);border:1px solid rgba(33,150,243,.2);border-radius:var(--radius) var(--radius) 4px var(--radius)}
+.msg.assistant .msg-bubble{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius) var(--radius) var(--radius) 4px}
+.msg-time{font-size:.65em;color:var(--text-muted);margin-top:2px}
+.msg.user .msg-time{text-align:right}
+.msg-typing{color:var(--blue);font-style:italic;font-size:.82em;padding:8px 0;animation:tp 1.5s infinite}
+@keyframes tp{0%,100%{opacity:1}50%{opacity:.4}}
+.msg-sep{text-align:center;color:var(--text-muted);font-size:.72em;padding:8px 0;border-top:1px dashed var(--border);margin:8px 0}
+.chat-input-bar{display:flex;gap:8px;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg-1)}
+.chat-input-bar textarea{flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:var(--radius);font-size:.85em;font-family:var(--mono);resize:none;min-height:40px;max-height:120px;outline:none;line-height:1.4}
+.chat-input-bar textarea:focus{border-color:var(--accent)}
+.chat-input-bar button{background:var(--accent);color:#000;border:none;padding:8px 18px;border-radius:var(--radius);cursor:pointer;font-weight:600;font-size:.85em;align-self:flex-end}
+.chat-input-bar button:hover{background:#66BB6A}.chat-input-bar button:disabled{opacity:.4;cursor:not-allowed}
+.empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.85em}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg-0)}::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:2px}
+</style>
+</head>
+<body>
+<nav class="nav"><a href="/">컨트롤러</a><a href="/chat.html" class="active">채팅</a><a href="/canvas.html">캔버스</a></nav>
+<div class="tb"><span class="lbl">CWD:</span><input type="text" id="chat-cwd" placeholder="작업 디렉토리" style="width:220px"><div class="sep"></div><button onclick="clearChat()">채팅 초기화</button></div>
+<div class="chat-area">
+  <div class="node-list" id="node-list"></div>
+  <div class="chat-panel" id="chat-panel"><div class="empty">← 노드 선택</div></div>
+</div>
+<script>
+const API=`http://${location.hostname}:8888`,LS_KEY='tmux_canvas_state';
+async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
+function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+let nodesList=[],activeChatId=null,activeNode=null,polling=null;
+const TYPES={agent:{icon:'🤖',color:'#3B82F6'},memo:{icon:'📝',color:'#F59E0B'},input:{icon:'📎',color:'#06B6D4'},trigger:{icon:'⚡',color:'#EF4444'}};
+
+function loadNodes(){try{const s=JSON.parse(localStorage.getItem(LS_KEY));return(s&&s.nodes)||[]}catch(e){return[]}}
+
+function renderNodeList(){
+  nodesList=loadNodes();
+  const el=document.getElementById('node-list');el.innerHTML='';
+  nodesList.forEach(n=>{
+    const t=TYPES[n.type]||TYPES.agent;
+    const d=document.createElement('div');d.className='nl-item'+(activeChatId===n.id?' active':'');
+    d.innerHTML=`<div class="nl-dot" style="background:${t.color}"></div><span class="nl-name">${t.icon} ${n.name}</span><span class="nl-badge">${n.history?n.history.length:0}</span>`;
+    d.onclick=()=>openChat(n);el.appendChild(d);
+  });
+}
+
+function openChat(node){
+  activeChatId=node.id;activeNode=node;renderNodeList();
+  const t=TYPES[node.type]||TYPES.agent;
+  const panel=document.getElementById('chat-panel');
+  panel.innerHTML=`
+    <div class="chat-header"><span style="font-size:1.2em">${t.icon}</span>${node.name}<span style="flex:1"></span><span style="font-size:.7em;color:var(--text-muted)">${node.type}</span></div>
+    <div class="chat-messages" id="chat-msgs"></div>
+    <div class="chat-input-bar">
+      <textarea id="chat-input" placeholder="${node.name}에게 메시지..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+      <button id="chat-send" onclick="sendChat()">전송</button>
+    </div>`;
+  renderHistory(node);
+}
+
+function renderHistory(node){
+  const el=document.getElementById('chat-msgs');if(!el)return;el.innerHTML='';
+  // 1) 캔버스에서의 워크플로우 히스토리 표시
+  if(node.history&&node.history.length>0){
+    const sep=document.createElement('div');sep.className='msg-sep';sep.textContent='─── 캔버스 워크플로우 기록 ───';el.appendChild(sep);
+    node.history.forEach(h=>{
+      if(h.input){const d=document.createElement('div');d.className='msg user';d.innerHTML=`<div class="msg-label">INPUT (워크플로우)</div><div class="msg-bubble">${escH(h.input)}</div><div class="msg-time">${h.timestamp?new Date(h.timestamp).toLocaleString('ko-KR'):''}</div>`;el.appendChild(d)}
+      if(h.output){const d=document.createElement('div');d.className='msg assistant';d.innerHTML=`<div class="msg-label">OUTPUT</div><div class="msg-bubble">${escH(h.output)}</div>`;el.appendChild(d)}
+    });
+  }
+  // 2) 채팅 탭 자체의 대화 히스토리 (서버 저장)
+  loadChatHistory(node.id);
+}
+
+async function loadChatHistory(chatId){
+  const r=await api('GET',`/api/chat-history?chatId=${chatId}`);
+  if(!r.ok||!r.history||r.history.length===0)return;
+  const el=document.getElementById('chat-msgs');if(!el)return;
+  const sep=document.createElement('div');sep.className='msg-sep';sep.textContent='─── 채팅 대화 ───';el.appendChild(sep);
+  r.history.forEach(msg=>{
+    const d=document.createElement('div');d.className='msg '+msg.role;
+    const time=msg.ts?new Date(msg.ts).toLocaleTimeString('ko-KR'):'';
+    d.innerHTML=`<div class="msg-label">${msg.role==='user'?'YOU':'CLAUDE'}</div><div class="msg-bubble">${escH(msg.content)}</div><div class="msg-time">${time}</div>`;
+    el.appendChild(d);
+  });
+  el.scrollTop=el.scrollHeight;
+}
+
+async function sendChat(){
+  if(!activeChatId)return;
+  const input=document.getElementById('chat-input'),btn=document.getElementById('chat-send');
+  const msg=input.value.trim();if(!msg)return;input.value='';btn.disabled=true;
+  const msgs=document.getElementById('chat-msgs');
+  // 유저 메시지
+  const ud=document.createElement('div');ud.className='msg user';
+  ud.innerHTML=`<div class="msg-label">YOU</div><div class="msg-bubble">${escH(msg)}</div><div class="msg-time">${new Date().toLocaleTimeString('ko-KR')}</div>`;msgs.appendChild(ud);
+  // 타이핑
+  const td=document.createElement('div');td.className='msg-typing';td.id='typing';td.textContent='응답 생성 중...';msgs.appendChild(td);msgs.scrollTop=msgs.scrollHeight;
+  // 캔버스 히스토리 포함하여 전송
+  const cwd=document.getElementById('chat-cwd').value.trim()||undefined;
+  const canvasHist=(activeNode&&activeNode.history)?activeNode.history:[];
+  await api('POST','/api/chat',{chatId:activeChatId,message:msg,cwd,canvasHistory:canvasHist});
+  if(polling)clearInterval(polling);
+  polling=setInterval(async()=>{
+    const ck=await api('GET',`/api/chat-check?chatId=${activeChatId}`);
+    if(ck.ok&&ck.done){clearInterval(polling);polling=null;
+      const ti=document.getElementById('typing');if(ti)ti.remove();
+      const rd=document.createElement('div');rd.className='msg assistant';
+      rd.innerHTML=`<div class="msg-label">CLAUDE</div><div class="msg-bubble">${escH(ck.reply)}</div><div class="msg-time">${new Date().toLocaleTimeString('ko-KR')}</div>`;
+      msgs.appendChild(rd);msgs.scrollTop=msgs.scrollHeight;btn.disabled=false}
+  },2000);
+}
+
+function clearChat(){if(!activeChatId||!confirm('채팅 초기화?'))return;api('POST','/api/chat',{chatId:activeChatId+'_clear',message:'clear'});if(activeNode)openChat(activeNode)}
+
+renderNodeList();
+// 주기적으로 노드 목록 갱신 (캔버스에서 추가/변경 감지)
+setInterval(()=>{const fresh=loadNodes();if(JSON.stringify(fresh.map(n=>n.id))!==JSON.stringify(nodesList.map(n=>n.id))){renderNodeList()}},3000);
+</script>
+</body>
+</html>
