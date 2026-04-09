@@ -583,7 +583,7 @@ body{background:#1a1a2e;color:#e0e0e0;font-family:'Segoe UI',sans-serif;overflow
 .toolbar button:hover{background:#4CAF50;color:#000}
 .toolbar span{color:#888;font-size:13px}
 .content-wrap{flex:1;overflow-y:auto;padding:0}
-.content{max-width:900px;margin:0 auto;padding:30px 40px;line-height:1.8;transition:font-size .15s}
+.content{width:100%;padding:30px 40px;line-height:1.8;transition:font-size .15s}
 .content h1,.content h2,.content h3{color:#88c0d0;margin:1em 0 .5em;border-bottom:1px solid #333;padding-bottom:.3em}
 .content h1{font-size:1.6em}.content h2{font-size:1.3em}.content h3{font-size:1.1em}
 .content p{margin:.6em 0}
@@ -723,6 +723,7 @@ function openModal(type){if(!selectedNode)return;modalType=type;modalIsRendered=
   }
   document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
+document.getElementById('modal').addEventListener('wheel',function(e){if(e.ctrlKey){e.preventDefault();modalTsz(e.deltaY>0?-2:2)}},{passive:false});
 window.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();document.getElementById('ctx').classList.remove('show')}
   if(e.key==='Delete'&&selectedNode&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName))delNode(selectedNode.id);
