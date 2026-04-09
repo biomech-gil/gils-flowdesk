@@ -190,7 +190,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       <div class="sb-row"><button class="r" onclick="engine.execSelected()">&#9654; 실행</button><button class="s" onclick="engine.stopNode(selectedNode)">&#9632;</button></div>
       <div class="sb-sec"><label>이름</label><input type="text" id="sb-name" onchange="sbName(this.value)"></div>
       <div class="sb-sec" id="sb-pane-sec"><label>패널</label><select id="sb-pane" onchange="sbPane(this.value)"></select></div>
-      <div class="sb-sec" id="sb-mode-sec"><label>모드</label><div class="tsz"><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;color:var(--text)"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)"> 대화전용 (도구차단)</label></div></div>
+      <div class="sb-sec" id="sb-mode-sec"><label>모드</label><div class="tsz"><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;color:var(--text)"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)"> 대화전용 (이미지 인식 가능)</label></div></div>
+      <div class="sb-sec" id="sb-sysprompt-sec"><label>시스템 프롬프트 <button onclick="openSysPrompt()" style="flex:1;min-width:60px">편집</button></label><div style="font-size:10px;color:var(--text-muted);max-height:30px;overflow:hidden" id="sb-sysprompt-preview">미설정</div></div>
+      <div class="sb-sec" id="sb-image-sec"><label>이미지 첨부 <button onclick="addImage()">+ 추가</button></label><div id="sb-images" style="font-size:10px;color:var(--text-dim)">없음</div></div>
       <div class="sb-sec" id="sb-split-sec"><label>분할 생성</label><div class="tsz"><input type="number" id="sb-split-n" value="3" min="2" max="10" style="width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:2px 4px;border-radius:3px;font-size:11px"><button onclick="splitNode()">분할</button></div></div>
       <div class="sb-sec"><label>Input <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openHtmlTab('input')">HTML</button><button onclick="openModal('input')" style="flex:1;min-width:80px">확대 보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)"></textarea></div>
       <div class="sb-sec"><label>Output <span><button onclick="copyText('output')">📋</button><button onclick="openHtmlTab('output')">HTML</button><button onclick="openModal('output')" style="flex:1;min-width:80px">확대 보기</button></span></label><div class="ov" id="sb-output">대기 중</div></div>
@@ -361,6 +363,7 @@ function mkNode(opts={}){
   const n={id:opts.id||('n'+Date.now()+'_'+ncnt),name:opts.name||(ti.label+ncnt),type,
     x:opts.x??100,y:opts.y??100,w:opts.w||280,h:opts.h||240,
     paneIndex:opts.paneIndex||null,collapsed:opts.collapsed||false,textSize:opts.textSize||1,chatOnly:opts.chatOnly??true,
+    systemPrompt:opts.systemPrompt||'',images:opts.images||[],
     inputTemplate:opts.inputTemplate||'',inputResolved:'',outputCapture:opts.outputCapture||'',
     status:opts.status||'idle',history:opts.history||[],el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
@@ -512,6 +515,35 @@ function collapseAll(v){nodes.forEach(n=>{n.collapsed=v;n.el.classList.toggle('c
 function dupNode(id){const o=nodes.find(n=>n.id===id);if(!o)return;mkNode({type:o.type,x:o.x+40,y:o.y+40,inputTemplate:o.inputTemplate,w:o.w,h:o.h});autoSave()}
 function ndTszSel(d){if(!selectedNode)return;const n=selectedNode;n.textSize=Math.max(.5,Math.min(2.5,n.textSize+d));const ta=n.el.querySelector('.nd-in textarea'),oc=n.el.querySelector('.out-c');if(ta)ta.style.fontSize=n.textSize+'em';if(oc)oc.style.fontSize=n.textSize+'em'}
 
+// ═══ SYSTEM PROMPT ═══
+function openSysPrompt(){
+  if(!selectedNode)return;
+  const mb=document.getElementById('mo-body');
+  document.getElementById('mo-title').textContent=`시스템 프롬프트 — ${selectedNode.name}`;
+  mb.innerHTML=`<textarea style="font-size:${modalFontSize}px">${selectedNode.systemPrompt||''}</textarea>`;
+  mb.querySelector('textarea').addEventListener('input',function(){
+    selectedNode.systemPrompt=this.value;
+    document.getElementById('sb-sysprompt-preview').textContent=this.value?this.value.substring(0,60)+'...':'미설정';
+    autoSave();
+  });
+  document.getElementById('modal').classList.add('show');
+}
+
+// ═══ IMAGE ATTACH ═══
+function addImage(){
+  if(!selectedNode)return;
+  const path=prompt('이미지 파일 경로 (WSL 경로):\n예: /home/user/image.png');
+  if(!path)return;
+  if(!selectedNode.images)selectedNode.images=[];
+  selectedNode.images.push(path);
+  openSb(selectedNode);autoSave();
+}
+function removeImage(idx){
+  if(!selectedNode||!selectedNode.images)return;
+  selectedNode.images.splice(idx,1);
+  openSb(selectedNode);autoSave();
+}
+
 // ═══ SPLIT NODE ═══
 async function splitNode(){
   if(!selectedNode||selectedNode.type!=='agent')return;
@@ -650,7 +682,14 @@ function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';documen
   document.getElementById('sb-pane-sec').style.display=isAgent?'':'none';
   document.getElementById('sb-mode-sec').style.display=isAgent?'':'none';
   document.getElementById('sb-split-sec').style.display=isAgent?'':'none';
-  if(isAgent)document.getElementById('sb-chatonly').checked=n.chatOnly;const ps=document.getElementById('sb-pane');ps.innerHTML='<option value="">자동</option>'+paneList.map(p=>`<option value="${p.index}" ${n.paneIndex==p.index?'selected':''}>${p.index}</option>`).join('');const hs=document.getElementById('sb-hist');hs.innerHTML='<option value="">없음</option>';(n.history||[]).forEach((h,i)=>hs.innerHTML+=`<option value="${i}">${new Date(h.timestamp).toLocaleString('ko-KR')}</option>`);
+  document.getElementById('sb-sysprompt-sec').style.display=isAgent?'':'none';
+  document.getElementById('sb-image-sec').style.display=isAgent?'':'none';
+  if(isAgent){
+    document.getElementById('sb-chatonly').checked=n.chatOnly;
+    document.getElementById('sb-sysprompt-preview').textContent=n.systemPrompt?n.systemPrompt.substring(0,60)+'...':'미설정';
+    document.getElementById('sb-images').innerHTML=n.images&&n.images.length?n.images.map((img,i)=>`<div style="display:flex;align-items:center;gap:4px;margin:2px 0"><span>${img}</span><button onclick="removeImage(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px">✕</button></div>`).join(''):'없음';
+  }
+  const ps=document.getElementById('sb-pane');ps.innerHTML='<option value="">자동</option>'+paneList.map(p=>`<option value="${p.index}" ${n.paneIndex==p.index?'selected':''}>${p.index}</option>`).join('');const hs=document.getElementById('sb-hist');hs.innerHTML='<option value="">없음</option>';(n.history||[]).forEach((h,i)=>hs.innerHTML+=`<option value="${i}">${new Date(h.timestamp).toLocaleString('ko-KR')}</option>`);
   loadExecHistory();loadConvList();setTimeout(drawConns,30)}
 function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout(drawConns,10)}
 function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('.nd-name').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
@@ -768,7 +807,7 @@ const engine={
     this.setSt(nd,'running');
     const cwd=document.getElementById('wf-cwd').value.trim()||undefined;
     const chatOnly=nd.chatOnly!==undefined?nd.chatOnly:true;
-    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input,inputRaw:nd.inputTemplate,cwd,chatOnly,projectId:workflowId||''});
+    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input,inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:nd.images||[],projectId:workflowId||''});
     if(!exec.ok){this.setSt(nd,'error');return}
     let pc=0;const pid=setInterval(async()=>{if(!this.running){clearInterval(pid);return}pc++;if(pc%5===0)console.log(`[${nd.name}] 대기 ${pc*3}초`);
       const ck=await api('GET',`/api/node-check?nodeId=${nd.id}`);
@@ -783,7 +822,7 @@ const engine={
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,
-  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,status:n.status==='running'?'idle':n.status,history:n.history})),
+  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,status:n.status==='running'?'idle':n.status,history:n.history})),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid}))}}
 let _saveTimer=null;
 function autoSave(){

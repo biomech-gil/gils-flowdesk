@@ -135,10 +135,44 @@ def get_session_info():
 # ═══════════════════════════════════════
 # Claude CLI
 # ═══════════════════════════════════════
-def build_claude_cmd(prompt, chat_only=False):
-    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
+def build_claude_cmd(prompt, opts=None):
+    """claude CLI 명령 구성 — 고급 옵션 지원"""
+    opts = opts or {}
+    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--effort", "max", "--bare"]
+
+    # 대화전용: Read만 허용 (이미지 인식용), 나머지 도구 차단
+    chat_only = opts.get("chatOnly", True)
     if chat_only:
-        cmd += ["--disallowedTools", "Bash,Read,Write,Edit,Glob,Grep,Agent,NotebookEdit"]
+        cmd += ["--disallowedTools", "Bash,Write,Edit,Glob,Grep,Agent,NotebookEdit,WebFetch,WebSearch"]
+        # Read는 허용 → 이미지 파일 인식 가능
+
+    # 시스템 프롬프트
+    sys_prompt = opts.get("systemPrompt", "")
+    if sys_prompt:
+        cmd += ["--append-system-prompt", sys_prompt]
+
+    # 폴백 모델
+    cmd += ["--fallback-model", "sonnet"]
+
+    # JSON 스키마 (구조화 출력)
+    json_schema = opts.get("jsonSchema", "")
+    if json_schema:
+        cmd += ["--output-format", "json", "--json-schema", json_schema]
+
+    # 최대 턴 수 (무한루프 방지)
+    max_turns = opts.get("maxTurns", 0)
+    if max_turns > 0:
+        cmd += ["--max-turns", str(max_turns)]
+
+    # 이미지 파일 경로가 있으면 프롬프트에 포함 (Read 도구로 읽기 유도)
+    images = opts.get("images", [])
+    if images:
+        img_instructions = "\n\n[첨부 이미지 파일 — Read 도구로 읽어서 분석하세요]:\n"
+        img_instructions += "\n".join(f"- {img}" for img in images)
+        # 프롬프트 끝에 이미지 경로 추가
+        idx = cmd.index(prompt)
+        cmd[idx] = prompt + img_instructions
+
     return cmd
 
 def get_claude_env():
@@ -238,7 +272,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try:
                 env = get_claude_env()
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd = build_claude_cmd(prompt, chat_only)
+                cmd = build_claude_cmd(prompt, {
+                    "chatOnly": chat_only,
+                    "systemPrompt": body.get("systemPrompt", ""),
+                    "jsonSchema": body.get("jsonSchema", ""),
+                    "maxTurns": body.get("maxTurns", 0),
+                    "images": body.get("images", []),
+                })
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
                 output = result.stdout.strip()
                 log(f"EXEC [{exec_id}] done! {len(output)}자")
@@ -307,7 +347,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try:
                 env = get_claude_env()
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd = build_claude_cmd(full_prompt, chat_only)
+                cmd = build_claude_cmd(full_prompt, {
+                    "chatOnly": chat_only,
+                    "systemPrompt": body.get("systemPrompt", ""),
+                    "images": body.get("images", []),
+                })
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
                 reply = result.stdout.strip()
                 log(f"CHAT [{conv_id}] reply={len(reply)}자")
