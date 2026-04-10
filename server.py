@@ -331,8 +331,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     "maxTurns": body.get("maxTurns", 0),
                     "images": body.get("images", []),
                 })
-                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
+                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=600, env=env, cwd=run_cwd)
                 output = result.stdout.strip()
+                if result.returncode != 0:
+                    log(f"EXEC [{exec_id}] returncode={result.returncode} stderr={result.stderr[:200]}")
                 log(f"EXEC [{exec_id}] done! {len(output)}자")
                 with open(out_file, "w", encoding="utf-8") as f: f.write(output)
                 with open(done_file, "w") as f: f.write("done")
@@ -404,7 +406,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     "systemPrompt": body.get("systemPrompt", ""),
                     "images": body.get("images", []),
                 })
-                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
+                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=600, env=env, cwd=run_cwd)
                 reply = result.stdout.strip()
                 log(f"CHAT [{conv_id}] reply={len(reply)}자")
                 db_exec("INSERT INTO messages (conv_id, role, content, ts) VALUES (?,?,?,?)",

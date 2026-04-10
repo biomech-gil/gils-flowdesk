@@ -1747,8 +1747,8 @@ const engine={
       if(!this.running){clearInterval(pid);return}
       pc++;
       if(pc%5===0)console.log(`[${nd.name}] 대기 ${pc*3}초`);
-      // 90초 타임아웃
-      if(pc>30){clearInterval(pid);this.polls.delete(nd.id);console.log(`[${nd.name}] 타임아웃`);return this._retryOrFail(nd,retryCount)}
+      // 10분 타임아웃
+      if(pc>200){clearInterval(pid);this.polls.delete(nd.id);console.log(`[${nd.name}] 타임아웃`);return this._retryOrFail(nd,retryCount)}
 
       const ck=await api('GET',`/api/node-check?nodeId=${nd.id}`);
       if(ck.ok&&ck.done){
