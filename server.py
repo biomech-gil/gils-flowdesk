@@ -166,9 +166,9 @@ def get_session_info():
 # Claude CLI
 # ═══════════════════════════════════════
 def build_claude_cmd(prompt, opts=None):
-    """claude CLI 명령 구성 — 고급 옵션 지원"""
+    """claude CLI 명령 구성 — 고급 옵션 지원. prompt는 stdin으로 전달."""
     opts = opts or {}
-    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--effort", "max"]
+    cmd = ["claude", "-p", "--dangerously-skip-permissions", "--effort", "max"]
 
     # 대화전용: Read만 허용 (이미지 인식용), 나머지 도구 차단
     chat_only = opts.get("chatOnly", True)
@@ -194,16 +194,15 @@ def build_claude_cmd(prompt, opts=None):
     if max_turns > 0:
         cmd += ["--max-turns", str(max_turns)]
 
-    # 이미지 파일 경로가 있으면 프롬프트에 포함 (Read 도구로 읽기 유도)
+    # 이미지 파일 경로가 있으면 프롬프트에 추가 텍스트 준비
     images = opts.get("images", [])
+    final_prompt = prompt
     if images:
         img_instructions = "\n\n[첨부 이미지 파일 — Read 도구로 읽어서 분석하세요]:\n"
         img_instructions += "\n".join(f"- {img}" for img in images)
-        # 프롬프트 끝에 이미지 경로 추가
-        idx = cmd.index(prompt)
-        cmd[idx] = prompt + img_instructions
+        final_prompt = prompt + img_instructions
 
-    return cmd
+    return cmd, final_prompt
 
 def get_claude_env():
     # nvm 또는 시스템 경로 자동 감지
@@ -325,14 +324,14 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try:
                 env = get_claude_env()
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd = build_claude_cmd(prompt, {
+                cmd, final_prompt = build_claude_cmd(prompt, {
                     "chatOnly": chat_only,
                     "systemPrompt": body.get("systemPrompt", ""),
                     "jsonSchema": body.get("jsonSchema", ""),
                     "maxTurns": body.get("maxTurns", 0),
                     "images": body.get("images", []),
                 })
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
+                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
                 output = result.stdout.strip()
                 log(f"EXEC [{exec_id}] done! {len(output)}자")
                 with open(out_file, "w", encoding="utf-8") as f: f.write(output)
@@ -400,12 +399,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try:
                 env = get_claude_env()
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd = build_claude_cmd(full_prompt, {
+                cmd, final_prompt = build_claude_cmd(full_prompt, {
                     "chatOnly": chat_only,
                     "systemPrompt": body.get("systemPrompt", ""),
                     "images": body.get("images", []),
                 })
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
+                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
                 reply = result.stdout.strip()
                 log(f"CHAT [{conv_id}] reply={len(reply)}자")
                 db_exec("INSERT INTO messages (conv_id, role, content, ts) VALUES (?,?,?,?)",
