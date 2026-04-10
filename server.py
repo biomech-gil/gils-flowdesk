@@ -33,7 +33,32 @@ def init_db():
         name TEXT NOT NULL,
         data TEXT NOT NULL,
         created TEXT NOT NULL,
-        modified TEXT NOT NULL
+        modified TEXT NOT NULL,
+        favorite INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS temps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        data TEXT NOT NULL,
+        date TEXT NOT NULL,
+        created TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memo_folders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '📁',
+        sort_order INTEGER DEFAULT 0,
+        created TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        content TEXT DEFAULT '',
+        folder_id INTEGER,
+        is_temp INTEGER DEFAULT 1,
+        created TEXT NOT NULL,
+        modified TEXT NOT NULL,
+        FOREIGN KEY (folder_id) REFERENCES memo_folders(id)
     );
     CREATE TABLE IF NOT EXISTS executions (
         id TEXT PRIMARY KEY,
@@ -70,6 +95,11 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_conv_node ON conversations(node_id);
     CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conv_id);
     """)
+    # 기존 DB에 favorite 컬럼이 없으면 추가 (마이그레이션)
+    try:
+        db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # 이미 있음
     db.commit()
     db.close()
     log("DB initialized")
@@ -135,10 +165,44 @@ def get_session_info():
 # ═══════════════════════════════════════
 # Claude CLI
 # ═══════════════════════════════════════
-def build_claude_cmd(prompt, chat_only=False):
-    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
+def build_claude_cmd(prompt, opts=None):
+    """claude CLI 명령 구성 — 고급 옵션 지원"""
+    opts = opts or {}
+    cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions", "--effort", "max"]
+
+    # 대화전용: Read만 허용 (이미지 인식용), 나머지 도구 차단
+    chat_only = opts.get("chatOnly", True)
     if chat_only:
-        cmd += ["--disallowedTools", "Bash,Read,Write,Edit,Glob,Grep,Agent,NotebookEdit"]
+        cmd += ["--disallowedTools", "Bash,Write,Edit,Glob,Grep,Agent,NotebookEdit,WebFetch,WebSearch"]
+        # Read는 허용 → 이미지 파일 인식 가능
+
+    # 시스템 프롬프트
+    sys_prompt = opts.get("systemPrompt", "")
+    if sys_prompt:
+        cmd += ["--append-system-prompt", sys_prompt]
+
+    # 폴백 모델
+    cmd += ["--fallback-model", "sonnet"]
+
+    # JSON 스키마 (구조화 출력)
+    json_schema = opts.get("jsonSchema", "")
+    if json_schema:
+        cmd += ["--output-format", "json", "--json-schema", json_schema]
+
+    # 최대 턴 수 (무한루프 방지)
+    max_turns = opts.get("maxTurns", 0)
+    if max_turns > 0:
+        cmd += ["--max-turns", str(max_turns)]
+
+    # 이미지 파일 경로가 있으면 프롬프트에 포함 (Read 도구로 읽기 유도)
+    images = opts.get("images", [])
+    if images:
+        img_instructions = "\n\n[첨부 이미지 파일 — Read 도구로 읽어서 분석하세요]:\n"
+        img_instructions += "\n".join(f"- {img}" for img in images)
+        # 프롬프트 끝에 이미지 경로 추가
+        idx = cmd.index(prompt)
+        cmd[idx] = prompt + img_instructions
+
     return cmd
 
 def get_claude_env():
@@ -162,7 +226,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/chat-check": self._json(self._chat_check(params))
         elif p == "/api/chat-history": self._json(self._chat_history(params))
         elif p == "/api/project/list": self._json(self._project_list())
+        elif p == "/api/project/list-meta": self._json(self._project_list_meta())
         elif p == "/api/project/load": self._json(self._project_load(params))
+        elif p == "/api/temp/list": self._json(self._temp_list())
+        elif p == "/api/temp/load": self._json(self._temp_load(params))
+        elif p == "/api/memo/list": self._json(self._memo_list(params))
+        elif p == "/api/memo/get": self._json(self._memo_get(params))
+        elif p == "/api/folder/list": self._json(self._folder_list())
         elif p == "/api/exec/list": self._json(self._exec_list(params))
         elif p == "/api/conv/list": self._json(self._conv_list(params))
         elif p == "/api/conv/messages": self._json(self._conv_messages(params))
@@ -188,8 +258,19 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/save": self._project_save,
             "/api/project/delete": self._project_delete,
             "/api/state/save": self._state_save,
+            "/api/temp/save": self._temp_save,
+            "/api/temp/delete": self._temp_delete,
+            "/api/memo/save": self._memo_save,
+            "/api/memo/delete": self._memo_delete,
+            "/api/folder/save": self._folder_save,
+            "/api/folder/delete": self._folder_delete,
+            "/api/project/star": self._project_star,
+            "/api/upload": self._upload_file,
+            "/api/pdf-split": self._pdf_split,
+            "/api/list-pdf-images": self._list_pdf_images,
             "/api/reset-session": self._reset_session,
             "/api/add-pane": self._add_pane,
+            "/api/setup-session": self._setup_session,
             "/api/split": self._split,
             "/api/send-command": self._send_command,
             "/api/preset": self._preset,
@@ -238,7 +319,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try:
                 env = get_claude_env()
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd = build_claude_cmd(prompt, chat_only)
+                cmd = build_claude_cmd(prompt, {
+                    "chatOnly": chat_only,
+                    "systemPrompt": body.get("systemPrompt", ""),
+                    "jsonSchema": body.get("jsonSchema", ""),
+                    "maxTurns": body.get("maxTurns", 0),
+                    "images": body.get("images", []),
+                })
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
                 output = result.stdout.strip()
                 log(f"EXEC [{exec_id}] done! {len(output)}자")
@@ -307,7 +394,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try:
                 env = get_claude_env()
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd = build_claude_cmd(full_prompt, chat_only)
+                cmd = build_claude_cmd(full_prompt, {
+                    "chatOnly": chat_only,
+                    "systemPrompt": body.get("systemPrompt", ""),
+                    "images": body.get("images", []),
+                })
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=env, cwd=run_cwd)
                 reply = result.stdout.strip()
                 log(f"CHAT [{conv_id}] reply={len(reply)}자")
@@ -418,13 +509,281 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "project": json.loads(row["data"])}
 
     def _project_list(self):
-        rows = db_exec("SELECT id, name, modified FROM projects WHERE id!='__current__' ORDER BY modified DESC LIMIT 50", fetch=True)
+        rows = db_exec("SELECT id, name, modified, favorite FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
         return {"ok": True, "projects": rows}
+
+    def _project_list_meta(self):
+        """메타데이터만 (data 필드 제외, 가벼움) — 노드 수도 함께"""
+        rows = db_exec("SELECT id, name, modified, created, favorite FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        # 노드 수만 추가 추출
+        for r in rows:
+            try:
+                d = db_exec("SELECT data FROM projects WHERE id=?", (r["id"],), fetchone=True)
+                if d:
+                    pj = json.loads(d["data"])
+                    r["nodeCount"] = len(pj.get("nodes", []))
+                    r["connCount"] = len(pj.get("connections", []))
+                else:
+                    r["nodeCount"] = 0
+                    r["connCount"] = 0
+            except:
+                r["nodeCount"] = 0
+                r["connCount"] = 0
+        return {"ok": True, "projects": rows}
+
+    def _project_star(self, body):
+        pid = body.get("id", "")
+        fav = 1 if body.get("favorite") else 0
+        if not pid: return {"ok": False, "error": "id required"}
+        db_exec("UPDATE projects SET favorite=? WHERE id=?", (fav, pid))
+        return {"ok": True}
+
+    # ── Temp Saves (날짜 기준 자동 백업) ──
+
+    def _temp_save(self, body):
+        """일별 임시 저장 — 같은 날짜에 추가 저장 가능 (여러 개)"""
+        from datetime import datetime
+        today = datetime.now().strftime("%Y-%m-%d")
+        now = datetime.now().isoformat()
+        name = body.get("name", "")
+        data = json.dumps(body, ensure_ascii=False)
+        db_exec("INSERT INTO temps (name, data, date, created) VALUES (?,?,?,?)", (name, data, today, now))
+        # 30일 이상 된 temp 자동 정리
+        db_exec("DELETE FROM temps WHERE created < datetime('now','-30 days')")
+        return {"ok": True}
+
+    def _temp_list(self):
+        """temp 목록 (메타데이터만, 최신순)"""
+        rows = db_exec("SELECT id, name, date, created FROM temps ORDER BY created DESC LIMIT 50", fetch=True)
+        for r in rows:
+            try:
+                d = db_exec("SELECT data FROM temps WHERE id=?", (r["id"],), fetchone=True)
+                if d:
+                    pj = json.loads(d["data"])
+                    r["nodeCount"] = len(pj.get("nodes", []))
+                    r["connCount"] = len(pj.get("connections", []))
+            except:
+                r["nodeCount"] = 0
+                r["connCount"] = 0
+        return {"ok": True, "temps": rows}
+
+    def _temp_load(self, params):
+        tid = params.get("id", [""])[0]
+        row = db_exec("SELECT data FROM temps WHERE id=?", (tid,), fetchone=True)
+        if not row: return {"ok": False, "error": "not found"}
+        return {"ok": True, "state": json.loads(row["data"])}
+
+    def _temp_delete(self, body):
+        tid = body.get("id", "")
+        if tid: db_exec("DELETE FROM temps WHERE id=?", (tid,))
+        return {"ok": True}
+
+    # ── Memo & Folders ──
+
+    def _memo_list(self, params):
+        """메모 목록 (folder_id 또는 is_temp 필터)"""
+        folder_id = params.get("folderId", [None])[0]
+        is_temp = params.get("isTemp", [None])[0]
+        sql = "SELECT id, name, folder_id, is_temp, substr(content,1,100) as preview, created, modified FROM memos"
+        cond = []
+        args = []
+        if folder_id is not None:
+            if folder_id == "null":
+                cond.append("folder_id IS NULL")
+            else:
+                cond.append("folder_id=?")
+                args.append(folder_id)
+        if is_temp is not None:
+            cond.append("is_temp=?")
+            args.append(int(is_temp))
+        if cond: sql += " WHERE " + " AND ".join(cond)
+        sql += " ORDER BY modified DESC LIMIT 200"
+        rows = db_exec(sql, tuple(args), fetch=True)
+        return {"ok": True, "memos": rows}
+
+    def _memo_get(self, params):
+        mid = params.get("id", [""])[0]
+        row = db_exec("SELECT * FROM memos WHERE id=?", (mid,), fetchone=True)
+        if not row: return {"ok": False, "error": "not found"}
+        return {"ok": True, "memo": row}
+
+    def _memo_save(self, body):
+        mid = body.get("id")
+        name = body.get("name", "")
+        content = body.get("content", "")
+        folder_id = body.get("folderId")
+        is_temp = 1 if body.get("isTemp", True) else 0
+        now = datetime.now().isoformat()
+        if mid:
+            db_exec("UPDATE memos SET name=?, content=?, folder_id=?, is_temp=?, modified=? WHERE id=?",
+                    (name, content, folder_id, is_temp, now, mid))
+            return {"ok": True, "id": mid}
+        else:
+            new_id = db_exec("INSERT INTO memos (name, content, folder_id, is_temp, created, modified) VALUES (?,?,?,?,?,?)",
+                             (name or f"메모{int(time.time())}", content, folder_id, is_temp, now, now))
+            return {"ok": True, "id": new_id}
+
+    def _memo_delete(self, body):
+        mid = body.get("id", "")
+        if mid: db_exec("DELETE FROM memos WHERE id=?", (mid,))
+        return {"ok": True}
+
+    def _folder_list(self):
+        rows = db_exec("SELECT f.*, (SELECT COUNT(*) FROM memos WHERE folder_id=f.id) as memo_count FROM memo_folders f ORDER BY sort_order, name", fetch=True)
+        return {"ok": True, "folders": rows}
+
+    def _folder_save(self, body):
+        fid = body.get("id")
+        name = body.get("name", "새 폴더")
+        icon = body.get("icon", "📁")
+        now = datetime.now().isoformat()
+        if fid:
+            db_exec("UPDATE memo_folders SET name=?, icon=? WHERE id=?", (name, icon, fid))
+            return {"ok": True, "id": fid}
+        else:
+            new_id = db_exec("INSERT INTO memo_folders (name, icon, created) VALUES (?,?,?)", (name, icon, now))
+            return {"ok": True, "id": new_id}
+
+    def _folder_delete(self, body):
+        fid = body.get("id", "")
+        if fid:
+            db_exec("UPDATE memos SET folder_id=NULL WHERE folder_id=?", (fid,))
+            db_exec("DELETE FROM memo_folders WHERE id=?", (fid,))
+        return {"ok": True}
 
     def _project_delete(self, body):
         pid = body.get("id", "")
         if pid: db_exec("DELETE FROM projects WHERE id=?", (pid,))
         return {"ok": True}
+
+    # ── File Upload (이미지/시스템프롬프트 파일) ──
+
+    def _upload_file(self, body):
+        """base64로 인코딩된 파일을 WSL에 저장하고 경로 반환"""
+        import base64
+        filename = body.get("filename", "")
+        b64data = body.get("data", "")
+        purpose = body.get("purpose", "image")  # image | sysprompt
+        if not filename or not b64data:
+            return {"ok": False, "error": "filename and data required"}
+
+        # 디렉토리: ~/tmux-controller/uploads/(images|sysprompts)/
+        upload_dir = os.path.join(BASE_DIR, "uploads", purpose + "s")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # 파일명 sanitize + timestamp 추가 (덮어쓰기 방지)
+        safe_name = re.sub(r'[^\w\s.\-_가-힣]', '_', filename)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        final_name = f"{ts}_{safe_name}"
+        filepath = os.path.join(upload_dir, final_name)
+
+        try:
+            # base64 디코딩 (data:image/png;base64,xxx 형식 지원)
+            if ',' in b64data:
+                b64data = b64data.split(',', 1)[1]
+            data = base64.b64decode(b64data)
+            with open(filepath, "wb") as f:
+                f.write(data)
+            log(f"UPLOAD [{purpose}] {filename} → {filepath} ({len(data)} bytes)")
+            return {"ok": True, "path": filepath, "filename": final_name}
+        except Exception as e:
+            log(f"UPLOAD ERROR: {e}")
+            return {"ok": False, "error": str(e)}
+
+    def _list_pdf_images(self, body):
+        """이미지 경로에서 부모 PDF 디렉토리의 모든 이미지 목록 반환"""
+        img_path = body.get("path", "")
+        if not img_path or not os.path.exists(img_path):
+            return {"ok": False, "error": "path not found"}
+        pdf_dir = os.path.dirname(img_path)
+        if not os.path.basename(pdf_dir).startswith(("20", "19")):
+            # not a pdf split dir
+            return {"ok": True, "images": []}
+        try:
+            files = sorted([f for f in os.listdir(pdf_dir) if f.startswith("page_") and f.endswith(".png")])
+            images = [{"path": os.path.join(pdf_dir, f), "name": f} for f in files]
+            return {"ok": True, "images": images, "dir": pdf_dir}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── PDF Split → 이미지 변환 ──
+
+    def _parse_page_range(self, spec, total):
+        """페이지 범위 파싱 '1,5,7-10' → [1,5,7,8,9,10]"""
+        if not spec or spec.strip() == "":
+            return list(range(1, total + 1))
+        pages = []
+        for part in spec.replace(" ", "").split(","):
+            if "-" in part:
+                a, b = part.split("-", 1)
+                a = int(a) if a else 1
+                b = int(b) if b else total
+                pages.extend(range(a, min(b, total) + 1))
+            else:
+                p = int(part)
+                if 1 <= p <= total: pages.append(p)
+        return sorted(set(pages))
+
+    def _pdf_split(self, body):
+        """PDF base64 → 페이지별 PNG 이미지 변환 (600 DPI)"""
+        import base64
+        filename = body.get("filename", "doc.pdf")
+        b64data = body.get("data", "")
+        page_spec = body.get("pages", "")  # "1,5,7-10" or empty for all
+        dpi = int(body.get("dpi", 600))
+
+        if not b64data:
+            return {"ok": False, "error": "data required"}
+
+        try:
+            import sys
+            sys.path.insert(0, os.path.expanduser("~/.local/lib/python3.12/site-packages"))
+            import fitz
+        except Exception as e:
+            log(f"PDF_SPLIT pymupdf import FAIL: {e}")
+            return {"ok": False, "error": "pymupdf not installed"}
+
+        # 디코딩
+        try:
+            if "," in b64data:
+                b64data = b64data.split(",", 1)[1]
+            pdf_bytes = base64.b64decode(b64data)
+        except Exception as e:
+            return {"ok": False, "error": f"decode failed: {e}"}
+
+        # 임시 PDF 저장 + 변환
+        upload_dir = os.path.join(BASE_DIR, "uploads", "pdfs")
+        os.makedirs(upload_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = re.sub(r'[^\w\s.\-_가-힣]', '_', filename).replace(".pdf", "")
+        pdf_dir = os.path.join(upload_dir, f"{ts}_{safe_name}")
+        os.makedirs(pdf_dir, exist_ok=True)
+        pdf_path = os.path.join(pdf_dir, "source.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+
+        try:
+            doc = fitz.open(pdf_path)
+            total_pages = len(doc)
+            target_pages = self._parse_page_range(page_spec, total_pages)
+            log(f"PDF_SPLIT {filename} total={total_pages} target={target_pages} dpi={dpi}")
+
+            results = []
+            for pnum in target_pages:
+                page = doc[pnum - 1]
+                # DPI 설정
+                mat = fitz.Matrix(dpi / 72, dpi / 72)
+                pix = page.get_pixmap(matrix=mat)
+                img_path = os.path.join(pdf_dir, f"page_{pnum:03d}.png")
+                pix.save(img_path)
+                results.append({"page": pnum, "path": img_path})
+            doc.close()
+
+            log(f"PDF_SPLIT done: {len(results)} pages")
+            return {"ok": True, "totalPages": total_pages, "pages": results, "pdfPath": pdf_path}
+        except Exception as e:
+            log(f"PDF_SPLIT ERROR: {e}")
+            return {"ok": False, "error": str(e)}
 
     # ── Auto State (항상 최신 상태를 DB에 보관) ──
 
@@ -515,6 +874,64 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 indices = [int(x) for x in r2["stdout"].strip().split("\n")]
                 return {"ok": True, "paneIndex": max(indices), "total": len(indices)}
         return r
+
+    def _setup_session(self, body):
+        """N개 패널 생성 + 각 패널에 claude 자동 실행"""
+        count = int(body.get("count", 1))
+        launch_claude = body.get("launchClaude", True)
+        log(f"SETUP_SESSION count={count} launchClaude={launch_claude}")
+
+        # 1. 세션 리셋 (clean slate)
+        run_tmux("kill-server")
+        time.sleep(1)
+        r = run_tmux("new-session", "-d", "-s", SESSION_NAME, "-c", os.path.expanduser("~"))
+        if not r["ok"]:
+            return {"ok": False, "error": "session create failed"}
+
+        # 2. count - 1개 패널 추가 (이미 1개 있음)
+        for _ in range(count - 1):
+            run_tmux("split-window", "-t", SESSION_NAME)
+            run_tmux("select-layout", "-t", SESSION_NAME, "tiled")
+        run_tmux("select-layout", "-t", SESSION_NAME, "tiled")
+
+        # 3. 각 패널에 claude 명령 전송
+        if launch_claude:
+            # -p 한번 실행으로 trust 디렉토리 사전 등록
+            try:
+                env = get_claude_env()
+                subprocess.run(
+                    ["claude", "-p", "ok", "--dangerously-skip-permissions"],
+                    capture_output=True, text=True, timeout=15, env=env, cwd=os.path.expanduser("~")
+                )
+                log("SETUP_SESSION trust pre-registered via -p")
+            except Exception as e:
+                log(f"SETUP_SESSION trust pre-register failed: {e}")
+
+            time.sleep(0.5)
+            r = run_tmux("list-panes", "-t", SESSION_NAME, "-F", "#{pane_index}")
+            if r["ok"]:
+                pane_indices = [idx.strip() for idx in r["stdout"].strip().split("\n")]
+                for idx in pane_indices:
+                    target = f"{SESSION_NAME}:.{idx}"
+                    cmd = "source ~/.nvm/nvm.sh && claude --dangerously-skip-permissions"
+                    run_tmux("send-keys", "-t", target, cmd, "Enter")
+                # 백그라운드: trust 다이얼로그 적극 자동 승인
+                def auto_trust():
+                    # 30초 동안 1초마다 모든 패널에 "1\n" 반복 전송
+                    for sec in range(30):
+                        time.sleep(1)
+                        for idx in pane_indices:
+                            target = f"{SESSION_NAME}:.{idx}"
+                            r = run_tmux("capture-pane", "-t", target, "-p")
+                            if r["ok"] and ("trust this folder" in r["stdout"] or "Yes, I trust" in r["stdout"] or "Do you trust" in r["stdout"]):
+                                run_tmux("send-keys", "-t", target, "1", "Enter")
+                                log(f"AUTO_TRUST pane={idx} sec={sec}")
+                                time.sleep(0.3)
+                threading.Thread(target=auto_trust, daemon=True).start()
+                log(f"SETUP_SESSION launched claude in {len(pane_indices)} panes + auto-trust")
+                return {"ok": True, "panes": pane_indices, "launched": len(pane_indices)}
+
+        return {"ok": True}
 
     def _reset_session(self, body):
         log("RESET SESSION")
