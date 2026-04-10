@@ -959,7 +959,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _reset_session(self, body):
         log("RESET SESSION")
-        run_tmux("kill-server")
+        run_tmux("kill-session", "-t", SESSION_NAME)
         time.sleep(1)
         return run_tmux("new-session", "-d", "-s", SESSION_NAME, "-c", os.path.expanduser("~"))
 

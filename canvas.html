@@ -2238,6 +2238,21 @@ async function confirmLanding(){
   loadState(previewState);
   if(landingSelected.kind==='project')workflowId=landingSelected.id;
   document.getElementById('landing').classList.remove('show');
+  // Agent 노드가 있으면 tmux 세션 자동 셋업
+  const agentCount=nodes.filter(n=>n.type==='agent').length;
+  if(agentCount>0){
+    const st=await api('GET','/api/status');
+    const curPanes=(st.panes||[]).length;
+    if(curPanes<agentCount||confirm(`Agent ${agentCount}개 감지\n\ntmux ${agentCount}개 패널에 Claude 자동 실행할까요?\n\n[확인] = 자동 생성\n[취소] = 수동`)){
+      const sr=await api('POST','/api/setup-session',{count:agentCount,launchClaude:true});
+      if(sr.ok){
+        const panes=sr.panes||[];
+        nodes.filter(n=>n.type==='agent').forEach((n,i)=>{n.paneIndex=parseInt(panes[i])||null});
+        paneList=panes.map(p=>({index:parseInt(p),command:'claude',size:'?'}));
+        autoSave();
+      }
+    }
+  }
 }
 
 function landingNewProject(){
