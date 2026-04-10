@@ -1701,12 +1701,12 @@ const engine={
     if(!roots.length&&nodes.length)nodes.forEach(n=>this.executeNode(n));
     else roots.forEach(n=>this.executeNode(n));
   },
-  stop(){this.running=false;this.polls.forEach(id=>clearInterval(id));this.polls.clear();nodes.forEach(n=>this.setSt(n,'idle'))},
+  stop(){this.running=false;this.polls.forEach(id=>clearInterval(id));this.polls.clear();nodes.forEach(n=>{if(n.status==='running')this.setSt(n,'idle')})},
   stopNode(n){if(!n)return;const pid=this.polls.get(n.id);if(pid){clearInterval(pid);this.polls.delete(n.id)}this.setSt(n,'idle')},
   execSelected(){if(selectedNode){this.running=true;this.executeNode(selectedNode)}},
   upstream(nid){return conns.filter(c=>c.tid===nid).map(c=>findNodeOrCe(c.sid)).filter(Boolean)},
   downstream(nid){return conns.filter(c=>c.sid===nid).map(c=>findNodeOrCe(c.tid)).filter(Boolean)},
-  canExec(nid){return this.upstream(nid).every(n=>n.status==='complete')},
+  canExec(nid){return this.upstream(nid).every(n=>n.status==='complete'||(n.outputCapture&&n.outputCapture.trim()))},
   resolve(nd){
     let t=nd.inputTemplate;
     const all=[...nodes,...canvasEls.filter(c=>c.nodeType)];
@@ -1718,9 +1718,9 @@ const engine={
     if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
     if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
 
-    // 다중 upstream 대기 (모두 complete여야 실행)
+    // 다중 upstream 대기 (complete이거나 outputCapture가 있으면 OK)
     const upstream=this.upstream(nd.id);
-    const incomplete=upstream.filter(u=>u.status!=='complete');
+    const incomplete=upstream.filter(u=>u.status!=='complete'&&!(u.outputCapture&&u.outputCapture.trim()));
     if(incomplete.length>0&&retryCount===0){
       console.log(`[${nd.name}] 상위 노드 미완료: ${incomplete.map(u=>u.name).join(', ')} → 대기`);
       return;
