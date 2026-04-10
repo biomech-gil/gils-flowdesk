@@ -319,6 +319,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         db_exec("INSERT INTO executions (id, project_id, node_id, node_name, input_raw, input_resolved, chat_only, started, status) VALUES (?,?,?,?,?,?,?,?,?)",
                 (exec_id, project_id, node_id, node_name, body.get("inputRaw", ""), prompt, 1 if chat_only else 0, datetime.now().isoformat(), "running"))
         log(f"EXEC [{exec_id}] node={node_name} prompt={len(prompt)}자 chatOnly={chat_only}")
+        if len(prompt) > 23000:
+            log(f"EXEC [{exec_id}] WARNING: 프롬프트 {len(prompt)}자 — 23,000자 초과, 타임아웃 가능성 높음")
 
         def run():
             try:
