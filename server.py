@@ -206,7 +206,13 @@ def build_claude_cmd(prompt, opts=None):
     return cmd
 
 def get_claude_env():
+    # nvm 또는 시스템 경로 자동 감지
     nvm_bin = os.path.expanduser("~/.nvm/versions/node/v22.22.2/bin")
+    if not os.path.isdir(nvm_bin):
+        # nvm 없으면 시스템 경로 사용
+        import shutil
+        claude_path = shutil.which("claude")
+        nvm_bin = os.path.dirname(claude_path) if claude_path else "/usr/bin"
     env = os.environ.copy()
     env["PATH"] = nvm_bin + ":" + env.get("PATH", "")
     return env
@@ -974,6 +980,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
 
 class ThreadedServer(ThreadingMixIn, HTTPServer):
+    allow_reuse_address = True
     daemon_threads = True
 
 if __name__ == "__main__":
