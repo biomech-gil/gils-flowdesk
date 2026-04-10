@@ -1209,18 +1209,6 @@ async function processPdfSplit(file){
     targetNodes.forEach(nn=>{nn.collapsed=true;nn.el.classList.add('collapsed');const btn=nn.el.querySelector('[data-act="tog"]');if(btn)btn.textContent='►'});
 
     drawConns();autoSave();arrangeAll();
-
-    // 세션 자동 셋업
-    const totalAgents=nodes.filter(n=>n.type==='agent').length;
-    const doSetup=confirm(`${targetNodes.length}개 노드 준비 완료\n\ntmux 세션을 ${totalAgents}개 패널로 새로 셋업할까요?\n(기존 패널 사용 시 [취소])`);
-    if(doSetup){
-      const sr=await api('POST','/api/setup-session',{count:totalAgents,launchClaude:true});
-      if(sr.ok){
-        const panes=sr.panes||[];
-        nodes.filter(n=>n.type==='agent').forEach((n,i)=>{n.paneIndex=parseInt(panes[i])||null});
-        autoSave();
-      }
-    }
   };
   reader.readAsDataURL(file);
 }
@@ -1881,22 +1869,6 @@ async function loadWorkflow(id){
   const r=await api('GET',`/api/project/load?id=${id}`);
   if(!r.ok||!r.project)return;
   loadState(r.project);
-  // 노드 수와 현재 패널 수 비교 → 부족하면 사용자에게 자동 셋업 제안
-  const agentCount=nodes.filter(n=>n.type==='agent').length;
-  if(agentCount===0)return;
-  const st=await api('GET','/api/status');
-  const curPanes=(st.panes||[]).length;
-  if(curPanes<agentCount||confirm(`프로젝트에 Agent ${agentCount}개 (현재 ${curPanes}개 패널)\n\ntmux 세션을 새로 만들고 ${agentCount}개 패널에 Claude 자동 실행할까요?\n\n[확인] = 자동 생성\n[취소] = 그대로 (수동)`)){
-    const sr=await api('POST','/api/setup-session',{count:agentCount,launchClaude:true});
-    if(sr.ok){
-      // 노드의 paneIndex 재할당
-      const panes=sr.panes||[];
-      nodes.filter(n=>n.type==='agent').forEach((n,i)=>{n.paneIndex=parseInt(panes[i])||null});
-      paneList=panes.map(p=>({index:parseInt(p),command:'claude',size:'?'}));
-      autoSave();
-      alert(`${sr.launched}개 패널에 Claude 실행 중\n\nWindows Terminal에서 각 패널 ↓ → Enter로 승인하세요`);
-    }
-  }
 }
 async function refreshWfList(){const r=await api('GET','/api/project/list');const s=document.getElementById('wf-sel');s.innerHTML='<option value="">불러오기</option>';if(r.ok)r.projects.forEach(w=>s.innerHTML+=`<option value="${w.id}">${w.name}</option>`)}
 function newProject(){
@@ -2238,21 +2210,6 @@ async function confirmLanding(){
   loadState(previewState);
   if(landingSelected.kind==='project')workflowId=landingSelected.id;
   document.getElementById('landing').classList.remove('show');
-  // Agent 노드가 있으면 tmux 세션 자동 셋업
-  const agentCount=nodes.filter(n=>n.type==='agent').length;
-  if(agentCount>0){
-    const st=await api('GET','/api/status');
-    const curPanes=(st.panes||[]).length;
-    if(curPanes<agentCount||confirm(`Agent ${agentCount}개 감지\n\ntmux ${agentCount}개 패널에 Claude 자동 실행할까요?\n\n[확인] = 자동 생성\n[취소] = 수동`)){
-      const sr=await api('POST','/api/setup-session',{count:agentCount,launchClaude:true});
-      if(sr.ok){
-        const panes=sr.panes||[];
-        nodes.filter(n=>n.type==='agent').forEach((n,i)=>{n.paneIndex=parseInt(panes[i])||null});
-        paneList=panes.map(p=>({index:parseInt(p),command:'claude',size:'?'}));
-        autoSave();
-      }
-    }
-  }
 }
 
 function landingNewProject(){
