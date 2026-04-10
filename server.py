@@ -887,8 +887,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         launch_claude = body.get("launchClaude", True)
         log(f"SETUP_SESSION count={count} launchClaude={launch_claude}")
 
-        # 1. 세션 리셋 (clean slate)
-        run_tmux("kill-server")
+        # 1. 세션 리셋 (main 세션만 삭제, 서버 세션은 유지)
+        run_tmux("kill-session", "-t", SESSION_NAME)
         time.sleep(1)
         r = run_tmux("new-session", "-d", "-s", SESSION_NAME, "-c", os.path.expanduser("~"))
         if not r["ok"]:
@@ -919,20 +919,38 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 pane_indices = [idx.strip() for idx in r["stdout"].strip().split("\n")]
                 for idx in pane_indices:
                     target = f"{SESSION_NAME}:.{idx}"
-                    cmd = "source ~/.nvm/nvm.sh && claude --dangerously-skip-permissions"
+                    cmd = "source ~/.nvm/nvm.sh 2>/dev/null; claude --dangerously-skip-permissions"
                     run_tmux("send-keys", "-t", target, cmd, "Enter")
                 # 백그라운드: trust 다이얼로그 적극 자동 승인
                 def auto_trust():
-                    # 30초 동안 1초마다 모든 패널에 "1\n" 반복 전송
-                    for sec in range(30):
+                    # 60초 동안 모든 패널에서 trust/permission 프롬프트 감지 → Enter로 자동 승인
+                    trust_keywords = ["trust this folder", "yes, i trust", "do you trust",
+                                      "safety check", "trust this project"]
+                    done_keywords = ["bypass permissions"]  # claude에 진입 완료된 상태 (프롬프트 "❯" 가 보이는 상태)
+                    done = set()
+                    for sec in range(60):
                         time.sleep(1)
+                        if len(done) >= len(pane_indices):
+                            log(f"AUTO_TRUST all {len(done)} panes done")
+                            break
                         for idx in pane_indices:
+                            if idx in done:
+                                continue
                             target = f"{SESSION_NAME}:.{idx}"
                             r = run_tmux("capture-pane", "-t", target, "-p")
-                            if r["ok"] and ("trust this folder" in r["stdout"] or "Yes, I trust" in r["stdout"] or "Do you trust" in r["stdout"]):
-                                run_tmux("send-keys", "-t", target, "1", "Enter")
-                                log(f"AUTO_TRUST pane={idx} sec={sec}")
-                                time.sleep(0.3)
+                            if not r["ok"]:
+                                continue
+                            out = r["stdout"].lower()
+                            # 이미 claude에 진입 완료?
+                            if any(kw in out for kw in done_keywords):
+                                done.add(idx)
+                                log(f"AUTO_TRUST pane={idx} already in claude (sec={sec})")
+                                continue
+                            # trust 프롬프트 감지 → Enter 전송
+                            if any(kw in out for kw in trust_keywords):
+                                run_tmux("send-keys", "-t", target, "Enter")
+                                log(f"AUTO_TRUST pane={idx} Enter sent (sec={sec})")
+                                time.sleep(0.5)
                 threading.Thread(target=auto_trust, daemon=True).start()
                 log(f"SETUP_SESSION launched claude in {len(pane_indices)} panes + auto-trust")
                 return {"ok": True, "panes": pane_indices, "launched": len(pane_indices)}
