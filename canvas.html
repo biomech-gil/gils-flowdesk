@@ -114,7 +114,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .sb-resize{position:absolute;left:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:10;transition:.15s}.sb-resize:hover{background:var(--accent);opacity:.5}
 .sb-hd{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
 .sb-hd h3{flex:1;font-size:.85em;color:var(--accent);font-weight:600}.sb-hd button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:3px}.sb-hd button:hover{color:var(--text);background:var(--bg-3)}
-.sb-ct{flex:1;overflow-y:auto;padding:8px}
+.sb-ct{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column}
 .sb-sec{margin-bottom:10px}
 .sb-sec label{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
 .sb-sec label button{background:var(--bg-3);border:1px solid var(--border);color:var(--blue);cursor:pointer;font-size:11px;padding:4px 12px;border-radius:var(--radius-sm);transition:.15s}.sb-sec label button:hover{background:var(--bg-4);color:var(--accent)}
@@ -294,11 +294,41 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 #sel-box{position:absolute;border:1px solid var(--blue);background:rgba(33,150,243,.08);z-index:50;pointer-events:none;display:none}
 .snap-guide{position:absolute;background:var(--red);z-index:40;pointer-events:none;opacity:.5}
 .snap-guide-h{height:1px;left:0;right:0}.snap-guide-v{width:1px;top:0;bottom:0}
+/* TOKEN LIMIT WARNING */
+@keyframes tokenPulse{0%,100%{border-color:#F44336;box-shadow:0 0 8px rgba(244,67,54,.4)}50%{border-color:#ff6b6b;box-shadow:0 0 20px rgba(244,67,54,.8),0 0 40px rgba(244,67,54,.3)}}
+.nd.token-warn{animation:tokenPulse 1.5s ease-in-out infinite;border-width:3px}
+.nd.collapsed.token-warn{animation:tokenPulse 1.2s ease-in-out infinite;border-width:3px}
+.token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#F44336;margin-left:4px;animation:pulse 1s infinite;flex-shrink:0}
+/* SCRATCHPAD */
+.scratchpad-bar{display:none;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0}
+.scratchpad-bar.show{display:block}
+.scratchpad-bar textarea{width:100%;height:80px;background:var(--bg-0);color:var(--text);border:none;padding:8px 12px;font-family:var(--mono);font-size:12px;resize:vertical;outline:none;line-height:1.4}
+.sp-toggle{background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);padding:2px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:.72em;margin-left:auto}
+.sp-toggle:hover{color:var(--text);background:var(--bg-4)}
+.sp-toggle.active{color:var(--amber);border-color:var(--amber)}
+/* SIDEBAR DIVIDER (resizable) */
+.sb-divider{height:6px;background:var(--bg-3);cursor:row-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.sb-divider:hover{background:var(--accent)}
+.sb-divider::after{content:'';width:30px;height:2px;background:var(--text-muted);border-radius:1px}
+/* PINNED MEMOS */
+.pinned-memos{display:flex;align-items:center;gap:4px;margin-left:auto;padding:0 8px}
+.pinned-chip{display:inline-block;padding:3px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;font-size:.7em;color:var(--text-dim);cursor:pointer;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:.1s}
+.pinned-chip:hover{color:var(--text);background:var(--bg-4);border-color:var(--accent)}
+/* RESOLVED PREVIEW */
+.resolved-preview{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;font-family:var(--mono);font-size:11px;min-height:60px;line-height:1.4;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.resolved-preview .rv-var{color:var(--cyan);background:rgba(6,182,212,.08)}
+.rv-toggle{background:var(--bg-3);border:1px solid var(--border);color:var(--cyan);cursor:pointer;font-size:10px;padding:3px 8px;border-radius:var(--radius-sm);transition:.15s;margin-left:4px}
+.rv-toggle:hover{background:var(--bg-4);color:var(--accent)}
+.rv-toggle.active{background:rgba(6,182,212,.15);border-color:var(--cyan)}
+/* SIDEBAR COMPACT LABELS */
+.sb-sec label{flex-wrap:wrap;gap:2px}
+.sb-sec label span{display:flex;gap:2px;flex-wrap:wrap}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg-0)}::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:2px}
 </style>
 </head>
 <body>
-<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><a href="/index.html">컨트롤러</a></nav>
+<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><a href="/index.html">컨트롤러</a><div class="pinned-memos" id="pinned-memos"></div><button class="sp-toggle" id="sp-toggle" onclick="toggleScratchpad()" title="메모장 (스크래치패드)">📋 메모장</button></nav>
+<div class="scratchpad-bar" id="scratchpad-bar"><textarea id="scratchpad-ta" placeholder="스크래치패드 — 자유 메모 (자동 저장)"></textarea></div>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 (임시)">📝 +</button>
   <button class="fld" onclick="toggleFolderPanel()" title="즐겨찾기 폴더">📁 폴더</button>
@@ -316,6 +346,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     <button onclick="memoTextSize(1)">A+</button>
     <button id="mp-render-btn" onclick="memoToggleRender()">렌더</button>
     <button onclick="memoCopyToInput()" title="현재 선택된 노드 input에 복사">→ 노드 input</button>
+    <button id="mp-pin-btn" onclick="toggleCurrentMemoPin()" title="상단바에 고정">📌</button>
     <span style="flex:1"></span>
     <button onclick="deleteMemo()" style="color:var(--red);border-color:rgba(244,67,54,.3)">삭제</button>
   </div>
@@ -369,8 +400,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <input type="text" id="sb-pdf-pages" placeholder="페이지 (예: 1,3,5-10) 비우면 전체" style="width:100%;font-size:11px;padding:5px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
       </div>
       <div class="sb-sec" id="sb-split-sec"><label>분할 생성</label><div class="tsz"><input type="number" id="sb-split-n" value="3" min="2" max="10" style="width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:2px 4px;border-radius:3px;font-size:11px"><button onclick="splitNode()">분할</button></div></div>
-      <div class="sb-sec"><label>Input <span id="sb-charcount" style="font-size:10px;color:var(--text-muted)"></span> <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openHtmlTab('input')">HTML</button><button onclick="openModal('input')" style="flex:1;min-width:80px">확대 보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)"></textarea></div>
-      <div class="sb-sec"><label>Output <span><button onclick="copyText('output')">📋</button><button onclick="openHtmlTab('output')">HTML</button><button onclick="openModal('output')" style="flex:1;min-width:80px">확대 보기</button></span></label><div class="ov" id="sb-output">대기 중</div></div>
+      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:1;min-height:80px"><label>Input <span id="sb-charcount" style="font-size:10px;color:var(--text-muted)"></span> <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openHtmlTab('input')">HTML</button><button onclick="openModal('input')">확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()">치환 미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
+      <div class="sb-divider" id="sb-div"></div>
+      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:1;min-height:80px"><label>Output <span><button onclick="copyText('output')">📋</button><button onclick="openHtmlTab('output')">HTML</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-sec"><label>텍스트 크기</label><div class="tsz"><button onclick="sbTsz(-.1)">A-</button><button onclick="sbTsz(.1)">A+</button><button onclick="ndTszSel(-.1)">노드 A-</button><button onclick="ndTszSel(.1)">노드 A+</button></div></div>
       <div class="sb-sec"><label>실행 기록 <button onclick="loadExecHistory()" title="새로고침">&#8635;</button></label><select id="sb-exec" onchange="sbExecSelect(this.value)"><option value="">기록 없음</option></select></div>
       <div class="sb-sec"><label>대화 분기 <button onclick="forkConv()" title="현재 실행에서 대화 분기 생성">+ 분기</button></label><select id="sb-conv" onchange="sbConvSelect(this.value)"><option value="">분기 없음</option></select></div>
@@ -786,7 +818,7 @@ function buildDom(n){
   }));
   const nm=d.querySelector('.nd-name');if(nm)nm.addEventListener('change',()=>{const old=n.name;n.name=nm.value.trim()||n.name;d.querySelector('.coll-badge').textContent=n.name;if(old!==n.name)nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${n.name}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});if(selectedNode===n){document.getElementById('sb-name').value=n.name;document.getElementById('sb-title').textContent=`${ti.icon} ${n.name}`}autoSave()});
   d.addEventListener('mousedown',e=>{if(!e.target.classList.contains('port')&&!e.target.classList.contains('nd-resize')&&e.target!==hd&&!hd.contains(e.target)&&e.target!==cb&&(!cb||!cb.contains(e.target))){if(e.ctrlKey)toggleMultiSel(n);else if(!multiSel.includes(n))selNode(n)}});
-  const ta=d.querySelector('.nd-in textarea');if(ta)ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value});
+  const ta=d.querySelector('.nd-in textarea');if(ta)ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value;checkTokenLimit(n)});
   const dv=d.querySelector('.nd-div');if(dv&&ta)dv.addEventListener('mousedown',e=>{e.stopPropagation();isDiv=true;divNd=n;divSY=e.clientY;divSH=ta.offsetHeight});
   d.querySelectorAll('.port').forEach(port=>port.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();isConn=true;connSrc={node:n,side:port.dataset.side};cw.classList.add('connecting')}));
   // RESIZE
@@ -1591,11 +1623,13 @@ function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';documen
     }).join(''):'없음';
   }
   const ps=document.getElementById('sb-pane');ps.innerHTML='<option value="">자동</option>'+paneList.map(p=>`<option value="${p.index}" ${n.paneIndex==p.index?'selected':''}>${p.index}</option>`).join('');const hs=document.getElementById('sb-hist');hs.innerHTML='<option value="">없음</option>';(n.history||[]).forEach((h,i)=>hs.innerHTML+=`<option value="${i}">${new Date(h.timestamp).toLocaleString('ko-KR')}</option>`);
-  loadExecHistory();loadConvList();setupImageDrop();setupPdfInput();setTimeout(drawConns,30)}
+  // reset resolved preview
+  if(resolvedPreviewOn){resolvedPreviewOn=false;document.getElementById('rv-toggle').classList.remove('active');document.getElementById('sb-input').style.display='';document.getElementById('sb-resolved').style.display='none'}
+  loadExecHistory();loadConvList();setupImageDrop();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
 function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout(drawConns,10)}
 function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('.nd-name').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
 function sbPane(v){if(selectedNode)selectedNode.paneIndex=v?parseInt(v):null;autoSave()}
-function sbInput(v){if(!selectedNode)return;selectedNode.inputTemplate=v;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=v;updateCharCount()}
+function sbInput(v){if(!selectedNode)return;selectedNode.inputTemplate=v;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=v;updateCharCount();checkTokenLimit(selectedNode);updateResolvedPreview()}
 function updateCharCount(){
   const el=document.getElementById('sb-charcount');if(!el||!selectedNode)return;
   const raw=selectedNode.inputTemplate||'';
@@ -1783,7 +1817,8 @@ const engine={
         if(selectedNode===nd)document.getElementById('sb-output').textContent=output;
         nd.history.push({timestamp:new Date().toISOString(),input:nd.inputResolved,output});
         this.setSt(nd,'complete');autoSave();
-        this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
+        // check token limits on downstream nodes (their resolved input may have changed)
+        this.downstream(nd.id).forEach(dn=>{checkTokenLimit(dn);if(this.canExec(dn.id))this.executeNode(dn)});
       }
     },3000);
     this.polls.set(nd.id,pid);
@@ -1859,6 +1894,7 @@ function loadState(st){
   conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5}));
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
   applyTx();drawConns();
+  checkAllTokenLimits();
   lastSavedState=JSON.stringify(getState());
 }
 
@@ -1930,7 +1966,8 @@ function renderMemoBar(){
     const t=document.createElement('div');
     t.className='memo-tab'+(activeMemoId==m.id?' active':'');
     const star=m.is_temp?'':'★ ';
-    t.innerHTML=`<span class="nm">${star}${escapeHtml(m.name||'무제')}</span><button class="x" onclick="event.stopPropagation();delMemoTab(${m.id})">×</button>`;
+    const pin=m.pinned?'📌':'';
+    t.innerHTML=`<span class="nm">${pin}${star}${escapeHtml(m.name||'무제')}</span><button class="x" onclick="event.stopPropagation();delMemoTab(${m.id})">×</button>`;
     t.onclick=()=>openMemoEditor(m.id);
     bar.appendChild(t);
   });
@@ -2019,6 +2056,16 @@ function memoToggleRender(){
     btn.textContent='렌더';btn.classList.remove('act');
   }
 }
+async function toggleCurrentMemoPin(){
+  if(!activeMemoId)return;
+  const r=await api('GET',`/api/memo/get?id=${activeMemoId}`);
+  if(!r.ok)return;
+  const nowPinned=r.memo.pinned?0:1;
+  await api('POST','/api/memo/pin',{id:activeMemoId,pinned:!!nowPinned});
+  const btn=document.getElementById('mp-pin-btn');
+  if(btn)btn.style.background=nowPinned?'rgba(245,158,11,.2)':'';
+  loadPinnedMemos();
+}
 function memoCopyToInput(){
   if(!selectedNode){alert('대상 노드를 먼저 선택하세요');return}
   const content=document.getElementById('mp-content').value;
@@ -2048,7 +2095,8 @@ function renderFolderPanel(){
   const list=document.getElementById('fp-folders');
   list.innerHTML='<div class="fp-folder '+(activeFolderId===null?'active':'')+'" onclick="selectFolder(null)"><span class="ic">📋</span><span class="nm">전체 메모</span></div>';
   memoFolders.forEach(f=>{
-    list.innerHTML+=`<div class="fp-folder ${activeFolderId==f.id?'active':''}" onclick="selectFolder(${f.id})"><span class="ic">${f.icon||'📁'}</span><span class="nm">${escapeHtml(f.name)}</span><span class="cnt">${f.memo_count}</span><button class="del" onclick="event.stopPropagation();delFolder(${f.id})">✕</button></div>`;
+    const fColor=f.color?`border-left:3px solid ${f.color};padding-left:7px`:'';
+    list.innerHTML+=`<div class="fp-folder ${activeFolderId==f.id?'active':''}" onclick="selectFolder(${f.id})" style="${fColor}"><span class="ic">${f.icon||'📁'}</span><span class="nm">${escapeHtml(f.name)}</span><span class="cnt">${f.memo_count}</span><button class="del" onclick="event.stopPropagation();editFolderColor(${f.id})" title="색상" style="opacity:.5;color:var(--text)">🎨</button><button class="del" onclick="event.stopPropagation();delFolder(${f.id})">✕</button></div>`;
   });
   loadFolderMemos();
 }
@@ -2057,9 +2105,13 @@ async function loadFolderMemos(){
   const r=await api('GET',url);
   const list=document.getElementById('fp-memos');
   if(r.ok){
+    const curFolder=memoFolders.find(f=>f.id===activeFolderId);
+    const fCol=curFolder&&curFolder.color?curFolder.color:'';
     list.innerHTML=(r.memos||[]).map(m=>{
       const star=m.is_temp?'':'★ ';
-      return `<div class="fp-memo" onclick="openMemoEditor(${m.id})"><span>${star}</span><span class="pv">${escapeHtml(m.name||(m.preview||'').substring(0,30))}</span></div>`;
+      const pin=m.pinned?'📌 ':'';
+      const bStyle=fCol?`border-left:3px solid ${fCol};padding-left:7px`:'';
+      return `<div class="fp-memo" onclick="openMemoEditor(${m.id})" style="${bStyle}"><span>${pin}${star}</span><span class="pv">${escapeHtml(m.name||(m.preview||'').substring(0,30))}</span></div>`;
     }).join('')||'<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">메모 없음</div>';
   }
 }
@@ -2250,6 +2302,142 @@ async function deleteTemp(id){
   loadLandingLists();
 }
 
+// ═══ TOKEN LIMIT WARNING ═══
+const TOKEN_LIMIT=23000;
+function checkTokenLimit(nd){
+  if(!nd||!nd.el)return;
+  let t=nd.inputTemplate||'';
+  const all=[...nodes,...canvasEls.filter(c=>c.nodeType)];
+  all.forEach(n=>{const ph=`{{${n.name||n.nodeName}}}`;if(t.includes(ph))t=t.replaceAll(ph,n.outputCapture||'')});
+  const over=t.length>TOKEN_LIMIT;
+  nd.el.classList.toggle('token-warn',over);
+  // collapsed badge: add/remove red dot
+  const badge=nd.el.querySelector('.coll-badge');
+  if(badge){
+    let dot=badge.querySelector('.token-dot');
+    if(over&&!dot){dot=document.createElement('span');dot.className='token-dot';badge.appendChild(dot)}
+    else if(!over&&dot){dot.remove()}
+  }
+}
+function checkAllTokenLimits(){nodes.forEach(nd=>checkTokenLimit(nd))}
+
+// ═══ RESOLVED PREVIEW TOGGLE ═══
+let resolvedPreviewOn=false;
+function toggleResolvedPreview(){
+  resolvedPreviewOn=!resolvedPreviewOn;
+  const btn=document.getElementById('rv-toggle');
+  const ta=document.getElementById('sb-input');
+  const rv=document.getElementById('sb-resolved');
+  btn.classList.toggle('active',resolvedPreviewOn);
+  if(resolvedPreviewOn){
+    ta.style.display='none';rv.style.display='block';
+    updateResolvedPreview();
+  }else{
+    ta.style.display='';rv.style.display='none';
+  }
+}
+function updateResolvedPreview(){
+  if(!resolvedPreviewOn||!selectedNode)return;
+  const rv=document.getElementById('sb-resolved');
+  const tpl=selectedNode.inputTemplate||'';
+  // Build HTML with color-coded substitutions
+  let html='';let last=0;
+  const regex=/\{\{([^}]+)\}\}/g;let m;
+  while((m=regex.exec(tpl))!==null){
+    // text before match
+    html+=escapeHtml(tpl.substring(last,m.index));
+    // find the source node
+    const srcName=m[1];
+    const src=nodes.find(n=>n.name===srcName)||canvasEls.find(c=>(c.name||c.nodeName)===srcName);
+    const val=src?(src.outputCapture||''):'';
+    if(val){html+=`<span class="rv-var">${escapeHtml(val)}</span>`}
+    else{html+=`<span style="color:var(--red)">${escapeHtml(m[0])}</span>`}
+    last=m.index+m[0].length;
+  }
+  html+=escapeHtml(tpl.substring(last));
+  rv.innerHTML=html;
+}
+
+// ═══ SCRATCHPAD ═══
+let spSaveTimer=null,spDbTimer=null,spDirty=false;
+function toggleScratchpad(){
+  const bar=document.getElementById('scratchpad-bar');
+  const btn=document.getElementById('sp-toggle');
+  const show=!bar.classList.contains('show');
+  bar.classList.toggle('show',show);
+  btn.classList.toggle('active',show);
+  localStorage.setItem('scratchpad_visible',show?'1':'0');
+}
+function initScratchpad(){
+  const ta=document.getElementById('scratchpad-ta');
+  // restore from localStorage first (instant)
+  const cached=localStorage.getItem('scratchpad_content');
+  if(cached)ta.value=cached;
+  // restore visibility
+  if(localStorage.getItem('scratchpad_visible')==='1'){
+    document.getElementById('scratchpad-bar').classList.add('show');
+    document.getElementById('sp-toggle').classList.add('active');
+  }
+  // load from server
+  api('GET','/api/scratchpad/load').then(r=>{if(r.ok&&r.content&&!ta.value)ta.value=r.content});
+  // input handler with debounce
+  ta.addEventListener('input',()=>{
+    localStorage.setItem('scratchpad_content',ta.value);
+    spDirty=true;
+    if(spSaveTimer)clearTimeout(spSaveTimer);
+    spSaveTimer=setTimeout(()=>{localStorage.setItem('scratchpad_content',ta.value)},1000);
+  });
+  // periodic DB sync
+  spDbTimer=setInterval(()=>{
+    if(spDirty){spDirty=false;api('POST','/api/scratchpad/save',{content:ta.value})}
+  },10000);
+}
+
+// ═══ SIDEBAR DIVIDER (resizable) ═══
+(function initSbDivider(){
+  const div=document.getElementById('sb-div');
+  if(!div)return;
+  let dragging=false,startY=0,startInputH=0,startOutputH=0;
+  div.addEventListener('mousedown',e=>{
+    e.preventDefault();e.stopPropagation();dragging=true;startY=e.clientY;
+    const inSec=document.getElementById('sb-input-sec');
+    const outSec=document.getElementById('sb-output-sec');
+    startInputH=inSec.offsetHeight;startOutputH=outSec.offsetHeight;
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    const dy=e.clientY-startY;
+    const inSec=document.getElementById('sb-input-sec');
+    const outSec=document.getElementById('sb-output-sec');
+    const newInH=Math.max(60,startInputH+dy);
+    const newOutH=Math.max(60,startOutputH-dy);
+    inSec.style.flex='none';inSec.style.height=newInH+'px';
+    outSec.style.flex='none';outSec.style.height=newOutH+'px';
+  });
+  window.addEventListener('mouseup',()=>{dragging=false});
+})();
+
+// ═══ PINNED MEMOS ═══
+async function loadPinnedMemos(){
+  const r=await api('GET','/api/memo/pinned');
+  const el=document.getElementById('pinned-memos');
+  if(!r.ok||!el)return;
+  el.innerHTML=(r.memos||[]).map(m=>`<span class="pinned-chip" onclick="openMemoEditor(${m.id})" title="${escapeHtml(m.preview||m.name||'')}">${escapeHtml(m.name||'무제')}</span>`).join('');
+}
+async function toggleMemoPin(id,pinned){
+  await api('POST','/api/memo/pin',{id,pinned});
+  loadPinnedMemos();loadMemoTabs();
+}
+
+// ═══ FOLDER COLORS ═══
+async function editFolderColor(fid){
+  const colors=['#3B82F6','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#22C55E','#F97316','#EC4899',''];
+  const choice=prompt('폴더 색상 (hex, 비우면 기본):\n'+colors.join(', '),'');
+  if(choice===null)return;
+  const f=memoFolders.find(x=>x.id===fid);
+  if(f){await api('POST','/api/folder/save',{id:fid,name:f.name,icon:f.icon,color:choice});loadFolders()}
+}
+
 // 툴바에 "프로젝트 열기" 버튼 추가는 init에서 처리
 
 async function init(){
@@ -2257,7 +2445,8 @@ async function init(){
   console.log('[INIT] 랜딩 모달 표시');
   refreshWfList();applyTx();
   undoStack=[];redoStack=[];
-  loadFolders();loadMemoTabs();
+  loadFolders();loadMemoTabs();loadPinnedMemos();
+  initScratchpad();
   showLanding();
 }
 init();

@@ -100,6 +100,16 @@ def init_db():
         db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
     except sqlite3.OperationalError:
         pass  # 이미 있음
+    # 메모/폴더 확장 컬럼 (pinned, color)
+    for stmt in [
+        "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0",
+        "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''",
+        "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
+    ]:
+        try:
+            db.execute(stmt)
+        except sqlite3.OperationalError:
+            pass
     db.commit()
     db.close()
     log("DB initialized")
@@ -241,6 +251,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/exec/list": self._json(self._exec_list(params))
         elif p == "/api/conv/list": self._json(self._conv_list(params))
         elif p == "/api/conv/messages": self._json(self._conv_messages(params))
+        elif p == "/api/scratchpad/load": self._json(self._scratchpad_load())
+        elif p == "/api/memo/pinned": self._json(self._memo_pinned())
         elif p == "/api/state/load": self._json(self._state_load())
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
@@ -269,6 +281,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/memo/delete": self._memo_delete,
             "/api/folder/save": self._folder_save,
             "/api/folder/delete": self._folder_delete,
+            "/api/scratchpad/save": self._scratchpad_save,
+            "/api/memo/pin": self._memo_pin,
             "/api/project/star": self._project_star,
             "/api/upload": self._upload_file,
             "/api/pdf-split": self._pdf_split,
@@ -593,7 +607,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         """메모 목록 (folder_id 또는 is_temp 필터)"""
         folder_id = params.get("folderId", [None])[0]
         is_temp = params.get("isTemp", [None])[0]
-        sql = "SELECT id, name, folder_id, is_temp, substr(content,1,100) as preview, created, modified FROM memos"
+        sql = "SELECT id, name, folder_id, is_temp, pinned, color, substr(content,1,100) as preview, created, modified FROM memos WHERE name!='__scratchpad__'"
         cond = []
         args = []
         if folder_id is not None:
@@ -605,7 +619,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         if is_temp is not None:
             cond.append("is_temp=?")
             args.append(int(is_temp))
-        if cond: sql += " WHERE " + " AND ".join(cond)
+        if cond: sql += " AND " + " AND ".join(cond)
         sql += " ORDER BY modified DESC LIMIT 200"
         rows = db_exec(sql, tuple(args), fetch=True)
         return {"ok": True, "memos": rows}
@@ -638,19 +652,20 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True}
 
     def _folder_list(self):
-        rows = db_exec("SELECT f.*, (SELECT COUNT(*) FROM memos WHERE folder_id=f.id) as memo_count FROM memo_folders f ORDER BY sort_order, name", fetch=True)
+        rows = db_exec("SELECT f.id, f.name, f.icon, f.sort_order, f.color, f.created, (SELECT COUNT(*) FROM memos WHERE folder_id=f.id) as memo_count FROM memo_folders f ORDER BY sort_order, name", fetch=True)
         return {"ok": True, "folders": rows}
 
     def _folder_save(self, body):
         fid = body.get("id")
         name = body.get("name", "새 폴더")
         icon = body.get("icon", "📁")
+        color = body.get("color", "")
         now = datetime.now().isoformat()
         if fid:
-            db_exec("UPDATE memo_folders SET name=?, icon=? WHERE id=?", (name, icon, fid))
+            db_exec("UPDATE memo_folders SET name=?, icon=?, color=? WHERE id=?", (name, icon, color, fid))
             return {"ok": True, "id": fid}
         else:
-            new_id = db_exec("INSERT INTO memo_folders (name, icon, created) VALUES (?,?,?)", (name, icon, now))
+            new_id = db_exec("INSERT INTO memo_folders (name, icon, color, created) VALUES (?,?,?,?)", (name, icon, color, now))
             return {"ok": True, "id": new_id}
 
     def _folder_delete(self, body):
@@ -795,6 +810,36 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": False, "error": str(e)}
 
     # ── Auto State (항상 최신 상태를 DB에 보관) ──
+
+    # ── Scratchpad ──
+
+    def _scratchpad_load(self):
+        row = db_exec("SELECT content FROM memos WHERE name='__scratchpad__' LIMIT 1", fetchone=True)
+        return {"ok": True, "content": row["content"] if row else ""}
+
+    def _scratchpad_save(self, body):
+        content = body.get("content", "")
+        now = datetime.now().isoformat()
+        existing = db_exec("SELECT id FROM memos WHERE name='__scratchpad__'", fetchone=True)
+        if existing:
+            db_exec("UPDATE memos SET content=?, modified=? WHERE name='__scratchpad__'", (content, now))
+        else:
+            db_exec("INSERT INTO memos (name, content, is_temp, created, modified) VALUES (?,?,0,?,?)",
+                    ("__scratchpad__", content, now, now))
+        return {"ok": True}
+
+    # ── Memo Pin ──
+
+    def _memo_pinned(self):
+        rows = db_exec("SELECT id, name, substr(content,1,40) as preview FROM memos WHERE pinned=1 AND name!='__scratchpad__' ORDER BY modified DESC LIMIT 5", fetch=True)
+        return {"ok": True, "memos": rows}
+
+    def _memo_pin(self, body):
+        mid = body.get("id", "")
+        pinned = 1 if body.get("pinned", True) else 0
+        if mid:
+            db_exec("UPDATE memos SET pinned=? WHERE id=?", (pinned, mid))
+        return {"ok": True}
 
     def _state_save(self, body):
         """현재 캔버스 상태를 __current__ 프로젝트로 자동 저장"""
