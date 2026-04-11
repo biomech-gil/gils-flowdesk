@@ -358,6 +358,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       <button onclick="toggleCurrentMemoPin()" id="me-pin-btn" title="고정" style="font-size:11px;padding:3px 8px">📌</button>
       <button onclick="deleteMemo()" style="font-size:11px;padding:3px 8px;color:var(--red)">🗑</button>
       <button onclick="memoToNode()" title="이 메모를 캔버스 노드로 생성" style="font-size:11px;padding:3px 8px">→ 노드</button>
+      <span style="border-left:1px solid var(--border);height:16px;margin:0 2px"></span>
+      <button onclick="memoFontSize(-2)" title="글자 축소" style="font-size:11px;padding:3px 6px">A−</button>
+      <button onclick="memoFontSize(2)" title="글자 확대" style="font-size:11px;padding:3px 6px">A+</button>
+      <span id="me-fontsize-label" style="font-size:9px;color:var(--text-muted)">14px</span>
     </div>
     <textarea id="me-content" style="flex:1;background:var(--bg-0);color:var(--text);border:none;padding:14px;font-family:var(--mono);font-size:14px;line-height:1.7;resize:none;outline:none" placeholder="메모 내용..." oninput="memoAutoSave()"></textarea>
   </div>
@@ -2123,6 +2127,24 @@ async function deleteMemo(){
 }
 
 // Auto-save (1 second debounce)
+let memoFontSizePx=14;
+function memoFontSize(delta){
+  memoFontSizePx=Math.max(10,Math.min(32,memoFontSizePx+delta));
+  const ta=document.getElementById('me-content');
+  if(ta)ta.style.fontSize=memoFontSizePx+'px';
+  const lbl=document.getElementById('me-fontsize-label');
+  if(lbl)lbl.textContent=memoFontSizePx+'px';
+}
+// Ctrl+스크롤로 메모 텍스트 크기 조절
+document.addEventListener('wheel',function(e){
+  if(!e.ctrlKey)return;
+  const me=document.getElementById('memo-editor');
+  if(!me||me.style.display==='none')return;
+  if(me.contains(e.target)){
+    e.preventDefault();
+    memoFontSize(e.deltaY<0?1:-1);
+  }
+},{passive:false});
 function memoAutoSave(){
   if(!activeMemoId)return;
   if(memoSaveTimer)clearTimeout(memoSaveTimer);
@@ -2366,6 +2388,7 @@ async function loadLandingLists(){
           <div class="nm">${escapeHtml(p.name||'무제')}</div>
           <div class="meta">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount} · 연결 ${p.connCount}</div>
         </div>
+        <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||"project")}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">📥</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
       </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">저장된 프로젝트 없음</div>';
   }
@@ -2826,12 +2849,20 @@ function ceOutputToMemo(){
 function exportProject(){
   const state = getState();
   state.name = wfName || 'project';
-  const json = JSON.stringify(state, null, 2);
+  downloadJson(state, wfName || 'claude-flow-project');
+}
+async function downloadProject(id, name){
+  const r=await api('GET',`/api/project/load?id=${id}`);
+  if(!r.ok||!r.project)return alert('불러오기 실패');
+  downloadJson(r.project, name || 'project');
+}
+function downloadJson(data, filename){
+  const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = (wfName || 'claude-flow-project') + '.json';
+  a.download = filename + '.json';
   a.click();
   URL.revokeObjectURL(url);
 }
