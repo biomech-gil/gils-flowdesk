@@ -362,7 +362,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 <div class="tb">
   <button onclick="showLanding()" title="저장된 프로젝트 목록에서 선택" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#7ecfff">📂 프로젝트열기</button>
   <button onclick="newProject()" title="빈 캔버스에서 새로 시작" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새프로젝트</button>
-  <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><div class="sep"></div>
+  <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><button onclick="openTrash()" title="휴지통 (삭제된 항목 복원)" style="background:rgba(139,92,246,.15);border-color:rgba(139,92,246,.3);color:#b48ead">🗑️ 휴지통</button><div class="sep"></div>
   <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■ 정지</button><div class="sep"></div>
   <span class="lbl">작업폴더:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><div class="sep"></div>
   <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 프로젝트저장</button><button onclick="exportProject()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">⬇ 내보내기</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기▾</option></select><button onclick="refreshWfList()" title="프로젝트 목록 새로고침">↻</button>
@@ -434,11 +434,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     </div>
     <div class="landing-body">
       <div class="landing-col">
-        <div class="landing-col-hd">⭐ 저장된 프로젝트 (즐겨찾기 우선) <button onclick="batchDeleteLanding()" style="float:right;font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-3);color:var(--red,#f44);border:1px solid var(--border);border-radius:4px">🗑 선택 삭제</button></div>
+        <div class="landing-col-hd">⭐ 저장된 프로젝트 (즐겨찾기 우선) <button onclick="toggleSelectAll('landing-projects')" style="float:right;font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;margin-right:4px">☑ 모두선택</button><button onclick="batchDeleteLanding()" style="float:right;font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-3);color:var(--red,#f44);border:1px solid var(--border);border-radius:4px">🗑 선택 삭제</button></div>
         <div class="landing-list" id="landing-projects"></div>
       </div>
       <div class="landing-col">
-        <div class="landing-col-hd">🕐 최근 임시 저장 (자동 백업) <button onclick="batchDeleteLanding()" style="float:right;font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-3);color:var(--red,#f44);border:1px solid var(--border);border-radius:4px">🗑 선택 삭제</button></div>
+        <div class="landing-col-hd">🕐 최근 임시 저장 (자동 백업) <button onclick="toggleSelectAll('landing-temps')" style="float:right;font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;margin-right:4px">☑ 모두선택</button><button onclick="batchDeleteLanding()" style="float:right;font-size:11px;padding:2px 8px;cursor:pointer;background:var(--bg-3);color:var(--red,#f44);border:1px solid var(--border);border-radius:4px">🗑 선택 삭제</button></div>
         <div class="landing-list" id="landing-temps"></div>
       </div>
       <div class="landing-preview">
@@ -2677,6 +2677,68 @@ async function batchDeleteLanding(){
     else await api('POST','/api/temp/delete',{id});
   }
   loadLandingLists();
+}
+
+function toggleSelectAll(column){
+  const list = document.getElementById(column);
+  if(!list) return;
+  const checks = list.querySelectorAll('.landing-chk');
+  const allChecked = [...checks].every(c => c.checked);
+  checks.forEach(c => c.checked = !allChecked);
+}
+
+async function openTrash(){
+  const r = await api('GET', '/api/trash/list');
+  if(!r.ok) return;
+  const items = r.items || [];
+  let html = '<div style="max-height:60vh;overflow-y:auto;padding:8px">';
+  if(!items.length){
+    html += '<div style="padding:20px;text-align:center;color:var(--text-dim)">휴지통이 비어있습니다</div>';
+  } else {
+    const typeLabels = {projects:'📂 프로젝트', temps:'📋 임시저장', memos:'📝 메모'};
+    items.forEach(item => {
+      html += `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">
+        <span style="color:var(--text-dim);font-size:10px">${typeLabels[item.original_table]||item.original_table}</span>
+        <span style="flex:1;color:var(--text)">${item.name||'무제'}</span>
+        <span style="color:var(--text-dim);font-size:9px">${(item.deleted_at||'').substring(0,16)}</span>
+        <button onclick="restoreTrash(${item.id})" style="font-size:10px;padding:2px 6px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#a3be8c;border-radius:3px;cursor:pointer">↩ 복원</button>
+        <button onclick="permanentDelete(${item.id})" style="font-size:10px;padding:2px 6px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#bf616a;border-radius:3px;cursor:pointer">✕</button>
+      </div>`;
+    });
+  }
+  html += '</div>';
+  let popup = document.getElementById('trash-popup');
+  if(!popup){
+    popup = document.createElement('div');
+    popup.id = 'trash-popup';
+    popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:500px;max-height:70vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:100;display:flex;flex-direction:column;overflow:hidden';
+    document.body.appendChild(popup);
+  }
+  popup.innerHTML = `
+    <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2)">
+      <span style="font-weight:600;font-size:.85em;flex:1">🗑️ 휴지통 (${items.length})</span>
+      <button onclick="emptyTrash()" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#bf616a;border-radius:3px;cursor:pointer;margin-right:8px">전체 비우기</button>
+      <button onclick="document.getElementById('trash-popup').remove()" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
+    </div>
+    ${html}`;
+  popup.style.display = 'flex';
+}
+
+async function restoreTrash(id){
+  const r = await api('POST', '/api/trash/restore', {id});
+  if(r.ok){openTrash(); if(typeof loadLandingLists==='function') loadLandingLists();}
+}
+
+async function permanentDelete(id){
+  if(!confirm('영구 삭제합니다. 복원할 수 없습니다.')) return;
+  await api('POST', '/api/trash/delete', {id});
+  openTrash();
+}
+
+async function emptyTrash(){
+  if(!confirm('휴지통을 비웁니다. 모든 항목이 영구 삭제됩니다.')) return;
+  await api('POST', '/api/trash/empty', {});
+  openTrash();
 }
 
 // ═══ PROJECT FOLDERS ═══

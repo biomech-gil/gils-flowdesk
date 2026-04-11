@@ -308,6 +308,14 @@ def init_db():
                 created TEXT NOT NULL,
                 expires TEXT NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS trash (
+                id SERIAL PRIMARY KEY,
+                original_table TEXT NOT NULL,
+                original_id TEXT NOT NULL,
+                name TEXT,
+                data TEXT NOT NULL,
+                deleted_at TEXT NOT NULL
+            )""",
         ]
         for ddl in pg_tables:
             cur.execute(ddl)
@@ -426,6 +434,14 @@ def init_db():
             username TEXT NOT NULL,
             created TEXT NOT NULL,
             expires TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS trash (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_table TEXT NOT NULL,
+            original_id TEXT NOT NULL,
+            name TEXT,
+            data TEXT NOT NULL,
+            deleted_at TEXT NOT NULL
         );
         """)
         try:
@@ -791,6 +807,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/state/load": self._json(self._state_load())
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
+        elif p == "/api/trash/list": self._json(self._trash_list())
         elif p.startswith("/uploads/"):
             # uploads 디렉토리가 외부 경로일 수 있으므로 직접 서빙
             file_path = os.path.join(UPLOADS_DIR, p[len("/uploads/"):])
@@ -863,6 +880,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/kill-pane": self._kill_pane,
             "/api/new-window": self._new_window,
             "/api/select-window": self._select_window,
+            "/api/trash/restore": self._trash_restore,
+            "/api/trash/delete": self._trash_delete,
+            "/api/trash/empty": self._trash_empty,
         }
         handler = handlers.get(p)
         if handler:
@@ -1203,7 +1223,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _temp_delete(self, body):
         tid = body.get("id", "")
-        if tid: db_exec("DELETE FROM temps WHERE id=?", (tid,))
+        if not tid: return {"ok": False, "error": "id required"}
+        row = db_exec("SELECT id, name, data, date, created FROM temps WHERE id=?", (tid,), fetchone=True)
+        if row:
+            trash_data = json.dumps(dict(row), ensure_ascii=False, default=str)
+            db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
+                    ("temps", str(tid), row.get("name", ""), trash_data, datetime.now().isoformat()))
+        db_exec("DELETE FROM temps WHERE id=?", (tid,))
         return {"ok": True}
 
     # ── Memo & Folders ──
@@ -1262,7 +1288,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _memo_delete(self, body):
         mid = body.get("id", "")
-        if mid: db_exec("DELETE FROM memos WHERE id=?", (mid,))
+        if not mid: return {"ok": False, "error": "id required"}
+        row = db_exec("SELECT id, name, content, folder_id, is_temp, pinned, color, created, modified FROM memos WHERE id=?", (mid,), fetchone=True)
+        if row:
+            trash_data = json.dumps(dict(row), ensure_ascii=False, default=str)
+            db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
+                    ("memos", str(mid), row.get("name", ""), trash_data, datetime.now().isoformat()))
+        db_exec("DELETE FROM memos WHERE id=?", (mid,))
         return {"ok": True}
 
     def _folder_list(self):
@@ -1291,7 +1323,47 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _project_delete(self, body):
         pid = body.get("id", "")
-        if pid: db_exec("DELETE FROM projects WHERE id=?", (pid,))
+        if not pid: return {"ok": False, "error": "id required"}
+        row = db_exec("SELECT id, name, data, created, modified, favorite, folder_id FROM projects WHERE id=?", (pid,), fetchone=True)
+        if row:
+            trash_data = json.dumps(dict(row), ensure_ascii=False, default=str)
+            db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
+                    ("projects", str(pid), row.get("name", ""), trash_data, datetime.now().isoformat()))
+        db_exec("DELETE FROM projects WHERE id=?", (pid,))
+        return {"ok": True}
+
+    # ── Trash (휴지통) ──
+
+    def _trash_list(self):
+        rows = db_exec("SELECT id, original_table, original_id, name, deleted_at FROM trash ORDER BY deleted_at DESC LIMIT 100", fetch=True)
+        return {"ok": True, "items": rows}
+
+    def _trash_restore(self, body):
+        tid = body.get("id")
+        if not tid: return {"ok": False, "error": "id required"}
+        row = db_exec("SELECT * FROM trash WHERE id=?", (tid,), fetchone=True)
+        if not row: return {"ok": False, "error": "not found"}
+        data = json.loads(row["data"])
+        table = row["original_table"]
+        if table == "projects":
+            db_exec("INSERT INTO projects (id, name, data, created, modified, favorite, folder_id) VALUES (?,?,?,?,?,?,?)",
+                    (data.get("id"), data.get("name",""), data.get("data","{}"), data.get("created",""), data.get("modified",""), data.get("favorite",0), data.get("folder_id")))
+        elif table == "temps":
+            db_exec("INSERT INTO temps (name, data, date, created) VALUES (?,?,?,?)",
+                    (data.get("name",""), data.get("data","{}"), data.get("date",""), data.get("created","")))
+        elif table == "memos":
+            db_exec("INSERT INTO memos (name, content, folder_id, is_temp, pinned, color, created, modified) VALUES (?,?,?,?,?,?,?,?)",
+                    (data.get("name",""), data.get("content",""), data.get("folder_id"), data.get("is_temp",1), data.get("pinned",0), data.get("color",""), data.get("created",""), data.get("modified","")))
+        db_exec("DELETE FROM trash WHERE id=?", (tid,))
+        return {"ok": True}
+
+    def _trash_delete(self, body):
+        tid = body.get("id")
+        if tid: db_exec("DELETE FROM trash WHERE id=?", (tid,))
+        return {"ok": True}
+
+    def _trash_empty(self, body):
+        db_exec("DELETE FROM trash")
         return {"ok": True}
 
     # ── File Upload (이미지/시스템프롬프트 파일) ──
