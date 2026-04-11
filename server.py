@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Claude Flow Canvas — Visual AI Workflow Editor Server (SQLite/PostgreSQL + Claude CLI)"""
 
-import subprocess, json, os, re, uuid, sys, time, sqlite3, threading
+import subprocess, json, os, re, uuid, sys, time, sqlite3, threading, hashlib, secrets
 try:
     import psycopg2
     import psycopg2.extras
     HAS_PSYCOPG2 = True
 except ImportError:
     HAS_PSYCOPG2 = False
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from urllib.parse import urlparse, parse_qs
@@ -294,6 +294,20 @@ def init_db():
                 ts TEXT NOT NULL,
                 FOREIGN KEY (conv_id) REFERENCES conversations(id)
             )""",
+            """CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                created TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                created TEXT NOT NULL,
+                expires TEXT NOT NULL
+            )""",
         ]
         for ddl in pg_tables:
             cur.execute(ddl)
@@ -399,6 +413,20 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_exec_node ON executions(node_id);
         CREATE INDEX IF NOT EXISTS idx_conv_node ON conversations(node_id);
         CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conv_id);
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            created TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            created TEXT NOT NULL,
+            expires TEXT NOT NULL
+        );
         """)
         try:
             db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
@@ -419,6 +447,23 @@ def init_db():
 
 init_db()
 db_lock = threading.Lock()
+
+# ═══════════════════════════════════════
+# Password hashing & default user
+# ═══════════════════════════════════════
+def hash_password(password, salt=None):
+    if salt is None:
+        salt = secrets.token_hex(32)
+    hashed = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
+    return hashed.hex(), salt
+
+def _create_default_user():
+    existing = db_exec("SELECT id FROM users WHERE username=?", ('gilhojong',), fetchone=True)
+    if not existing:
+        pw_hash, salt = hash_password('!!Il197119!!')
+        db_exec("INSERT INTO users (username, password_hash, salt, created) VALUES (?,?,?,?)",
+                ('gilhojong', pw_hash, salt, datetime.now().isoformat()))
+        log("Default user created: gilhojong")
 
 def db_exec(sql, params=(), fetch=False, fetchone=False):
     with db_lock:
@@ -608,6 +653,7 @@ def _create_manual_memo():
     log("Manual memo created")
 
 _create_manual_memo()
+_create_default_user()
 
 # ═══════════════════════════════════════
 # tmux
@@ -713,6 +759,17 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         params = parse_qs(parsed.query)
         p = parsed.path
 
+        # Auth check endpoint (no auth required)
+        if p == "/api/auth/check":
+            self._json(self._auth_check())
+            return
+
+        # Auth middleware for API routes
+        if p.startswith("/api/") and p not in ("/api/auth/login", "/api/auth/check"):
+            if not self._check_auth():
+                self._json({"ok": False, "error": "unauthorized"}, 401)
+                return
+
         if p == "/api/status": self._json(get_session_info())
         elif p == "/api/node-check": self._json(self._node_check(params))
         elif p == "/api/chat-check": self._json(self._chat_check(params))
@@ -760,6 +817,20 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         body = json.loads(self.rfile.read(content_len)) if content_len > 0 else {}
         p = parsed.path
 
+        # Auth login endpoint (no auth required)
+        if p == "/api/auth/login":
+            self._handle_auth_login(body)
+            return
+        if p == "/api/auth/logout":
+            self._handle_auth_logout(body)
+            return
+
+        # Auth middleware for all other POST API routes
+        if p.startswith("/api/"):
+            if not self._check_auth():
+                self._json({"ok": False, "error": "unauthorized"}, 401)
+                return
+
         handlers = {
             "/api/node-exec": self._node_exec,
             "/api/chat": self._chat_send,
@@ -801,7 +872,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self._get_cors_origin()
+        self.send_header("Access-Control-Allow-Origin", origin)
+        if origin != "*":
+            self.send_header("Access-Control-Allow-Credentials", "true")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
@@ -1572,12 +1646,102 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             if re.search(r'❯|~\$\s*$|\$\s*$', cl): idle = True; break
         return {"ok": True, "idle": idle, "lastLines": content_lines[-3:] if content_lines else []}
 
+    # ── Auth ──
+
+    def _check_auth(self):
+        cookie_header = self.headers.get("Cookie", "")
+        token = None
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("session="):
+                token = part[8:]
+                break
+        if not token:
+            return False
+        session = db_exec("SELECT * FROM sessions WHERE token=?", (token,), fetchone=True)
+        if not session:
+            return False
+        if datetime.fromisoformat(session["expires"]) < datetime.now():
+            db_exec("DELETE FROM sessions WHERE token=?", (token,))
+            return False
+        return True
+
+    def _auth_check(self):
+        if self._check_auth():
+            return {"ok": True, "authenticated": True}
+        return {"ok": True, "authenticated": False}
+
+    def _handle_auth_login(self, body):
+        username = body.get("username", "")
+        password = body.get("password", "")
+        if not username or not password:
+            self._json({"ok": False, "error": "아이디와 비밀번호를 입력하세요"})
+            return
+
+        user = db_exec("SELECT id, username, password_hash, salt FROM users WHERE username=?", (username,), fetchone=True)
+        if not user:
+            time.sleep(1)
+            self._json({"ok": False, "error": "아이디 또는 비밀번호가 잘못되었습니다"})
+            return
+
+        pw_hash, _ = hash_password(password, user["salt"])
+        if pw_hash != user["password_hash"]:
+            time.sleep(1)
+            self._json({"ok": False, "error": "아이디 또는 비밀번호가 잘못되었습니다"})
+            return
+
+        token = secrets.token_hex(32)
+        expires = (datetime.now() + timedelta(days=7)).isoformat()
+        db_exec("INSERT INTO sessions (token, user_id, username, created, expires) VALUES (?,?,?,?,?)",
+                (token, user["id"], username, datetime.now().isoformat(), expires))
+
+        result = {"ok": True, "token": token, "username": username}
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        origin = self._get_cors_origin()
+        self.send_header("Access-Control-Allow-Origin", origin)
+        if origin != "*":
+            self.send_header("Access-Control-Allow-Credentials", "true")
+        self.send_header("Set-Cookie", f"session={token}; Path=/; HttpOnly; Max-Age=604800")
+        self.end_headers()
+        self.wfile.write(json.dumps(result, ensure_ascii=False).encode("utf-8"))
+        log(f"AUTH login: {username}")
+
+    def _handle_auth_logout(self, body):
+        cookie_header = self.headers.get("Cookie", "")
+        token = None
+        for part in cookie_header.split(";"):
+            part = part.strip()
+            if part.startswith("session="):
+                token = part[8:]
+                break
+        if token:
+            db_exec("DELETE FROM sessions WHERE token=?", (token,))
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        origin = self._get_cors_origin()
+        self.send_header("Access-Control-Allow-Origin", origin)
+        if origin != "*":
+            self.send_header("Access-Control-Allow-Credentials", "true")
+        self.send_header("Set-Cookie", "session=; Path=/; HttpOnly; Max-Age=0")
+        self.end_headers()
+        self.wfile.write(json.dumps({"ok": True}, ensure_ascii=False).encode("utf-8"))
+        log("AUTH logout")
+
     # ── Response ──
+
+    def _get_cors_origin(self):
+        origin = self.headers.get("Origin", "")
+        return origin if origin else "*"
 
     def _json(self, data, code=200):
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self._get_cors_origin()
+        self.send_header("Access-Control-Allow-Origin", origin)
+        if origin != "*":
+            self.send_header("Access-Control-Allow-Credentials", "true")
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 

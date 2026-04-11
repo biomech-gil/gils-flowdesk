@@ -332,6 +332,20 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 </style>
 </head>
 <body>
+<!-- Login Screen -->
+<div id="login-screen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0a0a1a,#1a0a2e,#0a1a2e)">
+  <canvas id="login-bg" style="position:absolute;inset:0;z-index:0"></canvas>
+  <div style="z-index:1;text-align:center">
+    <h1 style="font-size:2.5em;color:#4CAF50;margin-bottom:8px;text-shadow:0 0 20px rgba(76,175,80,.4)">Claude Flow Canvas</h1>
+    <p style="color:#7ecfff;margin-bottom:30px;font-size:.9em">Visual AI Workflow Editor</p>
+    <div style="background:rgba(255,255,255,.05);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:30px;width:320px">
+      <input type="text" id="login-user" placeholder="아이디" style="width:100%;padding:12px;margin-bottom:12px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:14px;outline:none">
+      <input type="password" id="login-pass" placeholder="비밀번호" style="width:100%;padding:12px;margin-bottom:16px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:14px;outline:none">
+      <button onclick="doLogin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#4CAF50,#2E7D32);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:.2s">로그인</button>
+      <div id="login-error" style="color:#EF4444;margin-top:10px;font-size:12px;min-height:18px"></div>
+    </div>
+  </div>
+</div>
 <nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="pinned-memos" id="pinned-memos"></div></nav>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 생성">📝 메모생성</button>
@@ -490,7 +504,7 @@ function renderMd(text){try{
   return marked.parse(preserved,{breaks:true})
 }catch(e){return text}}
 const API=`http://${location.hostname}:8888`,LS_KEY='tmux_canvas_state';
-async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
+async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
 const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};
 
@@ -3122,7 +3136,65 @@ async function init(){
   setupJsonDragDrop();
   showLanding();
 }
-init();
+// ── Login / Auth ──
+function initLoginBg(){
+  const c=document.getElementById('login-bg');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  let w=c.width=window.innerWidth, h=c.height=window.innerHeight;
+  window.addEventListener('resize',()=>{w=c.width=window.innerWidth;h=c.height=window.innerHeight});
+  const particles=[];
+  for(let i=0;i<80;i++) particles.push({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*.5,vy:(Math.random()-.5)*.5,r:Math.random()*2+1});
+  function draw(){
+    ctx.fillStyle='rgba(10,10,26,.15)';ctx.fillRect(0,0,w,h);
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;
+      if(p.x<0)p.x=w;if(p.x>w)p.x=0;if(p.y<0)p.y=h;if(p.y>h)p.y=0;
+      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle='rgba(76,175,80,.5)';ctx.fill();
+    });
+    for(let i=0;i<particles.length;i++)for(let j=i+1;j<particles.length;j++){
+      const dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      if(d<150){ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);ctx.strokeStyle=`rgba(76,175,80,${.2*(1-d/150)})`;ctx.stroke()}
+    }
+    if(document.getElementById('login-screen').style.display!=='none')requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+async function doLogin(){
+  const user=document.getElementById('login-user').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  if(!user||!pass){document.getElementById('login-error').textContent='아이디와 비밀번호를 입력하세요';return}
+  document.getElementById('login-error').textContent='로그인 중...';
+  const r=await api('POST','/api/auth/login',{username:user,password:pass});
+  if(r.ok){
+    document.getElementById('login-screen').style.display='none';
+    init();
+  } else {
+    document.getElementById('login-error').textContent=r.error||'로그인 실패';
+  }
+}
+
+async function checkAuth(){
+  const r=await api('GET','/api/auth/check');
+  if(r.ok&&r.authenticated){
+    document.getElementById('login-screen').style.display='none';
+    init();
+  } else {
+    document.getElementById('login-screen').style.display='flex';
+    initLoginBg();
+  }
+}
+
+document.getElementById('login-pass').addEventListener('keydown', e => {
+  if(e.key === 'Enter') doLogin();
+});
+document.getElementById('login-user').addEventListener('keydown', e => {
+  if(e.key === 'Enter') document.getElementById('login-pass').focus();
+});
+
+checkAuth();
 </script>
 </body>
 </html>
