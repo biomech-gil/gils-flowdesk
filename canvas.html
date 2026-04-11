@@ -325,14 +325,14 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div class="fp-memos" id="fp-memos"></div>
 </div>
 <div class="tb">
-  <button onclick="showLanding()" title="프로젝트 선택" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#7ecfff">📂 열기</button>
-  <button onclick="newProject()" title="새 빈 프로젝트" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새</button>
-  <button class="danger" onclick="resetSession()" title="리셋">↻</button><div class="sep"></div>
-  <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■</button><div class="sep"></div>
-  <span class="lbl">CWD:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><div class="sep"></div>
-  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 저장</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기</option></select><button onclick="refreshWfList()" title="새로고침">↻</button>
+  <button onclick="showLanding()" title="저장된 프로젝트 목록에서 선택" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#7ecfff">📂 프로젝트열기</button>
+  <button onclick="newProject()" title="빈 캔버스에서 새로 시작" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새프로젝트</button>
+  <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><div class="sep"></div>
+  <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■ 정지</button><div class="sep"></div>
+  <span class="lbl">작업폴더:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><div class="sep"></div>
+  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 프로젝트저장</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기▾</option></select><button onclick="refreshWfList()" title="프로젝트 목록 새로고침">↻</button>
   <div class="sep"></div>
-  <button onclick="zoomFit()" title="전체 보기">⤢</button>
+  <button onclick="zoomFit()" title="모든 노드가 보이도록 줌 조절">⤢ 전체보기</button>
   <button onclick="zoomDelta(-.2)">−</button>
   <span class="lbl" id="zoom-lbl">100%</span>
   <button onclick="zoomDelta(.2)">+</button>
@@ -371,9 +371,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <span style="flex:1"></span>
         <span id="sb-charcount" style="font-size:10px;font-weight:600"></span>
       </div>
-      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>Input <span><button onclick="inputToMemo()" title="메모로 저장" style="color:#ebcb8b">📝메모</button><button onclick="copyText('resolved')" title="치환된 전체 복사" style="color:#88c0d0">📋풀</button><button onclick="copyText('input')" title="원문 복사">📋</button><button onclick="openModal('input')" title="확대 보기" style="color:#a3be8c">⤢</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" style="color:#b48ead">치환</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
+      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="copyText('resolved')" title="변수({{노드명}})를 실제 내용으로 치환한 전체 텍스트 복사" style="color:#88c0d0">📋치환복사</button><button onclick="copyText('input')" title="입력 원문 그대로 복사">📋원문</button><button onclick="openModal('input')" title="전체화면으로 확대" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="{{변수}}가 실제 내용으로 바뀐 결과 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
-      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Output <span><button onclick="outputToMemo()" title="메모로 저장" style="color:#ebcb8b">📝메모</button><button onclick="toggleOutputEdit()" title="출력 편집" style="color:#5e81ac">✏️편집</button><button onclick="clearOutput()" title="출력 지우기" style="color:#bf616a">🗑삭제</button><button onclick="copyText('output')" title="복사">📋</button><button onclick="openModal('output')" title="확대 보기" style="color:#a3be8c">⤢</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
+      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>출력 (Output) <span><button onclick="outputToMemo()" title="이 출력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="toggleOutputEdit()" title="출력 내용을 직접 수정" style="color:#5e81ac">✏️수정</button><button onclick="clearOutput()" title="출력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('output')" title="출력 텍스트 복사">📋복사</button><button onclick="openModal('output')" title="전체화면으로 확대" style="color:#a3be8c">⤢확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
         <button onclick="sbTsz(-.1)" style="font-size:9px;padding:1px 4px">A-</button><button onclick="sbTsz(.1)" style="font-size:9px;padding:1px 4px">A+</button>
         <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
