@@ -335,7 +335,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><div class="sep"></div>
   <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■ 정지</button><div class="sep"></div>
   <span class="lbl">작업폴더:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><div class="sep"></div>
-  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 프로젝트저장</button><button onclick="exportProject()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">📥 내보내기</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기▾</option></select><button onclick="refreshWfList()" title="프로젝트 목록 새로고침">↻</button>
+  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 프로젝트저장</button><button onclick="exportProject()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">⬇ 내보내기</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기▾</option></select><button onclick="refreshWfList()" title="프로젝트 목록 새로고침">↻</button>
   <div class="sep"></div>
   <button onclick="zoomFit()" title="모든 노드가 보이도록 줌 조절">⤢ 전체보기</button>
   <button onclick="zoomDelta(-.2)">−</button>
@@ -2388,7 +2388,7 @@ async function loadLandingLists(){
           <div class="nm">${escapeHtml(p.name||'무제')}</div>
           <div class="meta">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount} · 연결 ${p.connCount}</div>
         </div>
-        <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||"project")}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">📥</button>
+        <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||"project")}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
       </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">저장된 프로젝트 없음</div>';
   }
