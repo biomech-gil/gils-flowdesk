@@ -45,6 +45,118 @@ def log(msg):
     print(f"[{ts}] {msg}", flush=True)
 
 # ═══════════════════════════════════════
+# DB Lock (동시 접속 방지)
+# ═══════════════════════════════════════
+import socket, platform, atexit
+
+LOCK_PATH = DB_PATH + ".lock"
+LOCK_HEARTBEAT = 15  # 초
+
+def _get_machine_id():
+    hostname = socket.gethostname()
+    user = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
+    return f"{user}@{hostname}"
+
+def _read_lock():
+    """잠금 파일 읽기. {machine, pid, time} 반환 또는 None."""
+    if not os.path.exists(LOCK_PATH):
+        return None
+    try:
+        with open(LOCK_PATH, "r") as f:
+            return json.load(f)
+    except:
+        return None
+
+def _write_lock():
+    """잠금 파일 생성/갱신."""
+    data = {
+        "machine": _get_machine_id(),
+        "pid": os.getpid(),
+        "started": datetime.now().isoformat(),
+        "heartbeat": datetime.now().isoformat()
+    }
+    with open(LOCK_PATH, "w") as f:
+        json.dump(data, f)
+    return data
+
+def _remove_lock():
+    """잠금 파일 제거."""
+    try:
+        if os.path.exists(LOCK_PATH):
+            lock = _read_lock()
+            # 내 잠금인 경우에만 제거
+            if lock and lock.get("machine") == _get_machine_id() and lock.get("pid") == os.getpid():
+                os.remove(LOCK_PATH)
+                log("LOCK released")
+    except:
+        pass
+
+def acquire_lock():
+    """잠금 획득 시도. 실패 시 에러 메시지와 함께 종료."""
+    me = _get_machine_id()
+    lock = _read_lock()
+
+    if lock:
+        other = lock.get("machine", "?")
+        hb = lock.get("heartbeat", "")
+
+        # 같은 머신의 같은 PID → 이전 실행의 잔여 잠금 (무시)
+        if other == me and lock.get("pid") == os.getpid():
+            pass
+        # 같은 머신의 다른 PID → 해당 프로세스가 살아있는지 확인
+        elif other == me:
+            try:
+                os.kill(lock["pid"], 0)  # 프로세스 존재 확인
+                print(f"\n╔══════════════════════════════════════════╗")
+                print(f"║  ⚠️  이 PC에서 이미 서버가 실행 중입니다    ║")
+                print(f"║  PID: {lock['pid']}                              ║")
+                print(f"╚══════════════════════════════════════════╝")
+                sys.exit(1)
+            except OSError:
+                log(f"LOCK stale (same machine, dead PID {lock['pid']}), overriding")
+        else:
+            # 다른 머신 → 하트비트 확인 (60초 초과하면 stale)
+            try:
+                last_hb = datetime.fromisoformat(hb)
+                age = (datetime.now() - last_hb).total_seconds()
+                if age < 60:
+                    print(f"\n╔══════════════════════════════════════════════════╗")
+                    print(f"║  ⛔ 다른 PC에서 사용 중 — 동시 접속 차단           ║")
+                    print(f"║                                                  ║")
+                    print(f"║  사용자: {other:<40s}║")
+                    print(f"║  시작:   {lock.get('started','?'):<40s}║")
+                    print(f"║  마지막: {hb:<40s}║")
+                    print(f"║                                                  ║")
+                    print(f"║  해당 PC에서 서버를 먼저 종료해주세요.              ║")
+                    print(f"║  또는 잠금 파일을 수동 삭제:                       ║")
+                    print(f"║  rm {LOCK_PATH:<44s}║")
+                    print(f"╚══════════════════════════════════════════════════╝")
+                    sys.exit(1)
+                else:
+                    log(f"LOCK stale ({other}, {age:.0f}s ago), overriding")
+            except:
+                log("LOCK corrupt, overriding")
+
+    # 잠금 획득
+    _write_lock()
+    atexit.register(_remove_lock)
+    log(f"LOCK acquired by {me} (PID {os.getpid()})")
+
+    # 하트비트 스레드: 15초마다 잠금 파일 갱신
+    def heartbeat():
+        while True:
+            time.sleep(LOCK_HEARTBEAT)
+            try:
+                lock = _read_lock()
+                if lock and lock.get("pid") == os.getpid():
+                    lock["heartbeat"] = datetime.now().isoformat()
+                    with open(LOCK_PATH, "w") as f:
+                        json.dump(lock, f)
+            except:
+                pass
+    threading.Thread(target=heartbeat, daemon=True).start()
+
+# ═══════════════════════════════════════
 # SQLite DB
 # ═══════════════════════════════════════
 def get_db():
@@ -1096,13 +1208,16 @@ class ThreadedServer(ThreadingMixIn, HTTPServer):
 
 if __name__ == "__main__":
     os.chdir(BASE_DIR)
+    acquire_lock()
     server = ThreadedServer(("0.0.0.0", PORT), TmuxHandler)
-    print(f"╔══════════════════════════════════════╗")
-    print(f"║  Canvas Server on ::{PORT}             ║")
+    print(f"╔══════════════════════════════════════════════════╗")
+    print(f"║  Claude Flow Canvas on ::{PORT}                    ║")
     print(f"║  DB: {DB_PATH}")
-    print(f"╚══════════════════════════════════════╝")
+    print(f"║  User: {_get_machine_id()}")
+    print(f"╚══════════════════════════════════════════════════╝")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutdown")
+        _remove_lock()
         server.server_close()
