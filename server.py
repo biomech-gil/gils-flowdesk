@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tmux 노드 캔버스 서버 — SQLite + Claude CLI 통합"""
+"""Claude Flow Canvas — Visual AI Workflow Editor Server (SQLite + Claude CLI)"""
 
 import subprocess, json, os, re, uuid, sys, time, sqlite3, threading
 from datetime import datetime

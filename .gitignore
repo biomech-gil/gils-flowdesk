@@ -3,4 +3,9 @@
 
 # Progress notes (local only)
 PROGRESS.md
+
+# Runtime data
 canvas.db
+uploads/
+__pycache__/
+*.pyc
