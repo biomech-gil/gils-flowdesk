@@ -228,6 +228,12 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .fp-memo{padding:6px 10px;font-size:.78em;color:var(--text-dim);cursor:pointer;border-radius:3px;display:flex;align-items:center;gap:4px}
 .fp-memo:hover{background:var(--bg-3);color:var(--text)}
 .fp-memo .pv{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-folder-group.collapsed .fp-memo-list{display:none}
+.fp-memo-list{padding-left:12px}
+.fp-memo-list .fp-memo{padding:4px 8px;font-size:11px;cursor:pointer;border-radius:3px}
+.fp-memo-list .fp-memo:hover{background:var(--bg-3)}
+.fp-folder-group .fp-folder .fb{font-size:9px;padding:0 2px;background:none;border:none;cursor:pointer;opacity:0;transition:.1s}
+.fp-folder-group .fp-folder:hover .fb{opacity:.7}
 /* LANDING MODAL */
 #landing{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:200;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px)}
 #landing.show{display:flex}
@@ -364,7 +370,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       </div>
       <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>Input <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openModal('input')">확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()">치환</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
-      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Output <span><button onclick="copyText('output')">📋</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
+      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Output <span><button onclick="toggleOutputEdit()" title="출력 편집">✏️</button><button onclick="clearOutput()" title="출력 지우기">🗑</button><button onclick="copyText('output')">📋</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
         <button onclick="sbTsz(-.1)" style="font-size:9px;padding:1px 4px">A-</button><button onclick="sbTsz(.1)" style="font-size:9px;padding:1px 4px">A+</button>
         <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
@@ -2077,31 +2083,52 @@ async function loadFolders(){
   const r=await api('GET','/api/folder/list');
   if(r.ok){memoFolders=r.folders||[];renderFolderPanel()}
 }
-function renderFolderPanel(){
-  const list=document.getElementById('fp-folders');
-  list.innerHTML='<div class="fp-folder '+(activeFolderId===null?'active':'')+'" onclick="selectFolder(null)"><span class="ic">📋</span><span class="nm">전체 메모</span></div>';
-  memoFolders.forEach(f=>{
-    const fColor=f.color?`border-left:3px solid ${f.color};padding-left:7px`:'';
-    list.innerHTML+=`<div class="fp-folder ${activeFolderId==f.id?'active':''}" onclick="selectFolder(${f.id})" style="${fColor}"><span class="ic">${f.icon||'📁'}</span><span class="nm">${escapeHtml(f.name)}</span><span class="cnt">${f.memo_count}</span><button class="del" onclick="event.stopPropagation();editFolderColor(${f.id})" title="색상" style="opacity:.5;color:var(--text)">🎨</button><button class="del" onclick="event.stopPropagation();delFolder(${f.id})">✕</button></div>`;
-  });
-  loadFolderMemos();
-}
-async function loadFolderMemos(){
-  const url=activeFolderId===null?'/api/memo/list':`/api/memo/list?folderId=${activeFolderId}`;
-  const r=await api('GET',url);
-  const list=document.getElementById('fp-memos');
-  if(r.ok){
-    const curFolder=memoFolders.find(f=>f.id===activeFolderId);
-    const fCol=curFolder&&curFolder.color?curFolder.color:'';
-    list.innerHTML=(r.memos||[]).map(m=>{
-      const star=m.is_temp?'':'★ ';
-      const pin=m.pinned?'📌 ':'';
-      const bStyle=fCol?`border-left:3px solid ${fCol};padding-left:7px`:'';
-      return `<div class="fp-memo" onclick="openMemoEditor(${m.id})" style="${bStyle}"><span>${pin}${star}</span><span class="pv">${escapeHtml(m.name||(m.preview||'').substring(0,30))}</span></div>`;
-    }).join('')||'<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">메모 없음</div>';
+async function renderFolderPanel(){
+  const foldersDiv=document.getElementById('fp-folders');
+  const mr=await api('GET','/api/memo/list');
+  const allMemos=mr.ok?mr.memos:[];
+  let html='';
+  for(const f of memoFolders){
+    const folderMemos=allMemos.filter(m=>m.folder_id==f.id);
+    const eName=(f.name||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    html+=`<div class="fp-folder-group" data-fid="${f.id}">
+      <div class="fp-folder" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:7px':''}">
+        <span class="ic">${f.icon||'📁'}</span><span class="nm">${escapeHtml(f.name)}</span>
+        <span style="flex:1"></span>
+        <span style="font-size:9px;color:var(--text-dim)">${folderMemos.length}</span>
+        <button class="fb" onclick="event.stopPropagation();renameFolder(${f.id},'${eName}')" title="이름 변경">✏️</button>
+        <button class="fb" onclick="event.stopPropagation();editFolderColor(${f.id})" title="아이콘/색상">🎨</button>
+        <button class="fb" onclick="event.stopPropagation();delFolder(${f.id})" title="삭제" style="color:var(--red)">🗑</button>
+      </div>
+      <div class="fp-memo-list">
+        ${folderMemos.map(m=>`<div class="fp-memo" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px">${escapeHtml((m.preview||'').substring(0,30))}</span></div>`).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">메모 없음</div>'}
+      </div>
+    </div>`;
   }
+  const uncategorized=allMemos.filter(m=>!m.folder_id);
+  if(uncategorized.length>0){
+    html+=`<div class="fp-folder-group">
+      <div class="fp-folder" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="ic">📋</span><span class="nm">분류 없음</span>
+        <span style="flex:1"></span>
+        <span style="font-size:9px;color:var(--text-dim)">${uncategorized.length}</span>
+      </div>
+      <div class="fp-memo-list">
+        ${uncategorized.map(m=>`<div class="fp-memo" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px">${escapeHtml((m.preview||'').substring(0,30))}</span></div>`).join('')}
+      </div>
+    </div>`;
+  }
+  if(!html) html='<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">폴더 없음</div>';
+  foldersDiv.innerHTML=html;
+  document.getElementById('fp-memos').innerHTML='';
 }
-function selectFolder(id){activeFolderId=id;renderFolderPanel()}
+async function renameFolder(fid,currentName){
+  const name=prompt('폴더 이름 변경:',currentName);
+  if(!name||name===currentName)return;
+  const f=memoFolders.find(x=>x.id===fid);
+  await api('POST','/api/folder/save',{id:fid,name,icon:f?f.icon:'📁',color:f?f.color:''});
+  loadFolders();
+}
 function showIconColorPicker(defaults,callback){
   const ICONS='📁 📂 ⭐ 💡 🔬 📊 🎯 🏆 📐 🧪 💪 🏃 ⚽ 🏋️ 🎓 📝 🔧 💻 🌐 ❤️ 🔵 🟢 🟡 🔴 ⚪ 📅'.split(' ');
   const COLORS=['#3B82F6','#EF4444','#F59E0B','#10B981','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#84CC16',''];
@@ -2123,10 +2150,15 @@ function showIconColorPicker(defaults,callback){
       </div>`;
     pop.querySelectorAll('[data-ic]').forEach(el=>el.addEventListener('click',()=>{selIcon=el.dataset.ic;render()}));
     pop.querySelectorAll('[data-cl]').forEach(el=>el.addEventListener('click',()=>{selColor=el.dataset.cl;render()}));
-    pop.querySelector('#icp-cancel').addEventListener('click',()=>pop.remove());
-    pop.querySelector('#icp-ok').addEventListener('click',()=>{pop.remove();callback({icon:selIcon,color:selColor})});
+    pop.querySelector('#icp-cancel').addEventListener('click',()=>{pop.remove();if(pop._backdrop)pop._backdrop.remove()});
+    pop.querySelector('#icp-ok').addEventListener('click',()=>{pop.remove();if(pop._backdrop)pop._backdrop.remove();callback({icon:selIcon,color:selColor})});
   }
+  const backdrop=document.createElement('div');
+  backdrop.style.cssText='position:fixed;inset:0;z-index:1001;background:transparent';
+  backdrop.onclick=()=>{backdrop.remove();pop.remove()};
+  pop._backdrop=backdrop;
   render();
+  document.body.appendChild(backdrop);
   document.body.appendChild(pop);
 }
 async function newFolder(){
@@ -2435,6 +2467,49 @@ async function editFolderColor(fid){
     loadFolders();
   });
 }
+
+// ═══ OUTPUT EDIT/CLEAR ═══
+function toggleOutputEdit(){
+  if(!selectedNode)return;
+  const outDiv=document.getElementById('sb-output');
+  if(outDiv.contentEditable==='true'){
+    outDiv.contentEditable='false';
+    outDiv.style.border='';
+    selectedNode.outputCapture=outDiv.textContent;
+    const oc=selectedNode.el.querySelector('.out-c');
+    if(oc)oc.textContent=selectedNode.outputCapture;
+    autoSave();
+    checkTokenLimit(selectedNode);
+    engine.downstream(selectedNode.id).forEach(dn=>checkTokenLimit(dn));
+  }else{
+    outDiv.contentEditable='true';
+    outDiv.style.border='1px solid var(--accent)';
+    outDiv.focus();
+  }
+}
+function clearOutput(){
+  if(!selectedNode)return;
+  if(!confirm('이 노드의 출력을 지울까요?'))return;
+  selectedNode.outputCapture='';
+  selectedNode.status='idle';
+  engine.setSt(selectedNode,'idle');
+  document.getElementById('sb-output').textContent='대기 중';
+  const oc=selectedNode.el.querySelector('.out-c');
+  if(oc)oc.textContent='';
+  autoSave();
+}
+
+// ═══ CLICK OUTSIDE TO CLOSE POPUPS ═══
+document.addEventListener('click',function(e){
+  const fp=document.getElementById('folder-panel');
+  if(fp&&fp.classList.contains('show')&&!fp.contains(e.target)&&!e.target.closest('.fld')){
+    fp.classList.remove('show');
+  }
+  const fav=document.getElementById('fav-popup');
+  if(fav&&fav.style.display!=='none'&&fav.style.display!==''&&!fav.contains(e.target)&&!e.target.closest('[onclick*="openFavPopup"]')){
+    fav.style.display='none';
+  }
+},true);
 
 // 툴바에 "프로젝트 열기" 버튼 추가는 init에서 처리
 
