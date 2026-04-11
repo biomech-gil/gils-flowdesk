@@ -222,13 +222,22 @@ def init_db():
     if _is_pg():
         cur = db.cursor()
         pg_tables = [
+            """CREATE TABLE IF NOT EXISTS project_folders (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                icon TEXT DEFAULT '📂',
+                color TEXT DEFAULT '',
+                sort_order INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
             """CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 data TEXT NOT NULL,
                 created TEXT NOT NULL,
                 modified TEXT NOT NULL,
-                favorite INTEGER DEFAULT 0
+                favorite INTEGER DEFAULT 0,
+                folder_id INTEGER
             )""",
             """CREATE TABLE IF NOT EXISTS temps (
                 id SERIAL PRIMARY KEY,
@@ -298,6 +307,7 @@ def init_db():
         # Migration columns (PostgreSQL: check column existence before ALTER)
         alter_checks = [
             ("projects", "favorite", "ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0"),
+            ("projects", "folder_id", "ALTER TABLE projects ADD COLUMN folder_id INTEGER"),
             ("memos", "pinned", "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0"),
             ("memos", "color", "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''"),
             ("memo_folders", "color", "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''"),
@@ -314,13 +324,22 @@ def init_db():
     else:
         # SQLite
         db.executescript("""
+        CREATE TABLE IF NOT EXISTS project_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            icon TEXT DEFAULT '📂',
+            color TEXT DEFAULT '',
+            sort_order INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS projects (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             data TEXT NOT NULL,
             created TEXT NOT NULL,
             modified TEXT NOT NULL,
-            favorite INTEGER DEFAULT 0
+            favorite INTEGER DEFAULT 0,
+            folder_id INTEGER
         );
         CREATE TABLE IF NOT EXISTS temps (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -706,6 +725,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/memo/list": self._json(self._memo_list(params))
         elif p == "/api/memo/get": self._json(self._memo_get(params))
         elif p == "/api/folder/list": self._json(self._folder_list())
+        elif p == "/api/project-folder/list": self._json(self._project_folder_list())
         elif p == "/api/exec/list": self._json(self._exec_list(params))
         elif p == "/api/conv/list": self._json(self._conv_list(params))
         elif p == "/api/conv/messages": self._json(self._conv_messages(params))
@@ -756,6 +776,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/scratchpad/save": self._scratchpad_save,
             "/api/memo/pin": self._memo_pin,
             "/api/project/star": self._project_star,
+            "/api/project/move": self._project_move,
+            "/api/project-folder/save": self._project_folder_save,
+            "/api/project-folder/delete": self._project_folder_delete,
             "/api/upload": self._upload_file,
             "/api/pdf-split": self._pdf_split,
             "/api/list-pdf-images": self._list_pdf_images,
@@ -1004,12 +1027,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "project": json.loads(row["data"])}
 
     def _project_list(self):
-        rows = db_exec("SELECT id, name, modified, favorite FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
         return {"ok": True, "projects": rows}
 
     def _project_list_meta(self):
         """메타데이터만 (data 필드 제외, 가벼움) — 노드 수도 함께"""
-        rows = db_exec("SELECT id, name, modified, created, favorite FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
         # 노드 수만 추가 추출
         for r in rows:
             try:
@@ -1031,6 +1054,39 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         fav = 1 if body.get("favorite") else 0
         if not pid: return {"ok": False, "error": "id required"}
         db_exec("UPDATE projects SET favorite=? WHERE id=?", (fav, pid))
+        return {"ok": True}
+
+    def _project_move(self, body):
+        pid = body.get("id", "")
+        folder_id = body.get("folderId")
+        if not pid: return {"ok": False, "error": "id required"}
+        db_exec("UPDATE projects SET folder_id=? WHERE id=?", (folder_id, pid))
+        return {"ok": True}
+
+    # ── Project Folders ──
+
+    def _project_folder_list(self):
+        rows = db_exec("SELECT * FROM project_folders ORDER BY sort_order, name", fetch=True)
+        return {"ok": True, "folders": rows}
+
+    def _project_folder_save(self, body):
+        fid = body.get("id")
+        name = body.get("name", "새 폴더")
+        icon = body.get("icon", "📂")
+        color = body.get("color", "")
+        now = datetime.now().isoformat()
+        if fid:
+            db_exec("UPDATE project_folders SET name=?, icon=?, color=? WHERE id=?", (name, icon, color, fid))
+            return {"ok": True, "id": fid}
+        else:
+            new_id = db_exec("INSERT INTO project_folders (name, icon, color, created) VALUES (?,?,?,?)", (name, icon, color, now))
+            return {"ok": True, "id": new_id}
+
+    def _project_folder_delete(self, body):
+        fid = body.get("id", "")
+        if fid:
+            db_exec("UPDATE projects SET folder_id=NULL WHERE folder_id=?", (fid,))
+            db_exec("DELETE FROM project_folders WHERE id=?", (fid,))
         return {"ok": True}
 
     # ── Temp Saves (날짜 기준 자동 백업) ──

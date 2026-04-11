@@ -265,6 +265,22 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .landing-item .del{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;opacity:0;padding:2px 6px;border-radius:3px}
 .landing-item:hover .del{opacity:1}
 .landing-item .del:hover{background:rgba(244,67,54,.2)}
+/* 프로젝트 폴더 그룹 */
+.pf-bar{display:flex;gap:4px;padding:4px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pf-bar button{font-size:11px;padding:3px 8px;cursor:pointer;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px}
+.pf-bar button:hover{background:var(--bg-4)}
+.pf-group{border-bottom:1px solid var(--border)}
+.pf-group:last-child{border-bottom:none}
+.pf-header{display:flex;align-items:center;gap:4px;padding:6px 8px;cursor:pointer;font-size:12px;color:var(--text);user-select:none}
+.pf-header:hover{background:var(--bg-3)}
+.pf-header .pf-btn{background:none;border:none;cursor:pointer;font-size:11px;padding:1px 3px;border-radius:3px;opacity:0;transition:.1s}
+.pf-header:hover .pf-btn{opacity:1}
+.pf-header .pf-btn:hover{background:var(--bg-4)}
+.pf-list{padding-left:8px}
+.pf-group.collapsed .pf-list{display:none}
+.pf-group.collapsed .pf-arrow{transform:rotate(-90deg)}
+.pf-arrow{font-size:9px;transition:transform .15s;display:inline-block}
+.pf-header.pf-dragover{background:rgba(76,175,80,.15)}
 /* 미니 미리보기 */
 .landing-preview{width:480px;border-left:1px solid var(--border);background:var(--bg-0);display:flex;flex-direction:column;flex-shrink:0}
 .landing-preview-hd{padding:10px 16px;background:var(--bg-2);font-size:.85em;font-weight:600;color:var(--accent);border-bottom:1px solid var(--border)}
@@ -2388,21 +2404,72 @@ async function showLanding(){
   await loadLandingLists();
 }
 async function loadLandingLists(){
-  // 프로젝트 목록 (메타만)
-  const pj=await api('GET','/api/project/list-meta');
+  // 프로젝트 목록 (메타만) + 폴더 목록
+  const [pj,pf]=await Promise.all([api('GET','/api/project/list-meta'),api('GET','/api/project-folder/list')]);
+  const projFolders=pf.ok&&pf.folders?pf.folders:[];
   const pjList=document.getElementById('landing-projects');
   if(pj.ok&&pj.projects){
-    pjList.innerHTML=pj.projects.map(p=>`
-      <div class="landing-item" onclick="selectLandingItem(this,'project','${p.id}')">
+    const projectItemHtml=(p)=>`
+      <div class="landing-item" draggable="true" data-proj-id="${p.id}" onclick="selectLandingItem(this,'project','${p.id}')">
         <input type="checkbox" class="landing-chk" data-kind="project" data-id="${p.id}" onclick="event.stopPropagation()" style="margin-right:6px">
         <span class="star ${p.favorite?'fav':''}" onclick="event.stopPropagation();toggleStar('${p.id}',${!p.favorite})">${p.favorite?'★':'☆'}</span>
         <div class="info">
           <div class="nm">${escapeHtml(p.name||'무제')}</div>
           <div class="meta">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount} · 연결 ${p.connCount}</div>
         </div>
+        <button onclick="event.stopPropagation();moveProjectFolder('${p.id}')" title="폴더 이동" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px">📂</button>
         <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
-      </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">저장된 프로젝트 없음</div>';
+      </div>`;
+    let projHtml='<div class="pf-bar"><button onclick="newProjectFolder()">📂 새 폴더</button></div>';
+    for(const f of projFolders){
+      const folderProjects=pj.projects.filter(p=>p.folder_id==f.id);
+      const eName=(f.name||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      projHtml+=`<div class="pf-group" data-pfid="${f.id}">
+        <div class="pf-header" data-drop-pfid="${f.id}" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:5px':''}">
+          <span class="pf-arrow">▼</span>
+          <span>${f.icon||'📂'} ${escapeHtml(f.name)}</span>
+          <span style="flex:1"></span>
+          <span style="font-size:9px;color:var(--text-dim)">${folderProjects.length}</span>
+          <button class="pf-btn" onclick="event.stopPropagation();renameProjectFolder(${f.id},'${eName}')" title="이름 변경">✏️</button>
+          <button class="pf-btn" onclick="event.stopPropagation();editProjectFolderColor(${f.id})" title="아이콘/색상">🎨</button>
+          <button class="pf-btn" onclick="event.stopPropagation();deleteProjectFolder(${f.id})" title="삭제" style="color:var(--red)">🗑</button>
+        </div>
+        <div class="pf-list" data-drop-pfid="${f.id}">
+          ${folderProjects.map(p=>projectItemHtml(p)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">프로젝트 없음</div>'}
+        </div>
+      </div>`;
+    }
+    const uncategorized=pj.projects.filter(p=>!p.folder_id);
+    projHtml+=`<div class="pf-group" data-pfid="null">
+      <div class="pf-header" data-drop-pfid="null" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="pf-arrow">▼</span>
+        <span>📋 분류 없음</span>
+        <span style="flex:1"></span>
+        <span style="font-size:9px;color:var(--text-dim)">${uncategorized.length}</span>
+      </div>
+      <div class="pf-list" data-drop-pfid="null">
+        ${uncategorized.map(p=>projectItemHtml(p)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">프로젝트 없음</div>'}
+      </div>
+    </div>`;
+    pjList.innerHTML=projHtml;
+    // 드래그앤드롭: 프로젝트를 폴더간 이동
+    pjList.querySelectorAll('.landing-item[draggable]').forEach(el=>{
+      el.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',el.dataset.projId);el.style.opacity='.4'});
+      el.addEventListener('dragend',()=>{el.style.opacity='1'});
+    });
+    pjList.querySelectorAll('[data-drop-pfid]').forEach(el=>{
+      el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('pf-dragover')});
+      el.addEventListener('dragleave',()=>{el.classList.remove('pf-dragover')});
+      el.addEventListener('drop',async e=>{
+        e.preventDefault();el.classList.remove('pf-dragover');
+        const projId=e.dataTransfer.getData('text/plain');
+        const fid=el.dataset.dropPfid;
+        if(!projId)return;
+        await api('POST','/api/project/move',{id:projId,folder_id:fid==='null'?null:parseInt(fid)});
+        loadLandingLists();
+      });
+    });
   }
   // 임시 저장 목록
   const tp=await api('GET','/api/temp/list');
@@ -2573,6 +2640,47 @@ async function batchDeleteLanding(){
     if(kind==='project') await api('POST','/api/project/delete',{id});
     else await api('POST','/api/temp/delete',{id});
   }
+  loadLandingLists();
+}
+
+// ═══ PROJECT FOLDERS ═══
+async function newProjectFolder(){
+  const name=prompt('새 프로젝트 폴더 이름:');
+  if(!name)return;
+  await api('POST','/api/project-folder/save',{name,icon:'📂',color:''});
+  loadLandingLists();
+}
+async function renameProjectFolder(id,currentName){
+  const name=prompt('폴더 이름 변경:',currentName);
+  if(!name||name===currentName)return;
+  await api('POST','/api/project-folder/save',{id,name});
+  loadLandingLists();
+}
+async function editProjectFolderColor(id){
+  const pf=await api('GET','/api/project-folder/list');
+  const folders=pf.ok?pf.folders:[];
+  const f=folders.find(x=>x.id===id);
+  if(!f)return;
+  showIconColorPicker({icon:f.icon||'📂',color:f.color||''},async(result)=>{
+    await api('POST','/api/project-folder/save',{id,name:f.name,icon:result.icon,color:result.color});
+    loadLandingLists();
+  });
+}
+async function deleteProjectFolder(id){
+  if(!confirm('이 프로젝트 폴더를 삭제할까요?\n(폴더 안의 프로젝트는 분류 없음으로 이동됩니다)'))return;
+  await api('POST','/api/project-folder/delete',{id});
+  loadLandingLists();
+}
+async function moveProjectFolder(projId){
+  const pf=await api('GET','/api/project-folder/list');
+  const folders=pf.ok?pf.folders:[];
+  if(!folders.length)return alert('폴더가 없습니다. 먼저 폴더를 만드세요.');
+  const opts=folders.map((f,i)=>`${i+1}. ${f.icon||'📂'} ${f.name}`).join('\n');
+  const choice=prompt(`폴더 선택 (번호 입력, 0=분류없음):\n${opts}`);
+  if(choice===null)return;
+  const idx=parseInt(choice);
+  const folderId=idx>0&&idx<=folders.length?folders[idx-1].id:null;
+  await api('POST','/api/project/move',{id:projId,folder_id:folderId});
   loadLandingLists();
 }
 
