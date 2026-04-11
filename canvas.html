@@ -357,6 +357,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       <button onclick="saveMemoNow()" title="이름 지정 저장" style="font-size:11px;padding:3px 8px">💾 저장</button>
       <button onclick="toggleCurrentMemoPin()" id="me-pin-btn" title="고정" style="font-size:11px;padding:3px 8px">📌</button>
       <button onclick="deleteMemo()" style="font-size:11px;padding:3px 8px;color:var(--red)">🗑</button>
+      <button onclick="downloadMemo(activeMemoId,document.getElementById('me-name').value)" title=".md 파일로 다운로드" style="font-size:11px;padding:3px 8px;color:#88c0d0">⬇ .md</button>
       <button onclick="memoToNode()" title="이 메모를 캔버스 노드로 생성" style="font-size:11px;padding:3px 8px">→ 노드</button>
       <span style="border-left:1px solid var(--border);height:16px;margin:0 2px"></span>
       <button onclick="memoFontSize(-2)" title="글자 축소" style="font-size:11px;padding:3px 6px">A−</button>
@@ -2225,7 +2226,7 @@ async function renderFolderPanel(){
   const foldersDiv=document.getElementById('fp-folders');
   const mr=await api('GET','/api/memo/list');
   const allMemos=mr.ok?mr.memos:[];
-  const memoItem=(m)=>`<div class="fp-memo" draggable="true" data-memo-id="${m.id}" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')"><input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()" style="margin-right:4px">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px">${escapeHtml((m.preview||'').substring(0,30))}</span></div>`;
+  const memoItem=(m)=>`<div class="fp-memo" draggable="true" data-memo-id="${m.id}" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')"><input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()" style="margin-right:4px">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px;flex:1">${escapeHtml((m.preview||'').substring(0,30))}</span><button onclick="event.stopPropagation();downloadMemo(${m.id},'${escapeHtml(m.name||'memo').replace(/'/g,'&#39;')}')" title=".md 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0">⬇</button></div>`;
   let html='';
   for(const f of memoFolders){
     const folderMemos=allMemos.filter(m=>m.folder_id==f.id);
@@ -2403,6 +2404,7 @@ async function loadLandingLists(){
           <div class="nm">${escapeHtml(t.name||'무제')}</div>
           <div class="meta">${(t.created||'').substring(0,16)} · 노드 ${t.nodeCount||0} · 연결 ${t.connCount||0}</div>
         </div>
+        <button onclick="event.stopPropagation();downloadTemp('${t.id}','${escapeHtml(t.name||'temp').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteTemp('${t.id}')" title="삭제">✕</button>
       </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">임시 저장 없음</div>';
   }
@@ -2865,6 +2867,23 @@ function downloadJson(data, filename){
   a.download = filename + '.json';
   a.click();
   URL.revokeObjectURL(url);
+}
+async function downloadTemp(id, name){
+  const r=await api('GET',`/api/temp/load?id=${id}`);
+  if(!r.ok)return alert('불러오기 실패');
+  downloadJson(r.state||r.project||r, name||'temp');
+}
+function downloadText(text, filename, ext){
+  const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename+(ext||'.md');
+  a.click();URL.revokeObjectURL(url);
+}
+async function downloadMemo(id, name){
+  const r=await api('GET',`/api/memo/get?id=${id}`);
+  if(!r.ok)return;
+  downloadText(r.memo.content||'', name||'memo', '.md');
 }
 
 function importProjectJson(data){
