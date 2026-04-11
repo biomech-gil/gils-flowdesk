@@ -2936,6 +2936,23 @@ function setupJsonDragDrop(){
   });
 }
 
+// Ctrl+V 붙여넣기로 JSON 프로젝트 가져오기
+document.addEventListener('paste',function(e){
+  // textarea나 input에 포커스 있으면 무시 (일반 붙여넣기)
+  const tag=document.activeElement?.tagName;
+  if(tag==='TEXTAREA'||tag==='INPUT'||document.activeElement?.contentEditable==='true')return;
+  const text=(e.clipboardData||window.clipboardData).getData('text');
+  if(!text||!text.trim().startsWith('{'))return;
+  try{
+    const data=JSON.parse(text);
+    if(!data.nodes||!Array.isArray(data.nodes))return;
+    e.preventDefault();
+    if(confirm(`클립보드에서 프로젝트 감지 (노드 ${data.nodes.length}개)\n\n가져올까요?`)){
+      importProjectJson(data);
+    }
+  }catch(err){}
+});
+
 async function init(){
   const st=await api('GET','/api/status');if(st.panes)paneList=st.panes;
   console.log('[INIT] 랜딩 모달 표시');
