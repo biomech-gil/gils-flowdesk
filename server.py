@@ -452,6 +452,145 @@ def db_exec(sql, params=(), fetch=False, fetchone=False):
                 pass
 
 # ═══════════════════════════════════════
+# Manual memo initialization
+# ═══════════════════════════════════════
+def _create_manual_memo():
+    """Create the manual memo if it doesn't exist yet."""
+    manual_check = db_exec("SELECT id FROM memos WHERE name='📖 Claude Flow Canvas 매뉴얼'", fetchone=True)
+    if manual_check:
+        return
+    manual_content = """# Claude Flow Canvas — JSON 구조 매뉴얼
+
+## 프로젝트 JSON 구조
+
+프로젝트는 다음 구조의 JSON으로 저장/내보내기/가져오기됩니다:
+
+```json
+{
+  "cx": 0,           // 캔버스 X 오프셋
+  "cy": 0,           // 캔버스 Y 오프셋
+  "zoom": 1,         // 줌 레벨
+  "cwd": "",         // 작업 디렉토리 경로
+  "wfName": "",      // 프로젝트 이름
+  "workflowId": "",  // 프로젝트 ID
+  "nodes": [],       // 노드 배열
+  "connections": [],  // 연결선 배열
+  "canvasElements": [] // 캔버스 요소 (이미지 등)
+}
+```
+
+## 노드 (nodes) 구조
+
+```json
+{
+  "id": "n1234_1",        // 고유 ID
+  "name": "Agent1",       // 노드 이름 ({{name}}으로 참조)
+  "type": "agent",        // 타입: agent, memo, input, trigger
+  "x": 100, "y": 100,    // 캔버스 위치
+  "w": 280, "h": 240,    // 크기 (픽셀)
+  "collapsed": false,     // 접힌 상태
+  "chatOnly": true,       // true=대화전용(도구X), false=CLI모드(도구O)
+  "inputTemplate": "",    // 입력 텍스트 ({{노드명}} 변수 사용 가능)
+  "outputCapture": "",    // 실행 결과 (AI 응답)
+  "systemPrompt": "",     // 시스템 프롬프트 (선택)
+  "images": [],           // 첨부 이미지 경로 배열
+  "status": "idle",       // idle, running, complete, error
+  "history": []           // 실행 이력
+}
+```
+
+## 노드 타입별 동작
+
+| 타입 | 아이콘 | 실행 방식 |
+|------|--------|-----------|
+| agent | 🤖 | claude -p로 AI에 전송, 응답을 outputCapture에 저장 |
+| memo | 📝 | inputTemplate을 그대로 outputCapture에 복사 (AI 호출 없음) |
+| input | 📎 | memo와 동일 (데이터 입력용) |
+| trigger | ⚡ | 즉시 complete, 하위 노드 실행 트리거 |
+
+## 변수 시스템 ({{노드명}})
+
+노드의 inputTemplate에 `{{다른노드이름}}`을 넣으면, 실행 시 해당 노드의 outputCapture 내용으로 자동 치환됩니다.
+
+예시:
+- 메모1 (type: memo): inputTemplate = "한국 체육과학 연구..."
+- Agent1 (type: agent): inputTemplate = "다음 내용을 요약해: {{메모1}}"
+  → 실행 시 {{메모1}}이 메모1의 내용으로 바뀌어 AI에 전송
+
+## 연결선 (connections) 구조
+
+```json
+{
+  "id": "conn_1",
+  "sid": "n1234_1",  // 출발 노드 ID
+  "tid": "n1234_2"   // 도착 노드 ID
+}
+```
+
+연결선은 실행 순서를 결정합니다:
+- 상위 노드가 모두 complete여야 하위 노드 실행 가능
+- {{변수}} 치환과는 독립적 (변수명만 맞으면 연결 없이도 치환됨)
+
+## 캔버스 요소 (canvasElements) 구조
+
+```json
+{
+  "id": "ce_1",
+  "type": "image",
+  "x": 100, "y": 100,
+  "w": 200, "h": 150,
+  "src": "data:image/png;base64,...",
+  "nodeType": "agent",     // 노드로 전환 시 설정
+  "inputTemplate": "",
+  "outputCapture": ""
+}
+```
+
+## AI에게 프로젝트 생성 요청하기
+
+이 JSON 구조를 AI에게 알려주면, 원하는 워크플로우를 JSON으로 생성받을 수 있습니다.
+
+예시 프롬프트:
+"다음 JSON 구조로 3단계 연구 분석 워크플로우를 만들어줘:
+1. 메모 노드에 연구 데이터 입력
+2. Agent1이 데이터 분석
+3. Agent2가 분석 결과를 보고서로 작성
+각 노드를 {{변수}}로 연결해줘."
+
+생성된 JSON을 .json 파일로 저장 후 캔버스에 드래그앤드롭하면 바로 사용 가능합니다.
+
+## 주요 API 엔드포인트
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | /api/node-exec | 노드 실행 (claude -p) |
+| GET | /api/node-check?nodeId= | 실행 완료 확인 |
+| POST | /api/project/save | 프로젝트 저장 |
+| GET | /api/project/load?id= | 프로젝트 불러오기 |
+| POST | /api/memo/save | 메모 저장 |
+| GET | /api/memo/list | 메모 목록 |
+| POST | /api/upload | 이미지 업로드 |
+
+## 토큰 제한
+
+- 한국어 기준 약 23,000자 이상의 입력은 타임아웃 가능
+- 긴 텍스트는 메모를 분할하고 중간 요약 Agent를 넣어 처리
+- 노드에 23,000자 초과 시 빨간 펄싱 경고 표시
+"""
+    # Create a manual folder
+    manual_folder = db_exec("SELECT id FROM memo_folders WHERE name='📖 매뉴얼'", fetchone=True)
+    if not manual_folder:
+        fid = db_exec("INSERT INTO memo_folders (name, icon, color, created) VALUES (?,?,?,?)",
+                      ("📖 매뉴얼", "📖", "#3B82F6", datetime.now().isoformat()))
+    else:
+        fid = manual_folder["id"]
+    db_exec("INSERT INTO memos (name, content, folder_id, is_temp, pinned, created, modified) VALUES (?,?,?,?,?,?,?)",
+            ("📖 Claude Flow Canvas 매뉴얼", manual_content, fid, 0, 1, datetime.now().isoformat(), datetime.now().isoformat()))
+    log("Manual memo created")
+
+_create_manual_memo()
+
+# ═══════════════════════════════════════
 # tmux
 # ═══════════════════════════════════════
 def run_tmux(*args):

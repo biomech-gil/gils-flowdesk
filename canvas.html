@@ -111,7 +111,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .port-r{right:-14px;top:50%;margin-top:-7px}
 .nd.collapsed .port-l{left:-16px}.nd.collapsed .port-r{right:-16px}
 /* SIDEBAR */
-.sb{width:400px;min-width:280px;border-left:1px solid var(--border);background:var(--bg-1);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;z-index:4;position:relative}
+.sb{width:440px;min-width:280px;border-left:1px solid var(--border);background:var(--bg-1);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;z-index:4;position:relative}
 .sb.hid{display:none}
 .sb-resize{position:absolute;left:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:10;transition:.15s}.sb-resize:hover{background:var(--accent);opacity:.5}
 .sb-hd{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
@@ -215,6 +215,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 /* FOLDER PANEL */
 #folder-panel{position:fixed;top:80px;left:20px;width:320px;max-height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:91;display:none;flex-direction:column;overflow:hidden}
 #folder-panel.show{display:flex}
+#memo-hover-preview{position:fixed;top:80px;left:350px;width:400px;max-height:60vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:92;display:none;overflow-y:auto;padding:12px;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word}
+#memo-hover-preview.show{display:block}
 .fp-hd{display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);font-weight:600;font-size:.85em;color:var(--accent)}
 .fp-hd button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 10px;border-radius:3px;cursor:pointer;font-size:.78em;margin-left:6px}
 .fp-hd button.x{padding:3px 8px;color:var(--red);margin-left:auto}
@@ -326,13 +328,14 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div class="fp-list" id="fp-folders"></div>
   <div class="fp-memos" id="fp-memos"></div>
 </div>
+<div id="memo-hover-preview"></div>
 <div class="tb">
   <button onclick="showLanding()" title="저장된 프로젝트 목록에서 선택" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#7ecfff">📂 프로젝트열기</button>
   <button onclick="newProject()" title="빈 캔버스에서 새로 시작" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새프로젝트</button>
   <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><div class="sep"></div>
   <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■ 정지</button><div class="sep"></div>
   <span class="lbl">작업폴더:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><div class="sep"></div>
-  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 프로젝트저장</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기▾</option></select><button onclick="refreshWfList()" title="프로젝트 목록 새로고침">↻</button>
+  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 프로젝트저장</button><button onclick="exportProject()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">📥 내보내기</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기▾</option></select><button onclick="refreshWfList()" title="프로젝트 목록 새로고침">↻</button>
   <div class="sep"></div>
   <button onclick="zoomFit()" title="모든 노드가 보이도록 줌 조절">⤢ 전체보기</button>
   <button onclick="zoomDelta(-.2)">−</button>
@@ -2240,6 +2243,25 @@ async function renderFolderPanel(){
       el.style.opacity='.4';
     });
     el.addEventListener('dragend',()=>{el.style.opacity='1'});
+    el.addEventListener('mouseenter', async function(){
+      clearTimeout(window._memoPreviewTimer);
+      const mid = this.dataset.memoId;
+      window._memoPreviewTimer = setTimeout(async ()=>{
+        const r = await api('GET', `/api/memo/get?id=${mid}`);
+        if(!r.ok) return;
+        const prev = document.getElementById('memo-hover-preview');
+        prev.textContent = r.memo.content || '(비어있음)';
+        const fp = document.getElementById('folder-panel');
+        const rect = fp.getBoundingClientRect();
+        prev.style.left = (rect.right + 8) + 'px';
+        prev.style.top = rect.top + 'px';
+        prev.classList.add('show');
+      }, 200);
+    });
+    el.addEventListener('mouseleave', function(){
+      clearTimeout(window._memoPreviewTimer);
+      document.getElementById('memo-hover-preview').classList.remove('show');
+    });
   });
   foldersDiv.querySelectorAll('.fp-drop-target').forEach(el=>{
     el.addEventListener('dragover',e=>{e.preventDefault();el.style.background='rgba(76,175,80,.15)'});
@@ -2800,6 +2822,87 @@ function ceOutputToMemo(){
   if(!selectedCe || !selectedCe.outputCapture || !selectedCe.outputCapture.trim()) return;
   createMemoFromText(selectedCe.outputCapture, (selectedCe.nodeName||'CE') + ' - Output');
 }
+
+function exportProject(){
+  const state = getState();
+  state.name = wfName || 'project';
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (wfName || 'claude-flow-project') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importProjectJson(data){
+  if(nodes.length > 0){
+    const choice = confirm('현재 캔버스에 노드가 있습니다.\n\n[확인] = 기존 노드에 추가\n[취소] = 전체 교체');
+    if(!choice){
+      loadState(data);
+      autoSave();
+      return;
+    }
+    const idMap = {};
+    const offsetX = 400, offsetY = 200;
+    (data.nodes || []).forEach(n => {
+      const oldId = n.id;
+      const newId = 'n' + Date.now() + '_' + (++ncnt);
+      idMap[oldId] = newId;
+      n.id = newId;
+      n.x = (n.x || 0) + offsetX;
+      n.y = (n.y || 0) + offsetY;
+      mkNode(n);
+    });
+    (data.connections || []).forEach(c => {
+      const sid = idMap[c.sid] || c.sid;
+      const tid = idMap[c.tid] || c.tid;
+      if(nodes.find(n=>n.id===sid) && nodes.find(n=>n.id===tid)){
+        addConn(sid, tid);
+      }
+    });
+    drawConns();
+    autoSave();
+  } else {
+    loadState(data);
+    autoSave();
+  }
+}
+
+// JSON drag-drop import on canvas
+(function(){
+  const cw = document.getElementById('cw');
+  cw.addEventListener('dragover', e => {
+    if(e.dataTransfer.types.includes('Files')){
+      e.preventDefault();
+      cw.style.outline = '3px dashed var(--accent)';
+    }
+  });
+  cw.addEventListener('dragleave', e => {
+    cw.style.outline = '';
+  });
+  cw.addEventListener('drop', e => {
+    cw.style.outline = '';
+    const file = [...e.dataTransfer.files].find(f => f.name.endsWith('.json'));
+    if(!file) return;
+    e.preventDefault();
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if(!data.nodes || !Array.isArray(data.nodes)){
+          alert('유효한 프로젝트 JSON이 아닙니다.');
+          return;
+        }
+        importProjectJson(data);
+      } catch(err){
+        alert('JSON 파싱 실패: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  });
+})();
 
 async function init(){
   const st=await api('GET','/api/status');if(st.panes)paneList=st.panes;
