@@ -111,7 +111,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .port-r{right:-14px;top:50%;margin-top:-7px}
 .nd.collapsed .port-l{left:-16px}.nd.collapsed .port-r{right:-16px}
 /* SIDEBAR */
-.sb{width:360px;min-width:240px;border-left:1px solid var(--border);background:var(--bg-1);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;z-index:4;position:relative}
+.sb{width:400px;min-width:280px;border-left:1px solid var(--border);background:var(--bg-1);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;z-index:4;position:relative}
 .sb.hid{display:none}
 .sb-resize{position:absolute;left:0;top:0;bottom:0;width:5px;cursor:col-resize;z-index:10;transition:.15s}.sb-resize:hover{background:var(--accent);opacity:.5}
 .sb-hd{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
@@ -213,7 +213,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 #memo-editor button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer}
 #memo-editor button:hover{background:var(--bg-4)}
 /* FOLDER PANEL */
-#folder-panel{position:fixed;top:80px;left:20px;width:280px;max-height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:91;display:none;flex-direction:column;overflow:hidden}
+#folder-panel{position:fixed;top:80px;left:20px;width:320px;max-height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:91;display:none;flex-direction:column;overflow:hidden}
 #folder-panel.show{display:flex}
 .fp-hd{display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);font-weight:600;font-size:.85em;color:var(--accent)}
 .fp-hd button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 10px;border-radius:3px;cursor:pointer;font-size:.78em;margin-left:6px}
@@ -235,6 +235,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .fp-memo-list{padding-left:12px}
 .fp-memo-list .fp-memo{padding:4px 8px;font-size:11px;cursor:pointer;border-radius:3px}
 .fp-memo-list .fp-memo:hover{background:var(--bg-3)}
+.fp-memo[draggable]{cursor:grab}.fp-memo[draggable]:active{cursor:grabbing}
 .fp-folder-group .fp-folder .fb{font-size:9px;padding:0 2px;background:none;border:none;cursor:pointer;opacity:0;transition:.1s}
 .fp-folder-group .fp-folder:hover .fb{opacity:.7}
 /* LANDING MODAL */
@@ -359,7 +360,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   </div>
   <div class="sb hid" id="sb">
     <div class="sb-resize" id="sb-resize"></div>
-    <div class="sb-hd"><h3 id="sb-title">노드</h3><button onclick="closeSb()">&#x2715;</button></div>
+    <div class="sb-hd"><h3 id="sb-title">노드</h3><button onclick="deleteSelectedNode()" title="이 노드 삭제" style="color:#bf616a;font-size:12px">🗑</button><button onclick="closeSb()">&#x2715;</button></div>
     <div class="sb-ct" style="display:flex;flex-direction:column">
       <div class="sb-row"><button class="r" onclick="engine.execSelected()" style="background:#2d6a2d;color:#a3be8c;font-weight:700;padding:3px 10px" title="실행">▶</button><button class="s" onclick="engine.stopNode(selectedNode)" style="background:#6a2d2d;color:#bf616a;font-weight:700;padding:3px 8px" title="정지">■</button><input type="text" id="sb-name" onchange="sbName(this.value)" placeholder="이름" style="flex:1;min-width:0"><label style="font-size:10px;cursor:pointer;display:flex;align-items:center;gap:2px;color:var(--text-muted);white-space:nowrap"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)" style="margin:0"> 💬대화전용</label></div>
       <div class="sb-row" style="gap:3px;flex-wrap:wrap" id="sb-mode-sec">
@@ -838,6 +839,11 @@ async function addNode(type='agent',x,y){
 function selNode(n){nodes.forEach(nd=>nd.el.classList.remove('sel','multi-sel'));multiSel=[];n.el.classList.add('sel');selectedNode=n;selectedConn=null;openSb(n);drawConns();document.getElementById('ctx').classList.remove('show')}
 function toggleMultiSel(n){const idx=multiSel.indexOf(n);if(idx>=0){multiSel.splice(idx,1);n.el.classList.remove('multi-sel')}else{multiSel.push(n);n.el.classList.add('multi-sel')}if(multiSel.length===1){selectedNode=multiSel[0];openSb(multiSel[0])}}
 function togCollapse(n){n.collapsed=!n.collapsed;n.el.classList.toggle('collapsed',n.collapsed);const btn=n.el.querySelector('[data-act="tog"]');if(btn)btn.textContent=n.collapsed?'►':'▼';setTimeout(drawConns,20);autoSave()}
+function deleteSelectedNode(){
+  if(!selectedNode)return;
+  if(!confirm(`"${selectedNode.name}" 노드를 삭제할까요?`))return;
+  delNode(selectedNode.id);
+}
 function delNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i].el.remove();nodes.splice(i,1);conns=conns.filter(c=>c.sid!==id&&c.tid!==id);drawConns();if(selectedNode&&selectedNode.id===id){selectedNode=null;closeSb()}autoSave()}
 
 // ═══ CONTEXT MENU ═══
@@ -2194,12 +2200,13 @@ async function renderFolderPanel(){
   const foldersDiv=document.getElementById('fp-folders');
   const mr=await api('GET','/api/memo/list');
   const allMemos=mr.ok?mr.memos:[];
+  const memoItem=(m)=>`<div class="fp-memo" draggable="true" data-memo-id="${m.id}" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')"><input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()" style="margin-right:4px">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px">${escapeHtml((m.preview||'').substring(0,30))}</span></div>`;
   let html='';
   for(const f of memoFolders){
     const folderMemos=allMemos.filter(m=>m.folder_id==f.id);
     const eName=(f.name||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     html+=`<div class="fp-folder-group" data-fid="${f.id}">
-      <div class="fp-folder" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:7px':''}">
+      <div class="fp-folder fp-drop-target" data-drop-fid="${f.id}" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:7px':''}">
         <span class="ic">${f.icon||'📁'}</span><span class="nm">${escapeHtml(f.name)}</span>
         <span style="flex:1"></span>
         <span style="font-size:9px;color:var(--text-dim)">${folderMemos.length}</span>
@@ -2207,27 +2214,45 @@ async function renderFolderPanel(){
         <button class="fb" onclick="event.stopPropagation();editFolderColor(${f.id})" title="아이콘/색상">🎨</button>
         <button class="fb" onclick="event.stopPropagation();delFolder(${f.id})" title="삭제" style="color:var(--red)">🗑</button>
       </div>
-      <div class="fp-memo-list">
-        ${folderMemos.map(m=>`<div class="fp-memo" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')"><input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()" style="margin-right:4px">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px">${escapeHtml((m.preview||'').substring(0,30))}</span></div>`).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">메모 없음</div>'}
+      <div class="fp-memo-list fp-drop-target" data-drop-fid="${f.id}">
+        ${folderMemos.map(m=>memoItem(m)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">메모 없음</div>'}
       </div>
     </div>`;
   }
   const uncategorized=allMemos.filter(m=>!m.folder_id);
-  if(uncategorized.length>0){
-    html+=`<div class="fp-folder-group">
-      <div class="fp-folder" onclick="this.parentElement.classList.toggle('collapsed')">
-        <span class="ic">📋</span><span class="nm">분류 없음</span>
-        <span style="flex:1"></span>
-        <span style="font-size:9px;color:var(--text-dim)">${uncategorized.length}</span>
-      </div>
-      <div class="fp-memo-list">
-        ${uncategorized.map(m=>`<div class="fp-memo" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')"><input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()" style="margin-right:4px">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px">${escapeHtml((m.preview||'').substring(0,30))}</span></div>`).join('')}
-      </div>
-    </div>`;
-  }
-  if(!html) html='<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">메모폴더 없음</div>';
+  html+=`<div class="fp-folder-group" data-fid="null">
+    <div class="fp-folder fp-drop-target" data-drop-fid="null" onclick="this.parentElement.classList.toggle('collapsed')">
+      <span class="ic">📋</span><span class="nm">분류 없음</span>
+      <span style="flex:1"></span>
+      <span style="font-size:9px;color:var(--text-dim)">${uncategorized.length}</span>
+    </div>
+    <div class="fp-memo-list fp-drop-target" data-drop-fid="null">
+      ${uncategorized.map(m=>memoItem(m)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">메모 없음</div>'}
+    </div>
+  </div>`;
+  if(!memoFolders.length&&!uncategorized.length) html='<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">메모폴더 없음</div>';
   foldersDiv.innerHTML=html;
   document.getElementById('fp-memos').innerHTML='';
+  // 드래그앤드롭 설정
+  foldersDiv.querySelectorAll('.fp-memo[draggable]').forEach(el=>{
+    el.addEventListener('dragstart',e=>{
+      e.dataTransfer.setData('text/plain',el.dataset.memoId);
+      el.style.opacity='.4';
+    });
+    el.addEventListener('dragend',()=>{el.style.opacity='1'});
+  });
+  foldersDiv.querySelectorAll('.fp-drop-target').forEach(el=>{
+    el.addEventListener('dragover',e=>{e.preventDefault();el.style.background='rgba(76,175,80,.15)'});
+    el.addEventListener('dragleave',()=>{el.style.background=''});
+    el.addEventListener('drop',async e=>{
+      e.preventDefault();el.style.background='';
+      const memoId=e.dataTransfer.getData('text/plain');
+      const fid=el.dataset.dropFid;
+      if(!memoId)return;
+      await api('POST','/api/memo/save',{id:parseInt(memoId),folderId:fid==='null'?null:parseInt(fid)});
+      renderFolderPanel();
+    });
+  });
 }
 async function renameFolder(fid,currentName){
   const name=prompt('폴더 이름 변경:',currentName);
