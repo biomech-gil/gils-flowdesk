@@ -374,7 +374,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <span style="flex:1"></span>
         <span id="sb-charcount" style="font-size:10px;font-weight:600"></span>
       </div>
-      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="clearInput()" title="입력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('resolved')" title="변수 치환된 전체 복사" style="color:#88c0d0">📋치환복사</button><button onclick="copyText('input')" title="입력 원문 복사" style="color:#d8dee9">📋원문</button><button onclick="openModal('input')" title="전체화면 확대" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="변수 치환 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
+      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="clearInput()" title="입력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('resolved')" title="{{노드명}}이 실제 내용으로 바뀐 완성본 복사" style="color:#88c0d0">📋완성본</button><button onclick="copyText('input')" title="입력 원문 복사" style="color:#d8dee9">📋원문</button><button onclick="openModal('input')" title="전체화면 확대" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="변수 치환 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
       <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>출력 (Output) <span><button onclick="outputToMemo()" title="이 출력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="toggleOutputEdit()" title="출력 내용 직접 수정" style="color:#5e81ac">✏️수정</button><button onclick="clearOutput()" title="출력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('output')" title="출력 텍스트 복사" style="color:#d8dee9">📋복사</button><button onclick="openModal('output')" title="전체화면 확대" style="color:#a3be8c">⤢확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
@@ -2358,29 +2358,41 @@ function renderPreview(){
   const svgEl=document.getElementById('preview-svg');
   cvsEl.innerHTML='';svgEl.innerHTML='';
   if(!previewState||!previewState.nodes)return;
-  // 노드 렌더
+  const TYPES_P={agent:{icon:'🤖',color:'#3B82F6'},memo:{icon:'📝',color:'#F59E0B'},input:{icon:'📎',color:'#06B6D4'},trigger:{icon:'⚡',color:'#EF4444'}};
+  // 모든 노드를 접힌 상태로 렌더
   const nodeMap={};
+  const CW=110,CH=32;
   previewState.nodes.forEach(n=>{
+    const ti=TYPES_P[n.type||'agent']||TYPES_P.agent;
     const d=document.createElement('div');
     d.className='preview-node';d.dataset.type=n.type||'agent';
-    d.style.cssText=`left:${n.x}px;top:${n.y}px;width:${n.collapsed?100:(n.w||280)}px;height:${n.collapsed?36:(n.h||240)}px`;
-    d.textContent=n.name;d.title=`${n.name}\n\nInput: ${(n.inputTemplate||'').substring(0,200)}\n\nOutput: ${(n.outputCapture||'').substring(0,200)}`;
+    d.style.cssText=`left:${n.x}px;top:${n.y}px;width:${CW}px;height:${CH}px;display:flex;align-items:center;gap:4px;padding:0 8px;font-size:10px;border-color:${ti.color};border-radius:10px`;
+    d.innerHTML=`<span>${ti.icon}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.name}</span>`;
+    d.title=`${n.name}\n\nInput: ${(n.inputTemplate||'').substring(0,200)}\n\nOutput: ${(n.outputCapture||'').substring(0,200)}`;
     d.addEventListener('click',e=>{e.stopPropagation();showPreviewNodeInfo(n)});
     cvsEl.appendChild(d);nodeMap[n.id]=n;
   });
-  // SVG에 노드들도 그려야 함 (path 포함하는 큰 영역 필요)
-  // SVG 크기 = 모든 노드 포함하는 bbox + 여백
+  // 캔버스 이미지 렌더
+  (previewState.canvasElements||[]).forEach(ce=>{
+    if(ce.type==='image'&&ce.src){
+      const img=document.createElement('div');
+      img.style.cssText=`position:absolute;left:${ce.x}px;top:${ce.y}px;width:${ce.w||100}px;height:${ce.h||80}px;border:1px solid var(--border);border-radius:4px;overflow:hidden;opacity:.8`;
+      img.innerHTML=`<img src="${ce.src}" style="width:100%;height:100%;object-fit:cover">`;
+      cvsEl.appendChild(img);
+    }
+  });
+  // SVG bbox
   let minX=0,minY=0,maxX=2000,maxY=2000;
-  previewState.nodes.forEach(n=>{const w=n.collapsed?100:(n.w||280),h=n.collapsed?36:(n.h||240);
-    if(n.x<minX)minX=n.x;if(n.y<minY)minY=n.y;if(n.x+w>maxX)maxX=n.x+w;if(n.y+h>maxY)maxY=n.y+h});
+  previewState.nodes.forEach(n=>{
+    if(n.x<minX)minX=n.x;if(n.y<minY)minY=n.y;if(n.x+CW>maxX)maxX=n.x+CW;if(n.y+CH>maxY)maxY=n.y+CH});
+  (previewState.canvasElements||[]).forEach(ce=>{
+    if(ce.x+ce.w>maxX)maxX=ce.x+ce.w;if(ce.y+ce.h>maxY)maxY=ce.y+ce.h});
   svgEl.setAttribute('width',Math.max(maxX+200,2000));
   svgEl.setAttribute('height',Math.max(maxY+200,2000));
   // 연결선
   (previewState.connections||[]).forEach(c=>{
     const sn=nodeMap[c.sid],tn=nodeMap[c.tid];if(!sn||!tn)return;
-    const sw=sn.collapsed?100:(sn.w||280),sh=sn.collapsed?36:(sn.h||240);
-    const tw=tn.collapsed?100:(tn.w||280),th=tn.collapsed?36:(tn.h||240);
-    const x1=sn.x+sw,y1=sn.y+sh/2,x2=tn.x,y2=tn.y+th/2;
+    const x1=sn.x+CW,y1=sn.y+CH/2,x2=tn.x,y2=tn.y+CH/2;
     const dx=Math.abs(x2-x1)*0.4+30;
     const path=document.createElementNS('http://www.w3.org/2000/svg','path');
     path.setAttribute('d',`M${x1} ${y1} C${x1+dx} ${y1},${x2-dx} ${y2},${x2} ${y2}`);
