@@ -192,8 +192,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .ce.sel .ce-del{opacity:.9}
 /* SELECTION BOX */
 /* MEMO BAR (상단 탭) */
-.memo-bar{display:flex;align-items:center;background:#0a0a14;border-bottom:1px solid var(--border);padding:4px 8px;flex-shrink:0;gap:4px;overflow-x:auto;min-height:32px}
-.memo-tab{display:flex;align-items:center;gap:6px;padding:4px 12px;background:var(--bg-2);border:1px solid var(--border);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.1s;flex-shrink:0;max-width:160px}
+.memo-bar{display:flex;align-items:center;background:#0a0a14;border-bottom:1px solid var(--border);padding:4px 8px;flex-shrink:0;gap:4px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:thin;min-height:32px}
+.memo-bar::-webkit-scrollbar{height:3px}
+.memo-bar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.memo-tab{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:var(--bg-2);border:1px solid var(--border);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.1s;flex-shrink:0;max-width:160px}
 .memo-tab:hover{background:var(--bg-3);color:var(--text)}
 .memo-tab.active{background:var(--bg-0);border-color:var(--accent);border-bottom-color:var(--accent);color:var(--accent)}
 .memo-tab .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
@@ -281,13 +283,6 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .nd.token-warn{animation:tokenPulse 1.5s ease-in-out infinite;border-width:3px}
 .nd.collapsed.token-warn{animation:tokenPulse 1.2s ease-in-out infinite;border-width:3px}
 .token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#F44336;margin-left:4px;animation:pulse 1s infinite;flex-shrink:0}
-/* SCRATCHPAD */
-.scratchpad-bar{display:none;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0}
-.scratchpad-bar.show{display:block}
-.scratchpad-bar textarea{width:100%;height:80px;background:var(--bg-0);color:var(--text);border:none;padding:8px 12px;font-family:var(--mono);font-size:12px;resize:vertical;outline:none;line-height:1.4}
-.sp-toggle{background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);padding:2px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:.72em;margin-left:auto}
-.sp-toggle:hover{color:var(--text);background:var(--bg-4)}
-.sp-toggle.active{color:var(--amber);border-color:var(--amber)}
 /* SIDEBAR DIVIDER (resizable) */
 .sb-divider{height:6px;background:var(--bg-3);cursor:row-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s}
 .sb-divider:hover{background:var(--accent)}
@@ -309,11 +304,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 </style>
 </head>
 <body>
-<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><a href="/index.html">컨트롤러</a><div class="pinned-memos" id="pinned-memos"></div><button class="sp-toggle" id="sp-toggle" onclick="toggleScratchpad()" title="메모장 (스크래치패드)">📋 메모장</button></nav>
-<div class="scratchpad-bar" id="scratchpad-bar"><textarea id="scratchpad-ta" placeholder="스크래치패드 — 자유 메모 (자동 저장)"></textarea></div>
+<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><a href="/index.html">컨트롤러</a><div class="pinned-memos" id="pinned-memos"></div></nav>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 (임시)">📝 +</button>
   <button class="fld" onclick="toggleFolderPanel()" title="즐겨찾기 폴더">📁 폴더</button>
+  <button class="fld" onclick="openFavPopup()" title="즐겨찾기 메모">⭐</button>
   <span style="font-size:10px;color:var(--text-muted);margin-left:6px">최근:</span>
 </div>
 <div id="folder-panel">
@@ -416,6 +411,13 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       </div>
     </div>
   </div>
+</div>
+<div id="fav-popup" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;max-height:70vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:100;overflow:hidden">
+  <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2)">
+    <span style="font-weight:600;font-size:.85em;flex:1">⭐ 즐겨찾기 메모</span>
+    <button onclick="document.getElementById('fav-popup').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
+  </div>
+  <div id="fav-list" style="overflow-y:auto;max-height:calc(70vh - 50px);padding:8px"></div>
 </div>
 <div id="ctx"></div>
 <input type="file" id="ce-img-input" accept="image/*,.svg" style="display:none">
@@ -719,27 +721,44 @@ function addConn(sid,did){
   const srcNd=nodes.find(n=>n.id===sid),dstNd=nodes.find(n=>n.id===did);
   if(srcNd&&dstNd){const tag=`{{${srcNd.name}}}`;if(!dstNd.inputTemplate.includes(tag)){dstNd.inputTemplate=dstNd.inputTemplate?(dstNd.inputTemplate+'\n\n'+tag):tag;const ta=dstNd.el.querySelector('.nd-in textarea');if(ta)ta.value=dstNd.inputTemplate;if(selectedNode===dstNd)document.getElementById('sb-input').value=dstNd.inputTemplate}}
 }
-function finishConn(e){svg.querySelectorAll('.conn-temp').forEach(p=>p.remove());cw.classList.remove('connecting');if(!isConn||!connSrc){isConn=false;connSrc=null;return}
+function finishConn(e){
+  svg.querySelectorAll('.conn-temp').forEach(p=>p.remove());
+  cw.classList.remove('connecting');
+  if(!isConn||!connSrc){isConn=false;connSrc=null;return}
+
   const tgt=document.elementFromPoint(e.clientX,e.clientY);
+  let tnd=null, tside=null;
+
+  // 1. Check if dropped on a port directly
   if(tgt&&(tgt.classList.contains('port')||tgt.classList.contains('ce-port'))){
-    let tid,tside,tnd;
     if(tgt.classList.contains('ce-port')){
-      // 캔버스 요소 포트 → 부모 ce
       const ceEl=tgt.closest('.ce');
-      tid=ceEl?ceEl.dataset.ceId:null;
+      const tid=ceEl?ceEl.dataset.ceId:null;
       tside=tgt.dataset.side;
       tnd=canvasEls.find(c=>c.id===tid);
     } else {
-      tid=tgt.dataset.node;tside=tgt.dataset.side;
+      const tid=tgt.dataset.node;tside=tgt.dataset.side;
       tnd=nodes.find(n=>n.id===tid);
     }
-    if(tnd&&tnd!==connSrc.node&&connSrc.side!==tside){
-      // 다중 선택 → 단일 노드 연결
-      const sources=multiSel.length>0&&multiSel.includes(connSrc.node)?multiSel:[connSrc.node];
-      if(connSrc.side==='right'){sources.forEach(sn=>addConn(sn.id,tnd.id))}
-      else{sources.forEach(sn=>addConn(tnd.id,sn.id))}
-      autoSave()}}
-  isConn=false;connSrc=null;drawConns()}
+  }
+  // 2. Fallback: dropped anywhere on a node -> auto-connect to opposite port
+  if(!tnd){
+    const ndEl=tgt?tgt.closest('.nd'):null;
+    if(ndEl){
+      const tid=ndEl.dataset.nid;
+      tnd=nodes.find(n=>n.id===tid);
+      tside=connSrc.side==='right'?'left':'right';
+    }
+  }
+
+  if(tnd&&tnd!==connSrc.node&&connSrc.side!==tside){
+    const sources=multiSel.length>0&&multiSel.includes(connSrc.node)?multiSel:[connSrc.node];
+    if(connSrc.side==='right'){sources.forEach(sn=>addConn(sn.id,tnd.id))}
+    else{sources.forEach(sn=>addConn(tnd.id,sn.id))}
+    autoSave();
+  }
+  isConn=false;connSrc=null;drawConns();
+}
 
 // ═══ NODE ═══
 function mkNode(opts={}){
@@ -1998,14 +2017,39 @@ function memoAutoSave(){
 }
 async function saveMemoNow(){
   if(!activeMemoId)return;
-  const name=prompt('저장할 이름:',document.getElementById('me-name').value||'')||document.getElementById('me-name').value;
-  if(!name)return;
+  const r=await api('GET',`/api/memo/get?id=${activeMemoId}`);
+  if(!r.ok)return;
+  const memo=r.memo;
   const content=document.getElementById('me-content').value;
   const folderId=document.getElementById('me-folder').value||null;
-  await api('POST','/api/memo/save',{id:activeMemoId,name,content,folderId,isTemp:false});
-  document.getElementById('me-name').value=name;
-  loadMemoTabs();
-  alert('저장 완료 ★');
+
+  if(memo.is_temp){
+    // Never saved before: ask for name, save as non-temp
+    const name=prompt('저장할 이름:',document.getElementById('me-name').value||'');
+    if(!name)return;
+    await api('POST','/api/memo/save',{id:activeMemoId,name,content,folderId,isTemp:false});
+    document.getElementById('me-name').value=name;
+    loadMemoTabs();loadFolders();
+    alert('저장 완료 ★');
+  } else {
+    // Already saved: ask overwrite or new
+    const overwrite=confirm('기존 메모에 덮어쓸까요?\n\n[확인]=덮어쓰기\n[취소]=새 메모로 저장');
+    if(overwrite){
+      const name=document.getElementById('me-name').value||memo.name;
+      await api('POST','/api/memo/save',{id:activeMemoId,name,content,folderId,isTemp:false});
+      loadMemoTabs();
+      alert('덮어쓰기 완료');
+    } else {
+      const name=prompt('새 메모 이름:',document.getElementById('me-name').value||'');
+      if(!name)return;
+      const nr=await api('POST','/api/memo/save',{name,content,folderId,isTemp:false});
+      if(nr.ok){
+        await loadMemoTabs();
+        openMemoTab(nr.id);
+        alert('새 메모로 저장 완료 ★');
+      }
+    }
+  }
 }
 
 async function toggleCurrentMemoPin(){
@@ -2058,11 +2102,39 @@ async function loadFolderMemos(){
   }
 }
 function selectFolder(id){activeFolderId=id;renderFolderPanel()}
+function showIconColorPicker(defaults,callback){
+  const ICONS='📁 📂 ⭐ 💡 🔬 📊 🎯 🏆 📐 🧪 💪 🏃 ⚽ 🏋️ 🎓 📝 🔧 💻 🌐 ❤️ 🔵 🟢 🟡 🔴 ⚪ 📅'.split(' ');
+  const COLORS=['#3B82F6','#EF4444','#F59E0B','#10B981','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#84CC16',''];
+  let selIcon=defaults.icon||'📁',selColor=defaults.color||'';
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:340px;background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:1002;padding:14px;color:var(--text)';
+  function render(){
+    pop.innerHTML=`
+      <div style="font-size:.85em;font-weight:600;margin-bottom:8px">아이콘 선택</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">${ICONS.map(ic=>`<span style="cursor:pointer;font-size:20px;padding:4px 6px;border-radius:4px;border:2px solid ${ic===selIcon?'var(--accent)':'transparent'};background:${ic===selIcon?'var(--bg-3)':'transparent'}" data-ic="${ic}">${ic}</span>`).join('')}</div>
+      <div style="font-size:.85em;font-weight:600;margin-bottom:8px">색상 선택</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">${COLORS.map(c=>{
+        const bg=c||'var(--bg-3)';const label=c?'':'없음';
+        return `<div style="width:28px;height:28px;background:${bg};border:2px solid ${c===selColor?'#fff':'var(--border)'};border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text-muted)" data-cl="${c}">${label}</div>`;
+      }).join('')}</div>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button id="icp-cancel" style="background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:4px;cursor:pointer;font-size:.82em">취소</button>
+        <button id="icp-ok" style="background:var(--accent);color:#000;border:none;padding:5px 14px;border-radius:4px;cursor:pointer;font-size:.82em;font-weight:600">확인</button>
+      </div>`;
+    pop.querySelectorAll('[data-ic]').forEach(el=>el.addEventListener('click',()=>{selIcon=el.dataset.ic;render()}));
+    pop.querySelectorAll('[data-cl]').forEach(el=>el.addEventListener('click',()=>{selColor=el.dataset.cl;render()}));
+    pop.querySelector('#icp-cancel').addEventListener('click',()=>pop.remove());
+    pop.querySelector('#icp-ok').addEventListener('click',()=>{pop.remove();callback({icon:selIcon,color:selColor})});
+  }
+  render();
+  document.body.appendChild(pop);
+}
 async function newFolder(){
   const name=prompt('폴더 이름:','새 폴더');if(!name)return;
-  const icon=prompt('아이콘 (이모지):','📁')||'📁';
-  await api('POST','/api/folder/save',{name,icon});
-  loadFolders();
+  showIconColorPicker({icon:'📁',color:''},async({icon,color})=>{
+    await api('POST','/api/folder/save',{name,icon,color});
+    loadFolders();
+  });
 }
 async function delFolder(id){
   if(!confirm('이 폴더를 삭제할까요?\n(메모들은 폴더 없음으로 이동)'))return;
@@ -2300,40 +2372,6 @@ function updateResolvedPreview(){
   rv.innerHTML=html;
 }
 
-// ═══ SCRATCHPAD ═══
-let spSaveTimer=null,spDbTimer=null,spDirty=false;
-function toggleScratchpad(){
-  const bar=document.getElementById('scratchpad-bar');
-  const btn=document.getElementById('sp-toggle');
-  const show=!bar.classList.contains('show');
-  bar.classList.toggle('show',show);
-  btn.classList.toggle('active',show);
-  localStorage.setItem('scratchpad_visible',show?'1':'0');
-}
-function initScratchpad(){
-  const ta=document.getElementById('scratchpad-ta');
-  // restore from localStorage first (instant)
-  const cached=localStorage.getItem('scratchpad_content');
-  if(cached)ta.value=cached;
-  // restore visibility
-  if(localStorage.getItem('scratchpad_visible')==='1'){
-    document.getElementById('scratchpad-bar').classList.add('show');
-    document.getElementById('sp-toggle').classList.add('active');
-  }
-  // load from server
-  api('GET','/api/scratchpad/load').then(r=>{if(r.ok&&r.content&&!ta.value)ta.value=r.content});
-  // input handler with debounce
-  ta.addEventListener('input',()=>{
-    localStorage.setItem('scratchpad_content',ta.value);
-    spDirty=true;
-    if(spSaveTimer)clearTimeout(spSaveTimer);
-    spSaveTimer=setTimeout(()=>{localStorage.setItem('scratchpad_content',ta.value)},1000);
-  });
-  // periodic DB sync
-  spDbTimer=setInterval(()=>{
-    if(spDirty){spDirty=false;api('POST','/api/scratchpad/save',{content:ta.value})}
-  },10000);
-}
 
 // ═══ SIDEBAR DIVIDER (resizable) ═══
 (function initSbDivider(){
@@ -2370,14 +2408,32 @@ async function toggleMemoPin(id,pinned){
   await api('POST','/api/memo/pin',{id,pinned});
   loadPinnedMemos();loadMemoTabs();
 }
+async function openFavPopup(){
+  document.getElementById('fav-popup').style.display='block';
+  await loadFavPopup();
+}
+async function loadFavPopup(){
+  const r=await api('GET','/api/memo/pinned');
+  const list=document.getElementById('fav-list');
+  if(!r.ok||!r.memos||r.memos.length===0){
+    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.82em">즐겨찾기 메모 없음<br><span style="font-size:.9em">메모 편집기에서 📌 버튼으로 고정하세요</span></div>';
+    return;
+  }
+  list.innerHTML=r.memos.map(m=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:.82em;color:var(--text-dim);transition:.1s" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="openMemoEditor(${m.id});document.getElementById('fav-popup').style.display='none'">${escapeHtml(m.name||'무제')}</span>
+      <span style="font-size:.75em;color:var(--text-muted)">${escapeHtml((m.preview||'').substring(0,20))}</span>
+      <button onclick="event.stopPropagation();toggleMemoPin(${m.id},false);loadFavPopup()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;padding:2px 4px" title="즐겨찾기 해제">✕</button>
+    </div>`).join('');
+}
 
 // ═══ FOLDER COLORS ═══
 async function editFolderColor(fid){
-  const colors=['#3B82F6','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#22C55E','#F97316','#EC4899',''];
-  const choice=prompt('폴더 색상 (hex, 비우면 기본):\n'+colors.join(', '),'');
-  if(choice===null)return;
-  const f=memoFolders.find(x=>x.id===fid);
-  if(f){await api('POST','/api/folder/save',{id:fid,name:f.name,icon:f.icon,color:choice});loadFolders()}
+  const f=memoFolders.find(x=>x.id===fid);if(!f)return;
+  showIconColorPicker({icon:f.icon||'📁',color:f.color||''},async({icon,color})=>{
+    await api('POST','/api/folder/save',{id:fid,name:f.name,icon,color});
+    loadFolders();
+  });
 }
 
 // 툴바에 "프로젝트 열기" 버튼 추가는 init에서 처리
@@ -2388,7 +2444,6 @@ async function init(){
   refreshWfList();applyTx();
   undoStack=[];redoStack=[];
   loadFolders();loadMemoTabs();loadPinnedMemos();
-  initScratchpad();
   showLanding();
 }
 init();

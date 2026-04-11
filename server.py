@@ -637,6 +637,15 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         folder_id = body.get("folderId")
         is_temp = 1 if body.get("isTemp", True) else 0
         now = datetime.now().isoformat()
+        # Auto-create date folder for non-temp memos without a folder
+        if not folder_id and not is_temp:
+            today = datetime.now().strftime("%Y-%m-%d")
+            existing = db_exec("SELECT id FROM memo_folders WHERE name=?", (today,), fetchone=True)
+            if existing:
+                folder_id = existing["id"]
+            else:
+                folder_id = db_exec("INSERT INTO memo_folders (name, icon, color, created) VALUES (?,?,?,?)",
+                                   (today, "📅", "", now))
         if mid:
             db_exec("UPDATE memos SET name=?, content=?, folder_id=?, is_temp=?, modified=? WHERE id=?",
                     (name, content, folder_id, is_temp, now, mid))
