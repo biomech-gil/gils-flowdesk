@@ -2466,7 +2466,7 @@ async function loadLandingLists(){
         const projId=e.dataTransfer.getData('text/plain');
         const fid=el.dataset.dropPfid;
         if(!projId)return;
-        await api('POST','/api/project/move',{id:projId,folder_id:fid==='null'?null:parseInt(fid)});
+        await api('POST','/api/project/move',{id:projId,folderId:fid==='null'?null:parseInt(fid)});
         loadLandingLists();
       });
     });
@@ -2680,7 +2680,7 @@ async function moveProjectFolder(projId){
   if(choice===null)return;
   const idx=parseInt(choice);
   const folderId=idx>0&&idx<=folders.length?folders[idx-1].id:null;
-  await api('POST','/api/project/move',{id:projId,folder_id:folderId});
+  await api('POST','/api/project/move',{id:projId,folderId:folderId});
   loadLandingLists();
 }
 
