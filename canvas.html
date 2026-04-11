@@ -2044,7 +2044,7 @@ async function resetSession(){if(!confirm('tmux 세션 리셋?\n\n캔버스 상�
 
 // ═══ INIT ═══
 // ═══ MEMO SYSTEM (Tabbed Notepad) ═══
-let openMemos=[],activeMemoId=null,memoFontSize=14,memoSaveTimer=null,memoFolders=[],activeFolderId=null;
+let openMemos=[],activeMemoId=null,memoSaveTimer=null,memoFolders=[],activeFolderId=null;
 
 async function loadMemoTabs(){
   const r=await api('GET','/api/memo/list');
