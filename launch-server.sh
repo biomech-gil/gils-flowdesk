@@ -1,12 +1,12 @@
 #!/bin/bash
-# 서버를 tmux server-bg 세션에서 실행
-cd ~/tmux-config-korean
+# Claude Flow Canvas — 서버 백그라운드 실행
+cd ~/claude-flow-canvas
 
-# 기존 정리
+# 기존 서버 정리
 tmux kill-session -t server-bg 2>/dev/null
 
-# server-bg 세션 생성 + 서버 실행
-tmux new-session -d -s server-bg -c ~/tmux-config-korean
+# server-bg 세션에서 서버 실행
+tmux new-session -d -s server-bg -c ~/claude-flow-canvas
 tmux send-keys -t server-bg 'python3 server.py' Enter
 
-echo "[+] Server started in tmux session 'server-bg'"
+echo "[+] Claude Flow Canvas server started (http://127.0.0.1:8888)"
