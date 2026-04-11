@@ -2463,11 +2463,28 @@ async function loadLandingLists(){
       el.addEventListener('dragleave',()=>{el.classList.remove('pf-dragover')});
       el.addEventListener('drop',async e=>{
         e.preventDefault();el.classList.remove('pf-dragover');
-        const projId=e.dataTransfer.getData('text/plain');
         const fid=el.dataset.dropPfid;
-        if(!projId)return;
-        await api('POST','/api/project/move',{id:projId,folderId:fid==='null'?null:parseInt(fid)});
-        loadLandingLists();
+        // 기존 프로젝트 이동
+        const projId=e.dataTransfer.getData('text/plain');
+        if(projId){
+          await api('POST','/api/project/move',{id:projId,folderId:fid==='null'?null:parseInt(fid)});
+          loadLandingLists();
+          return;
+        }
+        // 임시저장 → 프로젝트로 변환 후 폴더에 넣기
+        const tempId=e.dataTransfer.getData('application/temp-id');
+        if(tempId){
+          const tr=await api('GET',`/api/temp/load?id=${tempId}`);
+          if(!tr.ok)return;
+          const data=tr.state||tr.project||tr;
+          const name=data.wfName||data.name||'임시 프로젝트';
+          data.name=name;
+          const sr=await api('POST','/api/project/save',data);
+          if(sr.ok&&fid!=='null'){
+            await api('POST','/api/project/move',{id:sr.id,folderId:parseInt(fid)});
+          }
+          loadLandingLists();
+        }
       });
     });
   }
@@ -2476,7 +2493,7 @@ async function loadLandingLists(){
   const tpList=document.getElementById('landing-temps');
   if(tp.ok&&tp.temps){
     tpList.innerHTML=tp.temps.map(t=>`
-      <div class="landing-item" onclick="selectLandingItem(this,'temp','${t.id}')">
+      <div class="landing-item" draggable="true" data-temp-id="${t.id}" data-temp-name="${escapeHtml(t.name||'무제')}" onclick="selectLandingItem(this,'temp','${t.id}')">
         <input type="checkbox" class="landing-chk" data-kind="temp" data-id="${t.id}" onclick="event.stopPropagation()" style="margin-right:6px">
         <div class="info">
           <div class="nm">${escapeHtml(t.name||'무제')}</div>
@@ -2485,6 +2502,11 @@ async function loadLandingLists(){
         <button onclick="event.stopPropagation();downloadTemp('${t.id}','${escapeHtml(t.name||'temp').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteTemp('${t.id}')" title="삭제">✕</button>
       </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">임시 저장 없음</div>';
+    // 임시저장 드래그 → 프로젝트 폴더로 이동 (프로젝트로 변환)
+    tpList.querySelectorAll('.landing-item[draggable]').forEach(el=>{
+      el.addEventListener('dragstart',e=>{e.dataTransfer.setData('application/temp-id',el.dataset.tempId);e.dataTransfer.setData('text/plain','');el.style.opacity='.4'});
+      el.addEventListener('dragend',()=>{el.style.opacity='1'});
+    });
   }
 }
 function escapeHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
