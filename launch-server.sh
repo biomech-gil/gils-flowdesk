@@ -2,6 +2,9 @@
 # Claude Flow Canvas — 서버 백그라운드 실행
 cd ~/claude-flow-canvas
 
+# PostgreSQL 시작 (WSL 재시작 후 필요)
+sudo pg_ctlcluster 16 main start 2>/dev/null
+
 # 네트워크 드라이브 자동 마운트 (Z: → /mnt/z)
 if [ ! -d /mnt/z ] || ! mountpoint -q /mnt/z 2>/dev/null; then
   echo "[i] Mounting Z: drive..."
