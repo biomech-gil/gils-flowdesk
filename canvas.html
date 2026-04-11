@@ -2388,7 +2388,7 @@ async function loadLandingLists(){
           <div class="nm">${escapeHtml(p.name||'무제')}</div>
           <div class="meta">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount} · 연결 ${p.connCount}</div>
         </div>
-        <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||"project")}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
+        <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
       </div>`).join('')||'<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">저장된 프로젝트 없음</div>';
   }
