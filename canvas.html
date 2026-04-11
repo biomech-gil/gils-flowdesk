@@ -346,7 +346,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     </div>
   </div>
 </div>
-<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="pinned-memos" id="pinned-memos"></div></nav>
+<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="pinned-memos" id="pinned-memos"></div><button onclick="doLogout()" title="로그아웃" style="margin-left:auto;background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;flex-shrink:0">🔒 로그아웃</button></nav>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 생성">📝 메모생성</button>
   <button class="fld" onclick="toggleFolderPanel()" title="메모 폴더 관리">📁 메모폴더</button>
@@ -3176,6 +3176,11 @@ async function doLogin(){
   }
 }
 
+async function doLogout(){
+  if(!confirm('로그아웃 하시겠습니까?'))return;
+  await api('POST','/api/auth/logout',{});
+  location.reload();
+}
 async function checkAuth(){
   const r=await api('GET','/api/auth/check');
   if(r.ok&&r.authenticated){
