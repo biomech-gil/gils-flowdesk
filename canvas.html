@@ -1113,13 +1113,24 @@ function newNodeSession(){
 
 // ═══ IMAGE VIEWER ═══
 function imgPathToUrl(absPath){
-  // /home/gilhojong/tmux-controller/uploads/.../page_001.png → /uploads/.../page_001.png
-  const m=absPath.match(/(\/uploads\/.*)/);
-  return m?m[1]:absPath;
+  // 어떤 경로든 /uploads/ 이후 부분을 추출하여 /uploads/...로 변환
+  const m=absPath.match(/uploads\/(.*)/);
+  return m?'/uploads/'+m[1]:absPath;
 }
 function viewImage(path){
   const url=imgPathToUrl(path);
   const fname=path.split('/').pop();
+  // 모달로 이미지 표시
+  let overlay=document.getElementById('img-overlay');
+  if(!overlay){
+    overlay=document.createElement('div');overlay.id='img-overlay';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer';
+    overlay.onclick=()=>overlay.style.display='none';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML=`<div style="color:#fff;padding:8px;font-size:13px">${fname} <span style="color:#88c0d0;font-size:11px">(클릭하면 닫힘 / 우클릭→새탭에서 열기)</span></div><img src="${url}" style="max-width:90vw;max-height:85vh;object-fit:contain;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.5)">`;
+  overlay.style.display='flex';
+  return; // 아래 새 탭 코드는 건너뜀 (필요 시 주석 해제)
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${fname}</title>
 <style>body{margin:0;background:#0d0d14;display:flex;flex-direction:column;height:100vh;font-family:'Segoe UI',sans-serif}
 .tb{padding:10px 16px;background:#13131f;color:#e0e0e0;font-size:13px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #333}

@@ -714,6 +714,20 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/state/load": self._json(self._state_load())
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
+        elif p.startswith("/uploads/"):
+            # uploads 디렉토리가 외부 경로일 수 있으므로 직접 서빙
+            file_path = os.path.join(UPLOADS_DIR, p[len("/uploads/"):])
+            if os.path.isfile(file_path):
+                import mimetypes
+                mime = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", os.path.getsize(file_path))
+                self.end_headers()
+                with open(file_path, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_error(404, "File not found")
         elif p == "/":
             self.path = "/canvas.html"
             return SimpleHTTPRequestHandler.do_GET(self)
