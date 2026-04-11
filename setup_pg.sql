@@ -1,0 +1,3 @@
+CREATE USER canvas WITH PASSWORD 'canvas2026';
+CREATE DATABASE canvas_db OWNER canvas;
+GRANT ALL PRIVILEGES ON DATABASE canvas_db TO canvas;

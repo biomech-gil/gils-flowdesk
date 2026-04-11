@@ -1,4 +1,10 @@
 {
+  "db_type": "postgresql",
+  "db_host": "127.0.0.1",
+  "db_port": 5432,
+  "db_name": "canvas_db",
+  "db_user": "canvas",
+  "db_password": "canvas2026",
   "db_path": "/mnt/z/00_Gils_Project/claude-flow-canvas/canvas.db",
   "port": 8888,
   "uploads_dir": "/mnt/z/00_Gils_Project/claude-flow-canvas/uploads"

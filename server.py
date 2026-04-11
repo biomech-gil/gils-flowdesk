@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Claude Flow Canvas — Visual AI Workflow Editor Server (SQLite + Claude CLI)"""
+"""Claude Flow Canvas — Visual AI Workflow Editor Server (SQLite/PostgreSQL + Claude CLI)"""
 
 import subprocess, json, os, re, uuid, sys, time, sqlite3, threading
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_PSYCOPG2 = True
+except ImportError:
+    HAS_PSYCOPG2 = False
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from socketserver import ThreadingMixIn
@@ -36,9 +42,15 @@ def load_config():
     return defaults
 
 CONFIG = load_config()
-DB_PATH = CONFIG["db_path"]
+DB_TYPE = CONFIG.get("db_type", "sqlite")  # "sqlite" or "postgresql"
+DB_PATH = CONFIG.get("db_path", os.path.join(BASE_DIR, "canvas.db"))
 PORT = CONFIG.get("port", 8888)
 UPLOADS_DIR = CONFIG.get("uploads_dir", os.path.join(BASE_DIR, "uploads"))
+
+if DB_TYPE == "postgresql" and not HAS_PSYCOPG2:
+    print("[FATAL] db_type is 'postgresql' but psycopg2 is not installed.")
+    print("        Install it: pip install psycopg2-binary")
+    sys.exit(1)
 
 def log(msg):
     ts = time.strftime("%H:%M:%S")
@@ -49,7 +61,10 @@ def log(msg):
 # ═══════════════════════════════════════
 import socket, platform, atexit
 
-LOCK_PATH = DB_PATH + ".lock"
+if DB_TYPE == "postgresql":
+    LOCK_PATH = os.path.join(CONFIG.get("uploads_dir", BASE_DIR), ".server.lock")
+else:
+    LOCK_PATH = DB_PATH + ".lock"
 LOCK_HEARTBEAT = 15  # 초
 
 def _get_machine_id():
@@ -69,6 +84,9 @@ def _read_lock():
 
 def _write_lock():
     """잠금 파일 생성/갱신."""
+    lock_dir = os.path.dirname(LOCK_PATH)
+    if lock_dir and not os.path.exists(lock_dir):
+        os.makedirs(lock_dir, exist_ok=True)
     data = {
         "machine": _get_machine_id(),
         "pid": os.getpid(),
@@ -157,110 +175,228 @@ def acquire_lock():
     threading.Thread(target=heartbeat, daemon=True).start()
 
 # ═══════════════════════════════════════
-# SQLite DB
+# Database (SQLite / PostgreSQL)
 # ═══════════════════════════════════════
+def _is_pg():
+    return DB_TYPE == "postgresql"
+
 def get_db():
-    # DB 디렉토리가 없으면 생성
-    db_dir = os.path.dirname(DB_PATH)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
-    conn.row_factory = sqlite3.Row
-    # 네트워크 드라이브(/mnt/ 등)에서는 WAL 대신 DELETE 모드 사용 (호환성)
-    if '/mnt/' in DB_PATH or '\\\\' in DB_PATH:
-        conn.execute("PRAGMA journal_mode=DELETE")
+    if _is_pg():
+        conn = psycopg2.connect(
+            host=CONFIG.get("db_host", "127.0.0.1"),
+            port=CONFIG.get("db_port", 5432),
+            dbname=CONFIG.get("db_name", "canvas_db"),
+            user=CONFIG.get("db_user", "canvas"),
+            password=CONFIG.get("db_password", ""),
+            connect_timeout=10
+        )
+        conn.autocommit = True
+        return conn
     else:
-        conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+        # SQLite fallback
+        db_dir = os.path.dirname(DB_PATH)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+        conn.row_factory = sqlite3.Row
+        if '/mnt/' in DB_PATH or '\\\\' in DB_PATH:
+            conn.execute("PRAGMA journal_mode=DELETE")
+        else:
+            conn.execute("PRAGMA journal_mode=WAL")
+        return conn
+
+def _pg_adapt_sql(sql):
+    """Convert SQLite-style SQL to PostgreSQL-compatible SQL."""
+    # Parameter placeholder: ? → %s
+    adapted = sql.replace("?", "%s")
+    # datetime('now','-30 days') → NOW() - INTERVAL '30 days'
+    adapted = re.sub(
+        r"datetime\(\s*'now'\s*,\s*'-(\d+)\s+days'\s*\)",
+        r"NOW() - INTERVAL '\1 days'",
+        adapted
+    )
+    return adapted
 
 def init_db():
     db = get_db()
-    db.executescript("""
-    CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        data TEXT NOT NULL,
-        created TEXT NOT NULL,
-        modified TEXT NOT NULL,
-        favorite INTEGER DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS temps (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        data TEXT NOT NULL,
-        date TEXT NOT NULL,
-        created TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS memo_folders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        icon TEXT DEFAULT '📁',
-        sort_order INTEGER DEFAULT 0,
-        created TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS memos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        content TEXT DEFAULT '',
-        folder_id INTEGER,
-        is_temp INTEGER DEFAULT 1,
-        created TEXT NOT NULL,
-        modified TEXT NOT NULL,
-        FOREIGN KEY (folder_id) REFERENCES memo_folders(id)
-    );
-    CREATE TABLE IF NOT EXISTS executions (
-        id TEXT PRIMARY KEY,
-        project_id TEXT,
-        node_id TEXT NOT NULL,
-        node_name TEXT NOT NULL,
-        input_raw TEXT,
-        input_resolved TEXT,
-        output TEXT,
-        status TEXT DEFAULT 'running',
-        chat_only INTEGER DEFAULT 1,
-        started TEXT NOT NULL,
-        finished TEXT,
-        FOREIGN KEY (project_id) REFERENCES projects(id)
-    );
-    CREATE TABLE IF NOT EXISTS conversations (
-        id TEXT PRIMARY KEY,
-        parent_exec_id TEXT,
-        node_id TEXT NOT NULL,
-        node_name TEXT NOT NULL,
-        title TEXT,
-        created TEXT NOT NULL,
-        FOREIGN KEY (parent_exec_id) REFERENCES executions(id)
-    );
-    CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conv_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        ts TEXT NOT NULL,
-        FOREIGN KEY (conv_id) REFERENCES conversations(id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_exec_node ON executions(node_id);
-    CREATE INDEX IF NOT EXISTS idx_conv_node ON conversations(node_id);
-    CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conv_id);
-    """)
-    # 기존 DB에 favorite 컬럼이 없으면 추가 (마이그레이션)
-    try:
-        db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass  # 이미 있음
-    # 메모/폴더 확장 컬럼 (pinned, color)
-    for stmt in [
-        "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0",
-        "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''",
-        "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
-    ]:
+    if _is_pg():
+        cur = db.cursor()
+        pg_tables = [
+            """CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created TEXT NOT NULL,
+                modified TEXT NOT NULL,
+                favorite INTEGER DEFAULT 0
+            )""",
+            """CREATE TABLE IF NOT EXISTS temps (
+                id SERIAL PRIMARY KEY,
+                name TEXT,
+                data TEXT NOT NULL,
+                date TEXT NOT NULL,
+                created TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS memo_folders (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                icon TEXT DEFAULT '📁',
+                sort_order INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS memos (
+                id SERIAL PRIMARY KEY,
+                name TEXT,
+                content TEXT DEFAULT '',
+                folder_id INTEGER,
+                is_temp INTEGER DEFAULT 1,
+                created TEXT NOT NULL,
+                modified TEXT NOT NULL,
+                FOREIGN KEY (folder_id) REFERENCES memo_folders(id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS executions (
+                id TEXT PRIMARY KEY,
+                project_id TEXT,
+                node_id TEXT NOT NULL,
+                node_name TEXT NOT NULL,
+                input_raw TEXT,
+                input_resolved TEXT,
+                output TEXT,
+                status TEXT DEFAULT 'running',
+                chat_only INTEGER DEFAULT 1,
+                started TEXT NOT NULL,
+                finished TEXT,
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                parent_exec_id TEXT,
+                node_id TEXT NOT NULL,
+                node_name TEXT NOT NULL,
+                title TEXT,
+                created TEXT NOT NULL,
+                FOREIGN KEY (parent_exec_id) REFERENCES executions(id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                conv_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                ts TEXT NOT NULL,
+                FOREIGN KEY (conv_id) REFERENCES conversations(id)
+            )""",
+        ]
+        for ddl in pg_tables:
+            cur.execute(ddl)
+        # Indexes
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_exec_node ON executions(node_id)",
+            "CREATE INDEX IF NOT EXISTS idx_conv_node ON conversations(node_id)",
+            "CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conv_id)",
+        ]:
+            cur.execute(idx_sql)
+        # Migration columns (PostgreSQL: check column existence before ALTER)
+        alter_checks = [
+            ("projects", "favorite", "ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0"),
+            ("memos", "pinned", "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0"),
+            ("memos", "color", "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''"),
+            ("memo_folders", "color", "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''"),
+        ]
+        for tbl, col, alter_sql in alter_checks:
+            cur.execute("""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name=%s AND column_name=%s
+            """, (tbl, col))
+            if not cur.fetchone():
+                cur.execute(alter_sql)
+        cur.close()
+        db.close()
+    else:
+        # SQLite
+        db.executescript("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            data TEXT NOT NULL,
+            created TEXT NOT NULL,
+            modified TEXT NOT NULL,
+            favorite INTEGER DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS temps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            data TEXT NOT NULL,
+            date TEXT NOT NULL,
+            created TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS memo_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            icon TEXT DEFAULT '📁',
+            sort_order INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS memos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            content TEXT DEFAULT '',
+            folder_id INTEGER,
+            is_temp INTEGER DEFAULT 1,
+            created TEXT NOT NULL,
+            modified TEXT NOT NULL,
+            FOREIGN KEY (folder_id) REFERENCES memo_folders(id)
+        );
+        CREATE TABLE IF NOT EXISTS executions (
+            id TEXT PRIMARY KEY,
+            project_id TEXT,
+            node_id TEXT NOT NULL,
+            node_name TEXT NOT NULL,
+            input_raw TEXT,
+            input_resolved TEXT,
+            output TEXT,
+            status TEXT DEFAULT 'running',
+            chat_only INTEGER DEFAULT 1,
+            started TEXT NOT NULL,
+            finished TEXT,
+            FOREIGN KEY (project_id) REFERENCES projects(id)
+        );
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            parent_exec_id TEXT,
+            node_id TEXT NOT NULL,
+            node_name TEXT NOT NULL,
+            title TEXT,
+            created TEXT NOT NULL,
+            FOREIGN KEY (parent_exec_id) REFERENCES executions(id)
+        );
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conv_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            ts TEXT NOT NULL,
+            FOREIGN KEY (conv_id) REFERENCES conversations(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_exec_node ON executions(node_id);
+        CREATE INDEX IF NOT EXISTS idx_conv_node ON conversations(node_id);
+        CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conv_id);
+        """)
         try:
-            db.execute(stmt)
+            db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
             pass
-    db.commit()
-    db.close()
-    log("DB initialized")
+        for stmt in [
+            "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0",
+            "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''",
+            "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
+        ]:
+            try:
+                db.execute(stmt)
+            except sqlite3.OperationalError:
+                pass
+        db.commit()
+        db.close()
+    log(f"DB initialized ({DB_TYPE})")
 
 init_db()
 db_lock = threading.Lock()
@@ -268,17 +404,52 @@ db_lock = threading.Lock()
 def db_exec(sql, params=(), fetch=False, fetchone=False):
     with db_lock:
         db = get_db()
+        is_pg = _is_pg()
         try:
-            cur = db.execute(sql, params)
-            if fetchone:
-                row = cur.fetchone()
-                return dict(row) if row else None
-            if fetch:
-                return [dict(r) for r in cur.fetchall()]
-            db.commit()
-            return cur.lastrowid
+            if is_pg:
+                adapted_sql = _pg_adapt_sql(sql)
+                # For INSERT on SERIAL tables, add RETURNING id to get lastrowid
+                need_returning = False
+                if adapted_sql.strip().upper().startswith("INSERT") and not fetch and not fetchone:
+                    # Tables with SERIAL id: temps, memo_folders, memos, messages
+                    serial_tables = ("temps", "memo_folders", "memos", "messages")
+                    sql_upper = adapted_sql.upper()
+                    if any(f"INTO {t.upper()}" in sql_upper for t in serial_tables):
+                        if "RETURNING" not in sql_upper:
+                            adapted_sql = adapted_sql.rstrip().rstrip(";") + " RETURNING id"
+                            need_returning = True
+                cur = db.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cur.execute(adapted_sql, params or ())
+                if fetchone:
+                    row = cur.fetchone()
+                    return dict(row) if row else None
+                if fetch:
+                    return [dict(r) for r in cur.fetchall()]
+                if need_returning:
+                    row = cur.fetchone()
+                    cur.close()
+                    db.close()
+                    return row["id"] if row else None
+                cur.close()
+                db.close()
+                return None
+            else:
+                cur = db.execute(sql, params)
+                if fetchone:
+                    row = cur.fetchone()
+                    return dict(row) if row else None
+                if fetch:
+                    return [dict(r) for r in cur.fetchall()]
+                db.commit()
+                return cur.lastrowid
+        except Exception as e:
+            log(f"DB ERROR: {e}\n  SQL: {sql[:200]}")
+            raise
         finally:
-            db.close()
+            try:
+                db.close()
+            except:
+                pass
 
 # ═══════════════════════════════════════
 # tmux
@@ -1210,9 +1381,13 @@ if __name__ == "__main__":
     os.chdir(BASE_DIR)
     acquire_lock()
     server = ThreadedServer(("0.0.0.0", PORT), TmuxHandler)
+    if _is_pg():
+        db_info = f"postgresql://{CONFIG.get('db_user','canvas')}@{CONFIG.get('db_host','127.0.0.1')}:{CONFIG.get('db_port',5432)}/{CONFIG.get('db_name','canvas_db')}"
+    else:
+        db_info = DB_PATH
     print(f"╔══════════════════════════════════════════════════╗")
     print(f"║  Claude Flow Canvas on ::{PORT}                    ║")
-    print(f"║  DB: {DB_PATH}")
+    print(f"║  DB: {db_info}")
     print(f"║  User: {_get_machine_id()}")
     print(f"╚══════════════════════════════════════════════════╝")
     try:
