@@ -27,7 +27,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .tb select,.tb input{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 6px;border-radius:var(--radius-sm);font-size:.78em}
 .tb .sep{width:1px;height:16px;background:var(--border);margin:0 2px}
 .tb .lbl{font-size:.72em;color:var(--text-muted)}
-.main{display:flex;flex:1;overflow:hidden}
+.main{display:flex;flex:1;overflow:hidden;position:relative}
 .cw{flex:1;overflow:hidden;position:relative;cursor:grab;
   background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:40px 40px}
 .cw.grabbing{cursor:grabbing}.cw.connecting{cursor:crosshair}
@@ -115,7 +115,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .sb-hd{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
 .sb-hd h3{flex:1;font-size:.85em;color:var(--accent);font-weight:600}.sb-hd button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:3px}.sb-hd button:hover{color:var(--text);background:var(--bg-3)}
 .sb-ct{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column}
-.sb-sec{margin-bottom:10px}
+.sb-sec{margin-bottom:4px}
 .sb-sec label{display:flex;align-items:center;justify-content:space-between;font-size:9px;color:var(--text-muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px}
 .sb-sec label button{background:var(--bg-3);border:1px solid var(--border);color:var(--blue);cursor:pointer;font-size:11px;padding:4px 12px;border-radius:var(--radius-sm);transition:.15s}.sb-sec label button:hover{background:var(--bg-4);color:var(--accent)}
 .sb-sec textarea,.sb-sec .ov{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;font-family:var(--mono);font-size:11px;resize:vertical;min-height:60px;line-height:1.4}
@@ -123,8 +123,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .sb-sec .ov{max-height:250px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .sb-sec select,.sb-sec input[type=text]{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:5px 6px;border-radius:var(--radius-sm);font-size:11px}
 .sb-sec input:focus,.sb-sec select:focus{outline:none;border-color:var(--accent)}
-.sb-row{display:flex;gap:4px;margin-bottom:8px}
-.sb-row button{flex:1;padding:6px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;font-size:.78em;transition:.15s}
+.sb-row{display:flex;gap:4px;margin-bottom:4px;align-items:center}
+.sb-row button{padding:4px 6px;border:none;border-radius:var(--radius-sm);cursor:pointer;font-weight:600;font-size:.78em;transition:.15s}
 .sb-row .r{background:var(--accent);color:#000}.sb-row .r:hover{background:var(--accent-hover)}
 .sb-row .s{background:rgba(244,67,54,.15);color:var(--red)}.sb-row .s:hover{background:rgba(244,67,54,.3)}
 .tsz{display:flex;align-items:center;gap:3px}.tsz button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:2px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:.78em}.tsz button:hover{background:var(--bg-4)}
@@ -193,9 +193,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 /* SELECTION BOX */
 /* MEMO BAR (상단 탭) */
 .memo-bar{display:flex;align-items:center;background:#0a0a14;border-bottom:1px solid var(--border);padding:4px 8px;flex-shrink:0;gap:4px;overflow-x:auto;min-height:32px}
-.memo-tab{display:flex;align-items:center;gap:6px;padding:4px 12px;background:var(--bg-2);border:1px solid var(--border);border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.1s;flex-shrink:0;max-width:160px}
+.memo-tab{display:flex;align-items:center;gap:6px;padding:4px 12px;background:var(--bg-2);border:1px solid var(--border);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.1s;flex-shrink:0;max-width:160px}
 .memo-tab:hover{background:var(--bg-3);color:var(--text)}
-.memo-tab.active{background:var(--bg-3);border-color:var(--accent);color:var(--accent)}
+.memo-tab.active{background:var(--bg-0);border-color:var(--accent);border-bottom-color:var(--accent);color:var(--accent)}
 .memo-tab .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
 .memo-tab .x{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;padding:0 2px;border-radius:3px}
 .memo-tab .x:hover{color:var(--red);background:rgba(244,67,54,.2)}
@@ -203,28 +203,10 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .memo-bar button.add:hover{background:var(--accent-hover)}
 .memo-bar button.fld{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.78em;flex-shrink:0}
 .memo-bar button.fld:hover{background:var(--bg-4)}
-/* MEMO PANEL (열리면 캔버스 위에 floating) */
-#memo-panel{position:fixed;top:80px;right:20px;width:520px;height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:90;display:none;flex-direction:column;resize:both;overflow:auto;min-width:320px;min-height:300px}
-#memo-panel.show{display:flex}
-.mp-hd{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);cursor:move}
-.mp-hd input{flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:5px 8px;border-radius:4px;font-size:.85em}
-.mp-hd select{background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:.78em}
-.mp-hd button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:.78em}
-.mp-hd button:hover{background:var(--bg-4)}
-.mp-hd button.save{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
-.mp-hd button.x{padding:4px 8px;color:var(--red)}
-.mp-tools{display:flex;align-items:center;gap:4px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.78em}
-.mp-tools button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 10px;border-radius:3px;cursor:pointer;font-size:.85em}
-.mp-tools button.act{background:var(--accent);color:#000;border-color:var(--accent)}
-.mp-body{flex:1;overflow:hidden;display:flex;flex-direction:column}
-.mp-body textarea{flex:1;background:var(--bg-0);color:var(--text);border:none;padding:14px;font-family:var(--mono);font-size:14px;line-height:1.6;resize:none;outline:none}
-.mp-body .rendered{flex:1;overflow-y:auto;padding:14px;font-family:'Segoe UI',sans-serif;font-size:14px;line-height:1.7;color:var(--text)}
-.mp-body .rendered h1,.mp-body .rendered h2,.mp-body .rendered h3{color:var(--accent);margin:.8em 0 .4em;border-bottom:1px solid var(--border);padding-bottom:.2em}
-.mp-body .rendered code{background:var(--bg-3);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:.9em}
-.mp-body .rendered pre{background:var(--bg-0);border:1px solid var(--border);padding:10px;border-radius:6px;overflow-x:auto}
-.mp-body .rendered pre code{background:none}
-.mp-body .rendered ul,.mp-body .rendered ol{margin:.5em 0 .5em 1.5em}
-.mp-body .rendered blockquote{border-left:3px solid var(--accent);padding-left:10px;color:var(--text-dim);margin:.5em 0}
+/* MEMO EDITOR (full-screen tab inside .main) */
+#memo-editor{font-family:var(--mono)}
+#memo-editor button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer}
+#memo-editor button:hover{background:var(--bg-4)}
 /* FOLDER PANEL */
 #folder-panel{position:fixed;top:80px;left:20px;width:280px;max-height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:91;display:none;flex-direction:column;overflow:hidden}
 #folder-panel.show{display:flex}
@@ -334,26 +316,6 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <button class="fld" onclick="toggleFolderPanel()" title="즐겨찾기 폴더">📁 폴더</button>
   <span style="font-size:10px;color:var(--text-muted);margin-left:6px">최근:</span>
 </div>
-<div id="memo-panel">
-  <div class="mp-hd">
-    <input type="text" id="mp-name" placeholder="메모 제목">
-    <select id="mp-folder"><option value="">폴더 없음</option></select>
-    <button class="save" onclick="saveMemoNow()">💾 저장</button>
-    <button class="x" onclick="closeMemo()">×</button>
-  </div>
-  <div class="mp-tools">
-    <button onclick="memoTextSize(-1)">A−</button>
-    <button onclick="memoTextSize(1)">A+</button>
-    <button id="mp-render-btn" onclick="memoToggleRender()">렌더</button>
-    <button onclick="memoCopyToInput()" title="현재 선택된 노드 input에 복사">→ 노드 input</button>
-    <button id="mp-pin-btn" onclick="toggleCurrentMemoPin()" title="상단바에 고정">📌</button>
-    <span style="flex:1"></span>
-    <button onclick="deleteMemo()" style="color:var(--red);border-color:rgba(244,67,54,.3)">삭제</button>
-  </div>
-  <div class="mp-body">
-    <textarea id="mp-content" placeholder="메모 내용..."></textarea>
-  </div>
-</div>
 <div id="folder-panel">
   <div class="fp-hd">📁 즐겨찾기 폴더 <button onclick="newFolder()">+ 새 폴더</button><button class="x" onclick="document.getElementById('folder-panel').classList.remove('show')">×</button></div>
   <div class="fp-list" id="fp-folders"></div>
@@ -378,35 +340,42 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     <div id="canvas"></div>
     <div id="sel-box"></div>
   </div>
+  <div id="memo-editor" style="display:none;position:absolute;inset:0;z-index:50;background:var(--bg-0);flex-direction:column">
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0">
+      <input type="text" id="me-name" placeholder="메모 제목" style="flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:13px">
+      <select id="me-folder" style="font-size:11px;padding:3px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px"><option value="">폴더 없음</option></select>
+      <button onclick="saveMemoNow()" title="이름 지정 저장" style="font-size:11px;padding:3px 8px">💾 저장</button>
+      <button onclick="toggleCurrentMemoPin()" id="me-pin-btn" title="고정" style="font-size:11px;padding:3px 8px">📌</button>
+      <button onclick="deleteMemo()" style="font-size:11px;padding:3px 8px;color:var(--red)">🗑</button>
+    </div>
+    <textarea id="me-content" style="flex:1;background:var(--bg-0);color:var(--text);border:none;padding:14px;font-family:var(--mono);font-size:14px;line-height:1.7;resize:none;outline:none" placeholder="메모 내용..." oninput="memoAutoSave()"></textarea>
+  </div>
   <div class="sb hid" id="sb">
     <div class="sb-resize" id="sb-resize"></div>
     <div class="sb-hd"><h3 id="sb-title">노드</h3><button onclick="closeSb()">&#x2715;</button></div>
-    <div class="sb-ct">
-      <div class="sb-row"><button class="r" onclick="engine.execSelected()">&#9654; 실행</button><button class="s" onclick="engine.stopNode(selectedNode)">&#9632;</button><button onclick="newNodeSession()" style="background:var(--bg-3);color:var(--blue);border:1px solid var(--border)" title="이 노드의 세션 새로 시작 (기록은 유지)">🔄 새 세션</button></div>
-      <div class="sb-sec"><label>이름</label><input type="text" id="sb-name" onchange="sbName(this.value)"></div>
-      <div class="sb-sec" id="sb-pane-sec"><label>패널</label><select id="sb-pane" onchange="sbPane(this.value)"></select></div>
-      <div class="sb-sec" id="sb-mode-sec"><label>모드</label><div class="tsz"><label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;color:var(--text)"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)"> 대화전용 (이미지 인식 가능)</label></div></div>
-      <div class="sb-sec" id="sb-sysprompt-sec"><label>시스템 프롬프트 <button onclick="openSysPrompt()" style="flex:1;min-width:60px">편집</button></label><div style="font-size:10px;color:var(--text-muted);max-height:30px;overflow:hidden" id="sb-sysprompt-preview">미설정</div></div>
-      <div class="sb-sec" id="sb-image-sec"><label>이미지 첨부</label>
-        <div id="sb-img-drop" style="border:1px dashed var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center;font-size:11px;color:var(--text-dim);cursor:pointer;transition:.15s">
-          <input type="file" id="sb-img-input" accept="image/*" multiple style="display:none">
-          📂 클릭하여 선택 또는 드래그 앤 드롭
-        </div>
-        <div id="sb-images" style="font-size:10px;color:var(--text-dim);margin-top:6px">없음</div>
-      </div>
-      <div class="sb-sec" id="sb-pdf-sec"><label>PDF 분할 → 노드 자동생성</label>
+    <div class="sb-ct" style="display:flex;flex-direction:column">
+      <div class="sb-row"><button class="r" onclick="engine.execSelected()">&#9654;</button><button class="s" onclick="engine.stopNode(selectedNode)">&#9632;</button><input type="text" id="sb-name" onchange="sbName(this.value)" placeholder="이름" style="flex:1;min-width:0"><label style="font-size:10px;cursor:pointer;display:flex;align-items:center;gap:2px;color:var(--text-muted);white-space:nowrap"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)" style="margin:0"> 대화전용</label></div>
+      <div class="sb-row" style="gap:2px;flex-wrap:wrap" id="sb-mode-sec">
+        <button onclick="openSysPrompt()" title="시스템 프롬프트" style="font-size:10px;padding:2px 5px">⚙️</button>
+        <button onclick="document.getElementById('sb-img-input').click()" title="이미지 첨부" style="font-size:10px;padding:2px 5px">📷</button>
+        <button onclick="document.getElementById('sb-pdf-input').click()" title="PDF 분할" style="font-size:10px;padding:2px 5px">📄</button>
+        <button onclick="splitNode()" title="분할 생성" style="font-size:10px;padding:2px 5px">⎘</button>
+        <input type="file" id="sb-img-input" accept="image/*" multiple style="display:none">
         <input type="file" id="sb-pdf-input" accept=".pdf" style="display:none">
-        <div style="display:flex;gap:4px;margin-bottom:4px"><button onclick="document.getElementById('sb-pdf-input').click()" style="flex:1;background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:4px;cursor:pointer;font-size:11px">📄 PDF 선택</button></div>
-        <input type="text" id="sb-pdf-pages" placeholder="페이지 (예: 1,3,5-10) 비우면 전체" style="width:100%;font-size:11px;padding:5px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
+        <input type="text" id="sb-pdf-pages" placeholder="PDF 페이지" style="width:70px;font-size:9px;padding:2px 4px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px;display:none">
+        <span id="sb-images" style="font-size:9px;color:var(--text-dim)"></span>
+        <span style="flex:1"></span>
+        <span id="sb-charcount" style="font-size:10px;color:var(--text-muted)"></span>
       </div>
-      <div class="sb-sec" id="sb-split-sec"><label>분할 생성</label><div class="tsz"><input type="number" id="sb-split-n" value="3" min="2" max="10" style="width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:2px 4px;border-radius:3px;font-size:11px"><button onclick="splitNode()">분할</button></div></div>
-      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:1;min-height:80px"><label>Input <span id="sb-charcount" style="font-size:10px;color:var(--text-muted)"></span> <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openHtmlTab('input')">HTML</button><button onclick="openModal('input')">확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()">치환 미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
+      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>Input <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openModal('input')">확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()">치환</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
-      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:1;min-height:80px"><label>Output <span><button onclick="copyText('output')">📋</button><button onclick="openHtmlTab('output')">HTML</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
-      <div class="sb-sec"><label>텍스트 크기</label><div class="tsz"><button onclick="sbTsz(-.1)">A-</button><button onclick="sbTsz(.1)">A+</button><button onclick="ndTszSel(-.1)">노드 A-</button><button onclick="ndTszSel(.1)">노드 A+</button></div></div>
-      <div class="sb-sec"><label>실행 기록 <button onclick="loadExecHistory()" title="새로고침">&#8635;</button></label><select id="sb-exec" onchange="sbExecSelect(this.value)"><option value="">기록 없음</option></select></div>
-      <div class="sb-sec"><label>대화 분기 <button onclick="forkConv()" title="현재 실행에서 대화 분기 생성">+ 분기</button></label><select id="sb-conv" onchange="sbConvSelect(this.value)"><option value="">분기 없음</option></select></div>
-      <div class="sb-sec"><label>히스토리 (로컬)</label><select id="sb-hist" onchange="sbHist(this.value)"><option value="">없음</option></select></div>
+      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Output <span><button onclick="copyText('output')">📋</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
+      <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
+        <button onclick="sbTsz(-.1)" style="font-size:9px;padding:1px 4px">A-</button><button onclick="sbTsz(.1)" style="font-size:9px;padding:1px 4px">A+</button>
+        <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
+        <select id="sb-conv" onchange="sbConvSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">분기</option></select><button onclick="forkConv()" style="font-size:9px;padding:1px 3px">+</button>
+        <select id="sb-pane" onchange="sbPane(this.value)" style="font-size:9px;padding:1px;width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px;display:none"></select>
+      </div>
     </div>
   </div>
 </div>
@@ -1266,7 +1235,6 @@ function openSysPrompt(){
   const ta=mb.querySelector('textarea');
   ta.addEventListener('input',function(){
     selectedNode.systemPrompt=this.value;
-    document.getElementById('sb-sysprompt-preview').textContent=this.value?this.value.substring(0,60)+'...':'미설정';
     autoSave();
   });
   // 파일 불러오기
@@ -1299,23 +1267,18 @@ function removeImage(idx){
   selectedNode.images.splice(idx,1);
   openSb(selectedNode);autoSave();
 }
-// 파일 선택 + 드래그앤드롭 핸들러 (한 번만 등록)
-function setupImageDrop(){
-  const drop=document.getElementById('sb-img-drop');
+// 파일 선택 핸들러 (한 번만 등록)
+function setupImageInput(){
   const input=document.getElementById('sb-img-input');
-  if(!drop||drop.dataset.bound)return;
-  drop.dataset.bound='1';
-  drop.addEventListener('click',()=>input.click());
+  if(!input||input.dataset.bound)return;
+  input.dataset.bound='1';
   input.addEventListener('change',e=>{[...e.target.files].forEach(uploadImageFile);input.value=''});
-  drop.addEventListener('dragover',e=>{e.preventDefault();drop.style.borderColor='var(--accent)';drop.style.background='rgba(76,175,80,.1)'});
-  drop.addEventListener('dragleave',e=>{drop.style.borderColor='';drop.style.background=''});
-  drop.addEventListener('drop',e=>{e.preventDefault();drop.style.borderColor='';drop.style.background='';[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')).forEach(uploadImageFile)});
 }
 
 // ═══ SPLIT NODE ═══
 async function splitNode(){
   if(!selectedNode||selectedNode.type!=='agent')return;
-  const count=parseInt(document.getElementById('sb-split-n').value)||3;
+  const count=parseInt(prompt('분할 개수:','3'))||3;
   const src=selectedNode;
   // 연결된 upstream 찾기
   const upConns=conns.filter(c=>c.tid===src.id);
@@ -1511,7 +1474,7 @@ function openCeSidebar(ce){
   document.getElementById('sb').classList.remove('hid');
   document.getElementById('sb-title').textContent=`🖼️ ${ce.nodeName||'Image'}`;
   // 모든 노드 전용 섹션 숨기고 ce 전용 표시
-  ['sb-pane-sec','sb-mode-sec','sb-sysprompt-sec','sb-image-sec','sb-pdf-sec','sb-split-sec'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+  const modeSec=document.getElementById('sb-mode-sec');if(modeSec)modeSec.style.display='none';
   const ct=document.querySelector('.sb-ct');
   // ce 전용 영역 (재생성)
   let ceArea=document.getElementById('ce-area');
@@ -1531,7 +1494,7 @@ function openCeSidebar(ce){
     ${ce.nodeType==='agent'?'<div class="sb-row"><button class="r" onclick="engine.executeNode(selectedCe)">▶ 실행</button></div>':''}
   `;
   // 다른 동적 섹션 숨기기
-  document.querySelectorAll('#sb-exec, #sb-conv, #sb-hist').forEach(el=>{const sec=el.closest('.sb-sec');if(sec)sec.style.display='none'});
+  document.querySelectorAll('#sb-exec, #sb-conv').forEach(el=>{const row=el.closest('.sb-row');if(row)row.style.display='none'});
 }
 function delCe(id){
   const i=canvasEls.findIndex(c=>c.id===id);if(i<0)return;
@@ -1608,24 +1571,29 @@ function copyText(type){
 function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';document.getElementById('sb').classList.remove('hid');
   // ce 영역 숨기고 노드 영역 다시 표시
   const ceArea=document.getElementById('ce-area');if(ceArea)ceArea.style.display='none';
-  ['sb-exec','sb-conv','sb-hist'].forEach(id=>{const el=document.getElementById(id);if(el){const sec=el.closest('.sb-sec');if(sec)sec.style.display=''}});document.getElementById('sb-title').textContent=`${ti.icon} ${n.name}`;document.getElementById('sb-name').value=n.name;document.getElementById('sb-input').value=n.inputTemplate;document.getElementById('sb-output').textContent=n.outputCapture||'대기 중';updateCharCount();
-  document.getElementById('sb-pane-sec').style.display=isAgent?'':'none';
+  document.getElementById('sb-title').textContent=`${ti.icon} ${n.name}`;document.getElementById('sb-name').value=n.name;document.getElementById('sb-input').value=n.inputTemplate;document.getElementById('sb-output').textContent=n.outputCapture||'대기 중';updateCharCount();
+  // compact toolbar: show/hide agent-only elements
   document.getElementById('sb-mode-sec').style.display=isAgent?'':'none';
-  document.getElementById('sb-split-sec').style.display=isAgent?'':'none';
-  document.getElementById('sb-sysprompt-sec').style.display=isAgent?'':'none';
-  document.getElementById('sb-image-sec').style.display=isAgent?'':'none';
   if(isAgent){
     document.getElementById('sb-chatonly').checked=n.chatOnly;
-    document.getElementById('sb-sysprompt-preview').textContent=n.systemPrompt?n.systemPrompt.substring(0,60)+'...':'미설정';
-    document.getElementById('sb-images').innerHTML=n.images&&n.images.length?n.images.map((img,i)=>{
-      const fname=img.split('/').pop();
-      return `<div style="display:flex;align-items:center;gap:4px;margin:3px 0;padding:3px;background:var(--bg-3);border-radius:3px"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-size:9px">${fname}</span><button onclick="viewImage('${img.replace(/'/g,"\\'")}')" title="이 이미지 크게 보기" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;padding:2px 6px">🔍</button><button onclick="viewAllImages('${img.replace(/'/g,"\\'")}')" title="이 PDF의 전체 페이지 갤러리" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:2px 6px">📚</button><button onclick="removeImage(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px">✕</button></div>`;
-    }).join(''):'없음';
+    // show images inline
+    const imgEl=document.getElementById('sb-images');
+    if(imgEl){
+      imgEl.innerHTML=n.images&&n.images.length?n.images.map((img,i)=>{
+        const fname=img.split('/').pop();
+        return `<span style="cursor:pointer;text-decoration:underline" onclick="viewImage('${img.replace(/'/g,"\\'")}')" title="${fname}">📎${i+1}</span><button onclick="removeImage(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:9px;padding:0 1px">✕</button>`;
+      }).join(' '):'';
+    }
+    // show PDF pages input if relevant
+    const pdfPages=document.getElementById('sb-pdf-pages');
+    if(pdfPages)pdfPages.style.display='inline-block';
   }
-  const ps=document.getElementById('sb-pane');ps.innerHTML='<option value="">자동</option>'+paneList.map(p=>`<option value="${p.index}" ${n.paneIndex==p.index?'selected':''}>${p.index}</option>`).join('');const hs=document.getElementById('sb-hist');hs.innerHTML='<option value="">없음</option>';(n.history||[]).forEach((h,i)=>hs.innerHTML+=`<option value="${i}">${new Date(h.timestamp).toLocaleString('ko-KR')}</option>`);
+  const ps=document.getElementById('sb-pane');
+  ps.innerHTML='<option value="">자동</option>'+paneList.map(p=>`<option value="${p.index}" ${n.paneIndex==p.index?'selected':''}>${p.index}</option>`).join('');
+  if(isAgent)ps.style.display='';else ps.style.display='none';
   // reset resolved preview
   if(resolvedPreviewOn){resolvedPreviewOn=false;document.getElementById('rv-toggle').classList.remove('active');document.getElementById('sb-input').style.display='';document.getElementById('sb-resolved').style.display='none'}
-  loadExecHistory();loadConvList();setupImageDrop();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
+  loadExecHistory();loadConvList();setupImageInput();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
 function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout(drawConns,10)}
 function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('.nd-name').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
 function sbPane(v){if(selectedNode)selectedNode.paneIndex=v?parseInt(v):null;autoSave()}
@@ -1948,11 +1916,10 @@ async function resetSession(){if(!confirm('tmux 세션 리셋?\n\n캔버스 상�
   await api('POST','/api/reset-session',{});await new Promise(ok=>setTimeout(ok,2000));await init(true);alert('리셋!')}
 
 // ═══ INIT ═══
-// ═══ MEMO SYSTEM ═══
-let openMemos=[],activeMemoId=null,memoFontSize=14,memoIsRendered=false,memoSaveTimer=null,memoFolders=[],activeFolderId=null;
+// ═══ MEMO SYSTEM (Tabbed Notepad) ═══
+let openMemos=[],activeMemoId=null,memoFontSize=14,memoSaveTimer=null,memoFolders=[],activeFolderId=null;
 
 async function loadMemoTabs(){
-  // 임시 + 저장된 모든 메모 (최근 20)
   const r=await api('GET','/api/memo/list');
   if(!r.ok)return;
   openMemos=r.memos.slice(0,20);
@@ -1960,7 +1927,6 @@ async function loadMemoTabs(){
 }
 function renderMemoBar(){
   const bar=document.getElementById('memo-bar');
-  // 기존 탭 제거 (버튼 2개 + 라벨 1개 유지)
   const existing=bar.querySelectorAll('.memo-tab');existing.forEach(e=>e.remove());
   openMemos.forEach(m=>{
     const t=document.createElement('div');
@@ -1968,123 +1934,99 @@ function renderMemoBar(){
     const star=m.is_temp?'':'★ ';
     const pin=m.pinned?'📌':'';
     t.innerHTML=`<span class="nm">${pin}${star}${escapeHtml(m.name||'무제')}</span><button class="x" onclick="event.stopPropagation();delMemoTab(${m.id})">×</button>`;
-    t.onclick=()=>openMemoEditor(m.id);
+    t.onclick=()=>openMemoTab(m.id);
     bar.appendChild(t);
   });
 }
 async function newMemo(){
   const r=await api('POST','/api/memo/save',{name:`메모${new Date().getHours()}:${String(new Date().getMinutes()).padStart(2,'0')}`,content:'',isTemp:true});
-  if(r.ok){await loadMemoTabs();openMemoEditor(r.id)}
+  if(r.ok){await loadMemoTabs();openMemoTab(r.id)}
 }
-async function openMemoEditor(id){
+async function openMemoTab(id){
+  // If already active, close it (toggle behavior)
+  if(activeMemoId==id){closeMemoTab();return}
   const r=await api('GET',`/api/memo/get?id=${id}`);
   if(!r.ok)return;
-  activeMemoId=id;memoIsRendered=false;
-  document.getElementById('mp-name').value=r.memo.name||'';
-  document.getElementById('mp-content').value=r.memo.content||'';
-  // 폴더 옵션 채우기
-  const sel=document.getElementById('mp-folder');
+  activeMemoId=id;
+  const editor=document.getElementById('memo-editor');
+  document.getElementById('me-name').value=r.memo.name||'';
+  document.getElementById('me-content').value=r.memo.content||'';
+  // folder options
+  const sel=document.getElementById('me-folder');
   sel.innerHTML='<option value="">폴더 없음</option>'+memoFolders.map(f=>`<option value="${f.id}" ${r.memo.folder_id==f.id?'selected':''}>${f.icon} ${f.name}</option>`).join('');
-  document.getElementById('memo-panel').classList.add('show');
-  document.getElementById('mp-render-btn').textContent='렌더';
-  showMemoText();
+  // pin button state
+  const pinBtn=document.getElementById('me-pin-btn');
+  if(pinBtn)pinBtn.style.background=r.memo.pinned?'rgba(245,158,11,.2)':'';
+  // show editor, hide canvas
+  editor.style.display='flex';
   renderMemoBar();
 }
-function closeMemo(){document.getElementById('memo-panel').classList.remove('show');activeMemoId=null;renderMemoBar()}
+function closeMemoTab(){
+  document.getElementById('memo-editor').style.display='none';
+  activeMemoId=null;
+  renderMemoBar();
+}
+// Alias for backward compat
+function openMemoEditor(id){openMemoTab(id)}
+function closeMemo(){closeMemoTab()}
 async function delMemoTab(id){
   if(!confirm('이 메모를 삭제할까요?'))return;
   await api('POST','/api/memo/delete',{id});
-  if(activeMemoId==id)closeMemo();
+  if(activeMemoId==id)closeMemoTab();
   loadMemoTabs();
 }
 async function deleteMemo(){
   if(!activeMemoId||!confirm('이 메모를 삭제할까요?'))return;
   await api('POST','/api/memo/delete',{id:activeMemoId});
-  closeMemo();loadMemoTabs();
+  closeMemoTab();loadMemoTabs();
 }
 
-// 자동 저장 (디바운스)
+// Auto-save (1 second debounce)
 function memoAutoSave(){
   if(!activeMemoId)return;
   if(memoSaveTimer)clearTimeout(memoSaveTimer);
   memoSaveTimer=setTimeout(async()=>{
-    const name=document.getElementById('mp-name').value.trim()||'무제';
-    const content=document.getElementById('mp-content').value;
-    const folderId=document.getElementById('mp-folder').value||null;
+    const name=document.getElementById('me-name').value.trim()||'무제';
+    const content=document.getElementById('me-content').value;
+    const folderId=document.getElementById('me-folder').value||null;
     await api('POST','/api/memo/save',{id:activeMemoId,name,content,folderId,isTemp:true});
-    loadMemoTabs();
-  },800);
+    // refresh tabs to show updated name
+    const tab=openMemos.find(m=>m.id==activeMemoId);
+    if(tab)tab.name=name;
+    renderMemoBar();
+  },1000);
 }
 async function saveMemoNow(){
   if(!activeMemoId)return;
-  const name=prompt('저장할 이름:',document.getElementById('mp-name').value||'')||document.getElementById('mp-name').value;
+  const name=prompt('저장할 이름:',document.getElementById('me-name').value||'')||document.getElementById('me-name').value;
   if(!name)return;
-  const content=document.getElementById('mp-content').value;
-  const folderId=document.getElementById('mp-folder').value||null;
+  const content=document.getElementById('me-content').value;
+  const folderId=document.getElementById('me-folder').value||null;
   await api('POST','/api/memo/save',{id:activeMemoId,name,content,folderId,isTemp:false});
-  document.getElementById('mp-name').value=name;
+  document.getElementById('me-name').value=name;
   loadMemoTabs();
   alert('저장 완료 ★');
 }
 
-function memoTextSize(d){
-  memoFontSize=Math.max(10,Math.min(30,memoFontSize+d));
-  const ta=document.getElementById('mp-content');
-  if(ta)ta.style.fontSize=memoFontSize+'px';
-  const r=document.querySelector('#memo-panel .rendered');
-  if(r)r.style.fontSize=memoFontSize+'px';
-}
-function showMemoText(){
-  const body=document.querySelector('.mp-body');
-  body.innerHTML=`<textarea id="mp-content" style="font-size:${memoFontSize}px"></textarea>`;
-  body.querySelector('textarea').addEventListener('input',memoAutoSave);
-  // 내용 다시 채우기
-  if(activeMemoId){
-    api('GET',`/api/memo/get?id=${activeMemoId}`).then(r=>{if(r.ok)document.getElementById('mp-content').value=r.memo.content||''});
-  }
-}
-function memoToggleRender(){
-  memoIsRendered=!memoIsRendered;
-  const btn=document.getElementById('mp-render-btn');
-  const body=document.querySelector('.mp-body');
-  if(memoIsRendered){
-    const text=document.getElementById('mp-content').value;
-    body.innerHTML=`<div class="rendered" style="font-size:${memoFontSize}px">${renderMd(text)}</div>`;
-    btn.textContent='텍스트';btn.classList.add('act');
-  } else {
-    showMemoText();
-    btn.textContent='렌더';btn.classList.remove('act');
-  }
-}
 async function toggleCurrentMemoPin(){
   if(!activeMemoId)return;
   const r=await api('GET',`/api/memo/get?id=${activeMemoId}`);
   if(!r.ok)return;
   const nowPinned=r.memo.pinned?0:1;
   await api('POST','/api/memo/pin',{id:activeMemoId,pinned:!!nowPinned});
-  const btn=document.getElementById('mp-pin-btn');
+  const btn=document.getElementById('me-pin-btn');
   if(btn)btn.style.background=nowPinned?'rgba(245,158,11,.2)':'';
   loadPinnedMemos();
 }
 function memoCopyToInput(){
   if(!selectedNode){alert('대상 노드를 먼저 선택하세요');return}
-  const content=document.getElementById('mp-content').value;
+  const content=document.getElementById('me-content').value;
   selectedNode.inputTemplate=(selectedNode.inputTemplate||'')+'\n\n'+content;
   const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=selectedNode.inputTemplate;
   document.getElementById('sb-input').value=selectedNode.inputTemplate;
   autoSave();
   console.log('[MEMO→NODE]',selectedNode.name);
 }
-
-// 패널 드래그 이동
-(function initMemoDrag(){
-  const panel=document.getElementById('memo-panel');
-  const hd=panel.querySelector('.mp-hd');
-  let dx=0,dy=0,drag=false;
-  hd.addEventListener('mousedown',e=>{if(e.target.tagName!=='INPUT'&&e.target.tagName!=='SELECT'&&e.target.tagName!=='BUTTON'){drag=true;dx=e.clientX-panel.offsetLeft;dy=e.clientY-panel.offsetTop}});
-  window.addEventListener('mousemove',e=>{if(drag){panel.style.left=(e.clientX-dx)+'px';panel.style.top=(e.clientY-dy)+'px';panel.style.right='auto'}});
-  window.addEventListener('mouseup',()=>drag=false);
-})();
 
 // ═══ FOLDERS ═══
 async function loadFolders(){
@@ -2134,7 +2076,7 @@ function toggleFolderPanel(){
 }
 
 // 메모 자동 백업 (열려있을 때만)
-setInterval(()=>{if(activeMemoId&&document.getElementById('memo-panel').classList.contains('show'))memoAutoSave()},10000);
+setInterval(()=>{if(activeMemoId&&document.getElementById('memo-editor').style.display!=='none')memoAutoSave()},10000);
 
 // ═══ LANDING MODAL ═══
 let landingSelected=null,previewState=null,previewZoomVal=0.3,previewCx=0,previewCy=0;
