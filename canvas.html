@@ -2901,20 +2901,21 @@ function importProjectJson(data){
   }
 }
 
-// JSON drag-drop import on canvas
-(function(){
-  const cw = document.getElementById('cw');
-  cw.addEventListener('dragover', e => {
+// JSON drag-drop import on canvas (init에서 호출)
+function setupJsonDragDrop(){
+  const cwEl = document.getElementById('cw');
+  if(!cwEl) return;
+  cwEl.addEventListener('dragover', e => {
     if(e.dataTransfer.types.includes('Files')){
       e.preventDefault();
-      cw.style.outline = '3px dashed var(--accent)';
+      cwEl.style.outline = '3px dashed var(--accent)';
     }
   });
-  cw.addEventListener('dragleave', e => {
-    cw.style.outline = '';
+  cwEl.addEventListener('dragleave', e => {
+    cwEl.style.outline = '';
   });
-  cw.addEventListener('drop', e => {
-    cw.style.outline = '';
+  cwEl.addEventListener('drop', e => {
+    cwEl.style.outline = '';
     const file = [...e.dataTransfer.files].find(f => f.name.endsWith('.json'));
     if(!file) return;
     e.preventDefault();
@@ -2933,7 +2934,7 @@ function importProjectJson(data){
     };
     reader.readAsText(file);
   });
-})();
+}
 
 async function init(){
   const st=await api('GET','/api/status');if(st.panes)paneList=st.panes;
@@ -2941,6 +2942,7 @@ async function init(){
   refreshWfList();applyTx();
   undoStack=[];redoStack=[];
   loadFolders();loadMemoTabs();loadPinnedMemos();
+  setupJsonDragDrop();
   showLanding();
 }
 init();
