@@ -1,0 +1,5 @@
+{
+  "db_path": "/mnt/z/00_Gils_Project/claude-flow-canvas/canvas.db",
+  "port": 8888,
+  "uploads_dir": "/mnt/z/00_Gils_Project/claude-flow-canvas/uploads"
+}

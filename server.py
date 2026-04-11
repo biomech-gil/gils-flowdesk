@@ -10,7 +10,35 @@ from urllib.parse import urlparse, parse_qs
 PORT = 8888
 SESSION_NAME = "main"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "canvas.db")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+
+def load_config():
+    """config.json에서 설정을 로드. 없으면 기본값 생성."""
+    defaults = {
+        "db_path": os.path.join(BASE_DIR, "canvas.db"),
+        "port": 8888,
+        "uploads_dir": os.path.join(BASE_DIR, "uploads")
+    }
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            # 설정 파일의 값으로 defaults 업데이트
+            for k, v in cfg.items():
+                defaults[k] = v
+        except Exception as e:
+            print(f"[WARN] config.json 읽기 실패: {e}, 기본값 사용")
+    else:
+        # 최초 실행: 기본 config.json 생성
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(defaults, f, indent=2, ensure_ascii=False)
+        print(f"[+] config.json 생성됨: {CONFIG_PATH}")
+    return defaults
+
+CONFIG = load_config()
+DB_PATH = CONFIG["db_path"]
+PORT = CONFIG.get("port", 8888)
+UPLOADS_DIR = CONFIG.get("uploads_dir", os.path.join(BASE_DIR, "uploads"))
 
 def log(msg):
     ts = time.strftime("%H:%M:%S")
@@ -20,9 +48,17 @@ def log(msg):
 # SQLite DB
 # ═══════════════════════════════════════
 def get_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    # DB 디렉토리가 없으면 생성
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    # 네트워크 드라이브(/mnt/ 등)에서는 WAL 대신 DELETE 모드 사용 (호환성)
+    if '/mnt/' in DB_PATH or '\\\\' in DB_PATH:
+        conn.execute("PRAGMA journal_mode=DELETE")
+    else:
+        conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 def init_db():
@@ -701,7 +737,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": False, "error": "filename and data required"}
 
         # 디렉토리: ~/tmux-controller/uploads/(images|sysprompts)/
-        upload_dir = os.path.join(BASE_DIR, "uploads", purpose + "s")
+        upload_dir = os.path.join(UPLOADS_DIR, purpose + "s")
         os.makedirs(upload_dir, exist_ok=True)
 
         # 파일명 sanitize + timestamp 추가 (덮어쓰기 방지)
@@ -785,7 +821,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": False, "error": f"decode failed: {e}"}
 
         # 임시 PDF 저장 + 변환
-        upload_dir = os.path.join(BASE_DIR, "uploads", "pdfs")
+        upload_dir = os.path.join(UPLOADS_DIR, "pdfs")
         os.makedirs(upload_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = re.sub(r'[^\w\s.\-_가-힣]', '_', filename).replace(".pdf", "")
