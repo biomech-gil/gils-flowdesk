@@ -348,6 +348,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       <button onclick="saveMemoNow()" title="이름 지정 저장" style="font-size:11px;padding:3px 8px">💾 저장</button>
       <button onclick="toggleCurrentMemoPin()" id="me-pin-btn" title="고정" style="font-size:11px;padding:3px 8px">📌</button>
       <button onclick="deleteMemo()" style="font-size:11px;padding:3px 8px;color:var(--red)">🗑</button>
+      <button onclick="memoToNode()" title="이 메모를 캔버스 노드로 생성" style="font-size:11px;padding:3px 8px">→ 노드</button>
     </div>
     <textarea id="me-content" style="flex:1;background:var(--bg-0);color:var(--text);border:none;padding:14px;font-family:var(--mono);font-size:14px;line-height:1.7;resize:none;outline:none" placeholder="메모 내용..." oninput="memoAutoSave()"></textarea>
   </div>
@@ -368,9 +369,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <span style="flex:1"></span>
         <span id="sb-charcount" style="font-size:10px;color:var(--text-muted)"></span>
       </div>
-      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>Input <span><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openModal('input')">확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()">치환</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
+      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>Input <span><button onclick="inputToMemo()" title="메모로 저장">📝</button><button onclick="copyText('resolved')">📋풀</button><button onclick="copyText('input')">📋</button><button onclick="openModal('input')">확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()">치환</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
-      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Output <span><button onclick="toggleOutputEdit()" title="출력 편집">✏️</button><button onclick="clearOutput()" title="출력 지우기">🗑</button><button onclick="copyText('output')">📋</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
+      <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Output <span><button onclick="outputToMemo()" title="메모로 저장">📝</button><button onclick="toggleOutputEdit()" title="출력 편집">✏️</button><button onclick="clearOutput()" title="출력 지우기">🗑</button><button onclick="copyText('output')">📋</button><button onclick="openModal('output')">확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
         <button onclick="sbTsz(-.1)" style="font-size:9px;padding:1px 4px">A-</button><button onclick="sbTsz(.1)" style="font-size:9px;padding:1px 4px">A+</button>
         <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
@@ -1506,17 +1507,16 @@ function openCeSidebar(ce){
   if(!ceArea){ceArea=document.createElement('div');ceArea.id='ce-area';ct.appendChild(ceArea)}
   ceArea.style.display='block';
   ceArea.innerHTML=`
-    <div class="sb-sec"><label>이름</label><input type="text" value="${ce.nodeName||''}" oninput="selectedCe.nodeName=this.value;document.getElementById('sb-title').textContent='🖼️ '+this.value;autoSave()"></div>
-    <div class="sb-sec"><label>노드 전환 (좌우 연결 활성화)</label><select onchange="setCeNodeType(this.value)">
+    <div class="sb-sec" style="margin-bottom:6px"><div style="display:flex;gap:4px;align-items:center"><input type="text" value="${ce.nodeName||''}" oninput="selectedCe.nodeName=this.value;document.getElementById('sb-title').textContent='🖼️ '+this.value;autoSave()" placeholder="이름" style="flex:1;min-width:0"><select onchange="setCeNodeType(this.value)" style="width:auto;min-width:90px">
       <option value="" ${!ce.nodeType?'selected':''}>이미지 전용</option>
       <option value="agent" ${ce.nodeType==='agent'?'selected':''}>🤖 Agent</option>
       <option value="memo" ${ce.nodeType==='memo'?'selected':''}>📝 Memo</option>
       <option value="input" ${ce.nodeType==='input'?'selected':''}>📎 Input</option>
       <option value="trigger" ${ce.nodeType==='trigger'?'selected':''}>⚡ Trigger</option>
-    </select></div>
-    <div class="sb-sec" id="ce-input-sec" style="display:${ce.nodeType?'':'none'}"><label>Input</label><textarea rows="4" oninput="selectedCe.inputTemplate=this.value;autoSave()">${ce.inputTemplate||''}</textarea></div>
-    <div class="sb-sec" id="ce-output-sec" style="display:${ce.nodeType==='agent'?'':'none'}"><label>Output</label><div class="ov" style="white-space:pre-wrap">${ce.outputCapture||'대기 중'}</div></div>
-    ${ce.nodeType==='agent'?'<div class="sb-row"><button class="r" onclick="engine.executeNode(selectedCe)">▶ 실행</button></div>':''}
+    </select></div></div>
+    ${ce.nodeType==='agent'?'<div class="sb-row" style="margin-bottom:4px"><button class="r" onclick="engine.executeNode(selectedCe)">▶ 실행</button></div>':''}
+    <div class="sb-sec" id="ce-input-sec" style="display:${ce.nodeType?'':'none'}"><label>Input <span><button onclick="ceInputToMemo()" title="메모로 저장">📝</button></span></label><textarea rows="4" oninput="selectedCe.inputTemplate=this.value;autoSave()">${ce.inputTemplate||''}</textarea></div>
+    <div class="sb-sec" id="ce-output-sec" style="display:${ce.nodeType==='agent'?'':'none'}"><label>Output <span><button onclick="ceOutputToMemo()" title="메모로 저장">📝</button></span></label><div class="ov" style="white-space:pre-wrap">${ce.outputCapture||'대기 중'}</div></div>
   `;
   // 다른 동적 섹션 숨기기
   document.querySelectorAll('#sb-exec, #sb-conv').forEach(el=>{const row=el.closest('.sb-row');if(row)row.style.display='none'});
@@ -2556,6 +2556,60 @@ document.addEventListener('click',function(e){
 },true);
 
 // 툴바에 "프로젝트 열기" 버튼 추가는 init에서 처리
+
+// ═══ MEMO <-> NODE CONVERSION ═══
+function memoToNode(){
+  const content = document.getElementById('me-content').value;
+  if(!content.trim()) return alert('메모 내용이 비어있습니다');
+  const name = document.getElementById('me-name').value || '메모 노드';
+  closeMemoTab();
+  const nd = mkNode({
+    type: 'memo',
+    x: (-cx + window.innerWidth/2 - 140) / zoom,
+    y: (-cy + window.innerHeight/2 - 120) / zoom,
+    inputTemplate: content,
+    name: name
+  });
+  nd.outputCapture = content;
+  const oc = nd.el.querySelector('.out-c');
+  if(oc) oc.textContent = content;
+  const ta = nd.el.querySelector('.nd-in textarea');
+  if(ta) ta.value = content;
+  selNode(nd);
+  autoSave();
+}
+
+async function createMemoFromText(text, name){
+  const r = await api('POST', '/api/memo/save', {
+    name: name,
+    content: text,
+    isTemp: true
+  });
+  if(r.ok){
+    await loadMemoTabs();
+    openMemoTab(r.id);
+  }
+}
+
+function inputToMemo(){
+  if(!selectedNode || !selectedNode.inputTemplate.trim()) return;
+  createMemoFromText(selectedNode.inputTemplate, selectedNode.name + ' - Input');
+}
+
+function outputToMemo(){
+  if(!selectedNode || !selectedNode.outputCapture || !selectedNode.outputCapture.trim()) return;
+  createMemoFromText(selectedNode.outputCapture, selectedNode.name + ' - Output');
+}
+
+function ceInputToMemo(){
+  if(!selectedCe || !selectedCe.inputTemplate || !selectedCe.inputTemplate.trim()) return;
+  createMemoFromText(selectedCe.inputTemplate, (selectedCe.nodeName||'CE') + ' - Input');
+}
+
+function ceOutputToMemo(){
+  if(!selectedCe || !selectedCe.outputCapture || !selectedCe.outputCapture.trim()) return;
+  createMemoFromText(selectedCe.outputCapture, (selectedCe.nodeName||'CE') + ' - Output');
+}
 
 async function init(){
   const st=await api('GET','/api/status');if(st.panes)paneList=st.panes;
