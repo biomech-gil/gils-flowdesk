@@ -16,16 +16,18 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.nav{display:flex;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0}
-.nav a{color:var(--text-dim);text-decoration:none;padding:10px 20px;font-size:.85em;border-bottom:2px solid transparent;transition:.15s}
-.nav a:hover{color:var(--text);background:var(--bg-3)}.nav a.active{color:var(--accent);border-bottom-color:var(--accent)}
-.tb{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
-.tb button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:.78em;transition:.15s}
-.tb button:hover{background:var(--bg-4);border-color:var(--border-light)}
-.tb .act{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600}
+.nav{display:flex;align-items:center;background:linear-gradient(180deg,#1e2030,#181825);border-bottom:1px solid rgba(76,175,80,.2);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.nav a{color:var(--text-dim);text-decoration:none;padding:10px 22px;font-size:.85em;font-weight:500;border-bottom:2px solid transparent;transition:.2s;letter-spacing:.3px}
+.nav a:hover{color:#fff;background:rgba(255,255,255,.05)}.nav a.active{color:var(--accent);border-bottom-color:var(--accent);text-shadow:0 0 8px rgba(76,175,80,.4)}
+.tb{display:flex;align-items:center;gap:6px;padding:5px 10px;background:linear-gradient(180deg,#16161e,#12121a);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.tb button{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.1);padding:4px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:.78em;transition:.2s;backdrop-filter:blur(4px)}
+.tb button:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);transform:translateY(-1px)}
+.tb .act{background:linear-gradient(135deg,var(--accent),#388E3C);color:#000;border-color:var(--accent);font-weight:600;box-shadow:0 0 8px rgba(76,175,80,.3)}
+.tb .act:hover{box-shadow:0 0 14px rgba(76,175,80,.5)}
 .tb .danger{background:rgba(244,67,54,.15);color:var(--red);border-color:rgba(244,67,54,.3)}
-.tb select,.tb input{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 6px;border-radius:var(--radius-sm);font-size:.78em}
-.tb .sep{width:1px;height:16px;background:var(--border);margin:0 2px}
+.tb .danger:hover{background:rgba(244,67,54,.25)}
+.tb select,.tb input{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.1);padding:3px 6px;border-radius:var(--radius-sm);font-size:.78em}
+.tb .sep{width:1px;height:16px;background:linear-gradient(180deg,transparent,var(--border),transparent);margin:0 4px}
 .tb .lbl{font-size:.72em;color:var(--text-muted)}
 .main{display:flex;flex:1;overflow:hidden;position:relative}
 .cw{flex:1;overflow:hidden;position:relative;cursor:grab;
@@ -192,19 +194,19 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .ce.sel .ce-del{opacity:.9}
 /* SELECTION BOX */
 /* MEMO BAR (상단 탭) */
-.memo-bar{display:flex;align-items:center;background:#0a0a14;border-bottom:1px solid var(--border);padding:4px 8px;flex-shrink:0;gap:4px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:thin;min-height:32px}
+.memo-bar{display:flex;align-items:center;background:linear-gradient(180deg,#0d0d1a,#0a0a14);border-bottom:1px solid rgba(245,158,11,.15);padding:3px 8px;flex-shrink:0;gap:4px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:thin;min-height:30px;box-shadow:inset 0 -1px 4px rgba(0,0,0,.2)}
 .memo-bar::-webkit-scrollbar{height:3px}
-.memo-bar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.memo-tab{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:var(--bg-2);border:1px solid var(--border);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.1s;flex-shrink:0;max-width:160px}
-.memo-tab:hover{background:var(--bg-3);color:var(--text)}
-.memo-tab.active{background:var(--bg-0);border-color:var(--accent);border-bottom-color:var(--accent);color:var(--accent)}
+.memo-bar::-webkit-scrollbar-thumb{background:rgba(245,158,11,.3);border-radius:2px}
+.memo-tab{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.2s;flex-shrink:0;max-width:160px}
+.memo-tab:hover{background:rgba(245,158,11,.1);color:var(--text);border-color:rgba(245,158,11,.2)}
+.memo-tab.active{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4);border-bottom-color:#F59E0B;color:#F59E0B;box-shadow:0 -2px 6px rgba(245,158,11,.15)}
 .memo-tab .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
 .memo-tab .x{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;padding:0 2px;border-radius:3px}
 .memo-tab .x:hover{color:var(--red);background:rgba(244,67,54,.2)}
-.memo-bar button.add{background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.78em;font-weight:600;flex-shrink:0}
-.memo-bar button.add:hover{background:var(--accent-hover)}
-.memo-bar button.fld{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.78em;flex-shrink:0}
-.memo-bar button.fld:hover{background:var(--bg-4)}
+.memo-bar button.add{background:linear-gradient(135deg,#F59E0B,#D97706);color:#000;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:.78em;font-weight:600;flex-shrink:0;box-shadow:0 1px 4px rgba(245,158,11,.3)}
+.memo-bar button.add:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.memo-bar button.fld{background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.78em;flex-shrink:0}
+.memo-bar button.fld:hover{background:rgba(139,92,246,.25)}
 /* MEMO EDITOR (full-screen tab inside .main) */
 #memo-editor{font-family:var(--mono)}
 #memo-editor button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer}
@@ -294,9 +296,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .sb-divider:hover{background:var(--accent)}
 .sb-divider::after{content:'';width:30px;height:2px;background:var(--text-muted);border-radius:1px}
 /* PINNED MEMOS */
-.pinned-memos{display:flex;align-items:center;gap:4px;margin-left:auto;padding:0 8px}
-.pinned-chip{display:inline-block;padding:3px 10px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;font-size:.7em;color:var(--text-dim);cursor:pointer;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:.1s}
-.pinned-chip:hover{color:var(--text);background:var(--bg-4);border-color:var(--accent)}
+.pinned-memos{display:flex;align-items:center;gap:5px;margin-left:auto;padding:0 10px}
+.pinned-chip{display:inline-block;padding:3px 10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:12px;font-size:.7em;color:#ebcb8b;cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:.2s}
+.pinned-chip:hover{color:#F59E0B;background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);box-shadow:0 0 6px rgba(245,158,11,.2);transform:translateY(-1px)}
 /* RESOLVED PREVIEW */
 .resolved-preview{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;font-family:var(--mono);font-size:11px;min-height:60px;line-height:1.4;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .resolved-preview .rv-var{color:var(--cyan);background:rgba(6,182,212,.08)}
@@ -323,15 +325,15 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div class="fp-memos" id="fp-memos"></div>
 </div>
 <div class="tb">
-  <button onclick="showLanding()" title="프로젝트 선택">📂 열기</button>
-  <button onclick="newProject()" title="새 빈 프로젝트">📄 새</button>
-  <button class="danger" onclick="resetSession()">&#x21BB;</button><div class="sep"></div>
-  <button class="act" onclick="engine.startAll()">&#9654; 전체</button><button onclick="engine.stop()">&#9632;</button><div class="sep"></div>
-  <span class="lbl">CWD:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:160px"><div class="sep"></div>
-  <button onclick="saveWorkflow()">저장</button><select id="wf-sel" onchange="loadWorkflow(this.value)"><option value="">불러오기</option></select><button onclick="refreshWfList()">&#8635;</button>
+  <button onclick="showLanding()" title="프로젝트 선택" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#7ecfff">📂 열기</button>
+  <button onclick="newProject()" title="새 빈 프로젝트" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새</button>
+  <button class="danger" onclick="resetSession()" title="리셋">↻</button><div class="sep"></div>
+  <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■</button><div class="sep"></div>
+  <span class="lbl">CWD:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><div class="sep"></div>
+  <button onclick="saveWorkflow()" style="background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#ebcb8b">💾 저장</button><select id="wf-sel" onchange="loadWorkflow(this.value)" style="max-width:120px"><option value="">불러오기</option></select><button onclick="refreshWfList()" title="새로고침">↻</button>
   <div class="sep"></div>
-  <button onclick="zoomFit()" title="전체 보기">&#x2922;</button>
-  <button onclick="zoomDelta(-.2)">-</button>
+  <button onclick="zoomFit()" title="전체 보기">⤢</button>
+  <button onclick="zoomDelta(-.2)">−</button>
   <span class="lbl" id="zoom-lbl">100%</span>
   <button onclick="zoomDelta(.2)">+</button>
 </div>
@@ -444,6 +446,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       <button onclick="modalTsz(2)" style="background:var(--bg-3)">A+</button>
       <button onclick="openHtmlTab(modalType)" style="background:var(--bg-3)">HTML 탭</button>
       <button onclick="modalToggleRender()" id="mo-render-btn" style="background:var(--bg-3)">렌더</button>
+      <button onclick="modalToMemo()" style="background:rgba(245,158,11,.2);color:#ebcb8b;border:1px solid rgba(245,158,11,.3)">📝 메모로</button>
       <button onclick="closeModal()">닫기</button>
     </div>
     <div class="mo-body" id="mo-body"></div>
@@ -1718,6 +1721,13 @@ function openModal(type){if(!selectedNode)return;modalType=type;modalIsRendered=
   }
   document.getElementById('modal').classList.add('show')}
 function closeModal(){document.getElementById('modal').classList.remove('show')}
+function modalToMemo(){
+  if(!selectedNode)return;
+  const text=modalType==='input'?selectedNode.inputTemplate:(selectedNode.outputCapture||'');
+  if(!text.trim())return alert('내용이 비어있습니다');
+  createMemoFromText(text,selectedNode.name+' - '+(modalType==='input'?'Input':'Output'));
+  closeModal();
+}
 document.getElementById('modal').addEventListener('wheel',function(e){if(e.ctrlKey){e.preventDefault();modalTsz(e.deltaY>0?-2:2)}},{passive:false});
 window.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();document.getElementById('ctx').classList.remove('show')}
