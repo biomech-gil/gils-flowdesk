@@ -314,13 +314,13 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 <body>
 <nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="pinned-memos" id="pinned-memos"></div></nav>
 <div class="memo-bar" id="memo-bar">
-  <button class="add" onclick="newMemo()" title="새 메모 (임시)">📝 +</button>
-  <button class="fld" onclick="toggleFolderPanel()" title="즐겨찾기 폴더">📁 폴더</button>
+  <button class="add" onclick="newMemo()" title="새 메모 생성">📝 메모생성</button>
+  <button class="fld" onclick="toggleFolderPanel()" title="메모 폴더 관리">📁 메모폴더</button>
   <button class="fld" onclick="openFavPopup()" title="즐겨찾기 메모">⭐</button>
   <span style="font-size:10px;color:var(--text-muted);margin-left:6px">최근:</span>
 </div>
 <div id="folder-panel">
-  <div class="fp-hd">📁 즐겨찾기 폴더 <button onclick="newFolder()">+ 새 폴더</button><button onclick="batchDeleteMemos()" style="font-size:11px;padding:2px 6px;cursor:pointer;background:var(--bg-3);color:var(--red,#f44);border:1px solid var(--border);border-radius:4px">🗑 선택 삭제</button><button class="x" onclick="document.getElementById('folder-panel').classList.remove('show')">×</button></div>
+  <div class="fp-hd">📁 메모폴더 <button onclick="newFolder()">+ 새 메모폴더</button><button onclick="batchDeleteMemos()" style="font-size:11px;padding:2px 6px;cursor:pointer;background:var(--bg-3);color:var(--red,#f44);border:1px solid var(--border);border-radius:4px">🗑 선택 삭제</button><button class="x" onclick="document.getElementById('folder-panel').classList.remove('show')">×</button></div>
   <div class="fp-list" id="fp-folders"></div>
   <div class="fp-memos" id="fp-memos"></div>
 </div>
@@ -336,6 +336,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <button onclick="zoomDelta(-.2)">−</button>
   <span class="lbl" id="zoom-lbl">100%</span>
   <button onclick="zoomDelta(.2)">+</button>
+  <div class="sep"></div>
+  <button onclick="toggleFocusMode()" id="focus-btn" title="툴바/메모바 숨기고 캔버스만 표시" style="background:rgba(99,102,241,.15);border-color:rgba(99,102,241,.3);color:#818cf8">🔲 집중모드</button>
 </div>
 <div class="main">
   <div class="cw" id="cw">
@@ -346,7 +348,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div id="memo-editor" style="display:none;position:absolute;inset:0;z-index:50;background:var(--bg-0);flex-direction:column">
     <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0">
       <input type="text" id="me-name" placeholder="메모 제목" style="flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:13px">
-      <select id="me-folder" style="font-size:11px;padding:3px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px"><option value="">폴더 없음</option></select>
+      <select id="me-folder" style="font-size:11px;padding:3px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px"><option value="">메모폴더 없음</option></select>
       <button onclick="saveMemoNow()" title="이름 지정 저장" style="font-size:11px;padding:3px 8px">💾 저장</button>
       <button onclick="toggleCurrentMemoPin()" id="me-pin-btn" title="고정" style="font-size:11px;padding:3px 8px">📌</button>
       <button onclick="deleteMemo()" style="font-size:11px;padding:3px 8px;color:var(--red)">🗑</button>
@@ -938,6 +940,19 @@ function arrLive(){
 
 // ═══ ZOOM ═══
 function zoomDelta(d){zoom=Math.max(.1,Math.min(3,zoom+d));applyTx()}
+let focusMode=false;
+function toggleFocusMode(){
+  focusMode=!focusMode;
+  document.querySelector('.nav').style.display=focusMode?'none':'';
+  document.querySelector('.tb').style.display=focusMode?'none':'';
+  document.querySelector('.memo-bar').style.display=focusMode?'none':'';
+  document.getElementById('focus-btn').textContent=focusMode?'🔲 해제':'🔲 집중모드';
+  // ESC로 해제
+  if(focusMode){
+    const esc=e=>{if(e.key==='Escape'&&focusMode){toggleFocusMode();document.removeEventListener('keydown',esc)}};
+    document.addEventListener('keydown',esc);
+  }
+}
 function zoomFit(){
   if(nodes.length===0)return;
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -2050,7 +2065,7 @@ async function openMemoTab(id){
   document.getElementById('me-content').value=r.memo.content||'';
   // folder options
   const sel=document.getElementById('me-folder');
-  sel.innerHTML='<option value="">폴더 없음</option>'+memoFolders.map(f=>`<option value="${f.id}" ${r.memo.folder_id==f.id?'selected':''}>${f.icon} ${f.name}</option>`).join('');
+  sel.innerHTML='<option value="">메모폴더 없음</option>'+memoFolders.map(f=>`<option value="${f.id}" ${r.memo.folder_id==f.id?'selected':''}>${f.icon} ${f.name}</option>`).join('');
   // pin button state
   const pinBtn=document.getElementById('me-pin-btn');
   if(pinBtn)pinBtn.style.background=r.memo.pinned?'rgba(245,158,11,.2)':'';
@@ -2067,10 +2082,28 @@ function closeMemoTab(){
 function openMemoEditor(id){openMemoTab(id)}
 function closeMemo(){closeMemoTab()}
 async function delMemoTab(id){
-  if(!confirm('이 메모를 삭제할까요?'))return;
-  await api('POST','/api/memo/delete',{id});
+  // 메모 내용 확인
+  const memo=openMemos.find(m=>m.id==id);
+  const content=activeMemoId==id?document.getElementById('me-content').value:(memo?memo.content:'');
+  const hasContent=content&&content.trim().length>0;
+  const isTemp=memo?memo.is_temp:true;
+
+  if(hasContent&&isTemp){
+    // 내용이 있는 임시 메모 → 저장/삭제/취소 선택
+    const action=confirm(`"${memo?.name||'무제'}" 메모에 내용이 있습니다.\n\n[확인] = 저장하고 닫기\n[취소] = 삭제하고 닫기`);
+    if(action){
+      // 저장하고 닫기
+      const name=prompt('저장할 이름:',memo?.name||'')||memo?.name||'무제';
+      await api('POST','/api/memo/save',{id,name,content,isTemp:false});
+    } else {
+      if(!confirm('정말 삭제할까요?'))return;
+      await api('POST','/api/memo/delete',{id});
+    }
+  }
+  // 빈 임시 메모 또는 저장된 메모 → 그냥 탭에서 닫기 (삭제 안 함)
   if(activeMemoId==id)closeMemoTab();
-  loadMemoTabs();
+  openMemos=openMemos.filter(m=>m.id!=id);
+  renderMemoBar();
 }
 async function deleteMemo(){
   if(!activeMemoId||!confirm('이 메모를 삭제할까요?'))return;
@@ -2190,7 +2223,7 @@ async function renderFolderPanel(){
       </div>
     </div>`;
   }
-  if(!html) html='<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">폴더 없음</div>';
+  if(!html) html='<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">메모폴더 없음</div>';
   foldersDiv.innerHTML=html;
   document.getElementById('fp-memos').innerHTML='';
 }
@@ -2234,14 +2267,14 @@ function showIconColorPicker(defaults,callback){
   document.body.appendChild(pop);
 }
 async function newFolder(){
-  const name=prompt('폴더 이름:','새 폴더');if(!name)return;
+  const name=prompt('폴더 이름:','새 메모폴더');if(!name)return;
   showIconColorPicker({icon:'📁',color:''},async({icon,color})=>{
     await api('POST','/api/folder/save',{name,icon,color});
     loadFolders();
   });
 }
 async function delFolder(id){
-  if(!confirm('이 폴더를 삭제할까요?\n(메모들은 폴더 없음으로 이동)'))return;
+  if(!confirm('이 폴더를 삭제할까요?\n(메모들은 메모폴더 없음으로 이동)'))return;
   await api('POST','/api/folder/delete',{id});
   loadFolders();
 }
