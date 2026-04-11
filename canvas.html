@@ -1502,26 +1502,31 @@ function selCe(ce){
 function openCeSidebar(ce){
   document.getElementById('sb').classList.remove('hid');
   document.getElementById('sb-title').textContent=`🖼️ ${ce.nodeName||'Image'}`;
-  // 모든 노드 전용 섹션 숨기고 ce 전용 표시
   const modeSec=document.getElementById('sb-mode-sec');if(modeSec)modeSec.style.display='none';
   const ct=document.querySelector('.sb-ct');
-  // ce 전용 영역 (재생성)
   let ceArea=document.getElementById('ce-area');
-  if(!ceArea){ceArea=document.createElement('div');ceArea.id='ce-area';ct.appendChild(ceArea)}
+  if(!ceArea){ceArea=document.createElement('div');ceArea.id='ce-area';ct.insertBefore(ceArea,ct.querySelector('#sb-input-sec'))}
   ceArea.style.display='block';
+  const hasType=!!ce.nodeType;
   ceArea.innerHTML=`
-    <div class="sb-sec" style="margin-bottom:6px"><div style="display:flex;gap:4px;align-items:center"><input type="text" value="${ce.nodeName||''}" oninput="selectedCe.nodeName=this.value;document.getElementById('sb-title').textContent='🖼️ '+this.value;autoSave()" placeholder="이름" style="flex:1;min-width:0"><select onchange="setCeNodeType(this.value)" style="width:auto;min-width:90px">
-      <option value="" ${!ce.nodeType?'selected':''}>이미지 전용</option>
-      <option value="agent" ${ce.nodeType==='agent'?'selected':''}>🤖 Agent</option>
-      <option value="memo" ${ce.nodeType==='memo'?'selected':''}>📝 Memo</option>
-      <option value="input" ${ce.nodeType==='input'?'selected':''}>📎 Input</option>
-      <option value="trigger" ${ce.nodeType==='trigger'?'selected':''}>⚡ Trigger</option>
-    </select></div></div>
-    ${ce.nodeType==='agent'?'<div class="sb-row" style="margin-bottom:4px"><button class="r" onclick="engine.executeNode(selectedCe)">▶ 실행</button></div>':''}
-    <div class="sb-sec" id="ce-input-sec" style="display:${ce.nodeType?'':'none'}"><label>Input <span><button onclick="ceInputToMemo()" title="메모로 저장">📝</button></span></label><textarea rows="4" oninput="selectedCe.inputTemplate=this.value;autoSave()">${ce.inputTemplate||''}</textarea></div>
-    <div class="sb-sec" id="ce-output-sec" style="display:${ce.nodeType==='agent'?'':'none'}"><label>Output <span><button onclick="ceOutputToMemo()" title="메모로 저장">📝</button></span></label><div class="ov" style="white-space:pre-wrap">${ce.outputCapture||'대기 중'}</div></div>
+    <div class="sb-row" style="gap:4px;margin-bottom:4px">
+      <input type="text" value="${ce.nodeName||''}" oninput="selectedCe.nodeName=this.value;document.getElementById('sb-title').textContent='🖼️ '+this.value;autoSave()" placeholder="이름" style="flex:1;min-width:0">
+      <select onchange="setCeNodeType(this.value)" style="width:auto;min-width:90px;font-size:11px;background:${hasType?'rgba(59,130,246,.15)':'rgba(255,255,255,.06)'};border:1px solid ${hasType?'rgba(59,130,246,.3)':'var(--border)'};color:${hasType?'#7ecfff':'var(--text)'};border-radius:3px;padding:2px 4px">
+        <option value="" ${!ce.nodeType?'selected':''}>🖼️ 이미지전용</option>
+        <option value="agent" ${ce.nodeType==='agent'?'selected':''}>🤖 Agent</option>
+        <option value="memo" ${ce.nodeType==='memo'?'selected':''}>📝 Memo</option>
+        <option value="input" ${ce.nodeType==='input'?'selected':''}>📎 Input</option>
+        <option value="trigger" ${ce.nodeType==='trigger'?'selected':''}>⚡ Trigger</option>
+      </select>
+    </div>
+    <div class="sb-row" style="gap:3px;margin-bottom:4px;flex-wrap:wrap">
+      ${ce.nodeType==='agent'?'<button class="r" onclick="engine.executeNode(selectedCe)" style="background:#2d6a2d;color:#a3be8c;font-weight:700;padding:2px 8px">▶</button><button onclick="engine.stopNode(selectedCe)" style="background:#6a2d2d;color:#bf616a;padding:2px 6px">■</button>':''}
+      <button onclick="ceImgToTarget()" title="이 이미지를 다른 노드에 첨부" style="font-size:10px;padding:2px 6px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#88c0d0;border-radius:3px">📷→노드</button>
+      <button onclick="ceImgConnectDrag()" title="연결된 노드에 이미지 자동 첨부" style="font-size:10px;padding:2px 6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#ebcb8b;border-radius:3px">🔗이미지연결</button>
+    </div>
+    ${ce.nodeType?`<div class="sb-sec" id="ce-input-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>Input <span><button onclick="ceInputToMemo()" title="메모로 저장" style="color:#ebcb8b">📝메모</button></span></label><textarea oninput="selectedCe.inputTemplate=this.value;autoSave()" style="flex:1">${ce.inputTemplate||''}</textarea></div>`:''}
+    ${ce.nodeType==='agent'?`<div class="sb-sec" id="ce-output-sec" style="display:flex;flex-direction:column;flex:1;min-height:40px"><label>Output <span><button onclick="ceOutputToMemo()" title="메모로 저장" style="color:#ebcb8b">📝메모</button></span></label><div class="ov" style="flex:1;white-space:pre-wrap">${ce.outputCapture||'대기 중'}</div></div>`:''}
   `;
-  // 다른 동적 섹션 숨기기
   document.querySelectorAll('#sb-exec, #sb-conv').forEach(el=>{const row=el.closest('.sb-row');if(row)row.style.display='none'});
 }
 function setCeNodeType(type){
@@ -1539,8 +1544,47 @@ function setCeNodeType(type){
   }
   drawConns();
   autoSave();
-  // Refresh sidebar to show/hide input/output/execute sections
   openCeSidebar(selectedCe);
+}
+// 캔버스 이미지를 다른 노드의 이미지 첨부로 전송
+function ceImgToTarget(){
+  if(!selectedCe||!selectedCe.src)return alert('이미지가 없습니다');
+  // 노드 선택 팝업
+  const agentNodes=nodes.filter(n=>n.type==='agent');
+  if(!agentNodes.length)return alert('Agent 노드가 없습니다');
+  const names=agentNodes.map((n,i)=>`${i+1}. ${n.name}`).join('\n');
+  const choice=prompt(`이미지를 첨부할 Agent 노드 번호:\n\n${names}`);
+  if(!choice)return;
+  const idx=parseInt(choice)-1;
+  if(idx<0||idx>=agentNodes.length)return alert('잘못된 번호');
+  const target=agentNodes[idx];
+  // 이미지를 서버에 업로드 후 target.images에 추가
+  uploadImageToNode(selectedCe.src,target);
+}
+async function uploadImageToNode(dataUrl,targetNode){
+  const r=await api('POST','/api/upload',{filename:'canvas_image.png',data:dataUrl,purpose:'image'});
+  if(!r.ok)return alert('업로드 실패');
+  if(!targetNode.images)targetNode.images=[];
+  targetNode.images.push(r.path);
+  autoSave();
+  alert(`"${targetNode.name}" 노드에 이미지 첨부 완료 (총 ${targetNode.images.length}개)`);
+}
+// 연결된 모든 downstream 노드에 이미지 자동 첨부
+async function ceImgConnectDrag(){
+  if(!selectedCe||!selectedCe.src)return alert('이미지가 없습니다');
+  const downstream=conns.filter(c=>c.sid===selectedCe.id).map(c=>nodes.find(n=>n.id===c.tid)||canvasEls.find(ce=>ce.id===c.tid)).filter(Boolean);
+  if(!downstream.length)return alert('연결된 노드가 없습니다.\n이미지에서 연결선을 다른 노드로 연결한 후 사용하세요.');
+  if(!confirm(`연결된 ${downstream.length}개 노드에 이미지를 첨부할까요?\n\n${downstream.map(n=>n.name||n.nodeName).join(', ')}`))return;
+  const r=await api('POST','/api/upload',{filename:'canvas_image.png',data:selectedCe.src,purpose:'image'});
+  if(!r.ok)return alert('업로드 실패');
+  let count=0;
+  downstream.forEach(n=>{
+    if(!n.images)n.images=[];
+    n.images.push(r.path);
+    count++;
+  });
+  autoSave();
+  alert(`${count}개 노드에 이미지 첨부 완료`);
 }
 function delCe(id){
   const i=canvasEls.findIndex(c=>c.id===id);if(i<0)return;
