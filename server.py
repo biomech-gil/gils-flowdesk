@@ -1044,7 +1044,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         data = json.dumps(body, ensure_ascii=False)
         db_exec("INSERT INTO temps (name, data, date, created) VALUES (?,?,?,?)", (name, data, today, now))
         # 30일 이상 된 temp 자동 정리
-        db_exec("DELETE FROM temps WHERE created < datetime('now','-30 days')")
+        if DB_TYPE == "postgresql":
+            db_exec("DELETE FROM temps WHERE created::timestamp < NOW() - INTERVAL '30 days'")
+        else:
+            db_exec("DELETE FROM temps WHERE created < datetime('now','-30 days')")
         return {"ok": True}
 
     def _temp_list(self):
