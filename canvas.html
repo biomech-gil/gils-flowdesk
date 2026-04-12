@@ -1919,7 +1919,8 @@ async function forkConv(){
   const res=await api('POST','/api/chat/fork',{
     execId:latestExec?latestExec.id:'',
     nodeId:selectedNode.id,
-    nodeName:selectedNode.name
+    nodeName:selectedNode.name,
+    accountId:selectedNode.accountId||null
   });
   if(res.ok){
     alert(`대화 분기 생성: ${res.convId}\n채팅 탭에서 이어서 대화하세요.`);

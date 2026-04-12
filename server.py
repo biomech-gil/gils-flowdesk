@@ -290,6 +290,7 @@ def init_db():
                 node_id TEXT NOT NULL,
                 node_name TEXT NOT NULL,
                 title TEXT,
+                account_id INTEGER,
                 created TEXT NOT NULL,
                 FOREIGN KEY (parent_exec_id) REFERENCES executions(id)
             )""",
@@ -354,6 +355,7 @@ def init_db():
             ("memos", "color", "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''"),
             ("memo_folders", "color", "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''"),
             ("claude_accounts", "priority", "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0"),
+            ("conversations", "account_id", "ALTER TABLE conversations ADD COLUMN account_id INTEGER"),
         ]
         for tbl, col, alter_sql in alter_checks:
             cur.execute("""
@@ -428,6 +430,7 @@ def init_db():
             node_id TEXT NOT NULL,
             node_name TEXT NOT NULL,
             title TEXT,
+            account_id INTEGER,
             created TEXT NOT NULL,
             FOREIGN KEY (parent_exec_id) REFERENCES executions(id)
         );
@@ -1125,11 +1128,27 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         node_name = body.get("nodeName", "")
         if not message: return {"ok": False, "error": "message required"}
 
+        # account_id 결정: body에 있으면 사용, 없으면 conversation에서 조회, 그것도 없으면 기본
+        account_id = body.get("accountId")
+
         # 대화 세션 없으면 생성
         if not conv_id:
             conv_id = str(uuid.uuid4())[:8]
-            db_exec("INSERT INTO conversations (id, node_id, node_name, title, created) VALUES (?,?,?,?,?)",
-                    (conv_id, node_id, node_name, message[:30], datetime.now().isoformat()))
+            # 새 conversation 생성 시 body의 accountId 사용 (없으면 다음 계정 자동 배정)
+            if not account_id:
+                # 자동 배정 (round-robin 등)
+                try:
+                    nxt = self._claude_next_account({})
+                    if nxt.get("ok"): account_id = nxt.get("accountId")
+                except: pass
+            db_exec("INSERT INTO conversations (id, node_id, node_name, title, account_id, created) VALUES (?,?,?,?,?,?)",
+                    (conv_id, node_id, node_name, message[:30], account_id, datetime.now().isoformat()))
+        else:
+            # 기존 conversation → 저장된 account_id 조회
+            if not account_id:
+                conv = db_exec("SELECT account_id FROM conversations WHERE id=?", (conv_id,), fetchone=True)
+                if conv and conv.get("account_id"):
+                    account_id = conv["account_id"]
 
         # 유저 메시지 저장
         db_exec("INSERT INTO messages (conv_id, role, content, ts) VALUES (?,?,?,?)",
@@ -1150,7 +1169,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         def run():
             try:
-                env = get_claude_env()
+                env = get_claude_env_for_account(account_id)
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
                 cmd, final_prompt = build_claude_cmd(full_prompt, {
                     "chatOnly": chat_only,
@@ -1204,8 +1223,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 node_id = ex["node_id"]
                 node_name = ex["node_name"]
                 title = f"{node_name} @{ex['started'][:16]}"
-        db_exec("INSERT INTO conversations (id, parent_exec_id, node_id, node_name, title, created) VALUES (?,?,?,?,?,?)",
-                (conv_id, exec_id, node_id, node_name, title, datetime.now().isoformat()))
+        # 부모 노드의 account_id를 상속 (body에 있으면 사용)
+        account_id = body.get("accountId")
+        db_exec("INSERT INTO conversations (id, parent_exec_id, node_id, node_name, title, account_id, created) VALUES (?,?,?,?,?,?,?)",
+                (conv_id, exec_id, node_id, node_name, title, account_id, datetime.now().isoformat()))
 
         # 실행 기록의 input/output을 초기 대화로 삽입
         if exec_id:
