@@ -5,12 +5,8 @@ version: "3.9"
 # 시놀로지 NAS 배포:
 #   1. 이 폴더를 /volume1/docker/gils-flowdesk/ 등에 복사
 #   2. .env 파일 작성 (아래 주석 참고)
-#   3. docker-compose up -d
+#   3. Container Manager에서 프로젝트 생성 또는 docker-compose up -d
 #   4. 브라우저에서 http://시놀로지IP:8888
-#
-# .env 파일 예시:
-#   DB_PASSWORD=your_strong_password_here
-#   WORKSPACE_HOST=/volume1/Workspace  # 시놀로지의 실제 작업 폴더
 #
 services:
   postgres:
@@ -22,10 +18,15 @@ services:
       POSTGRES_USER: canvas
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_strong_password}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # DB 데이터는 시놀로지 파일 시스템에 직접 저장 (권장)
+      # .env의 DB_DATA_HOST 경로로 지정. 미설정 시 docker volume 사용
+      - ${DB_DATA_HOST:-postgres_data}:/var/lib/postgresql/data
     networks:
       - flowdesk-net
-    # 내부 네트워크에서만 접근 가능 (보안)
+    # 보안: 외부에 포트 노출 안 함. 앱에서만 내부 네트워크로 접근
+    # 다른 서비스에서 접근 필요 시 아래 주석 해제 (보안 주의)
+    # ports:
+    #   - "5432:5432"
 
   flowdesk:
     build: .
@@ -36,20 +37,19 @@ services:
     ports:
       - "${PORT:-8888}:8888"
     environment:
-      # config.json 대신 환경변수로 DB 설정
       DB_TYPE: postgresql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: canvas_db
-      DB_USER: canvas
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-canvas_db}
+      DB_USER: ${DB_USER:-canvas}
       DB_PASSWORD: ${DB_PASSWORD:-changeme_strong_password}
     volumes:
       # 시놀로지 작업 폴더 마운트 (각 노드가 접근할 파일들)
       - ${WORKSPACE_HOST:-./workspace}:/workspace
-      # Claude 인증 (시스템 설정에서 업로드하면 여기 저장됨)
-      - claude_creds:/claude-creds
+      # Claude 인증 (설정 UI에서 업로드 시 여기 저장)
+      - ${CLAUDE_CREDS_HOST:-claude_creds}:/claude-creds
       # 업로드 파일 (이미지 등)
-      - uploads_data:/app/uploads
+      - ${UPLOADS_HOST:-uploads_data}:/app/uploads
     networks:
       - flowdesk-net
 
@@ -57,6 +57,8 @@ networks:
   flowdesk-net:
     driver: bridge
 
+# DB_DATA_HOST가 .env에 설정된 경우 이 볼륨은 사용 안 됨
+# (Docker Compose는 절대경로면 bind mount, 이름이면 named volume으로 처리)
 volumes:
   postgres_data:
   claude_creds:

@@ -74,12 +74,27 @@ Claude AI → 응답 → 다음 노드로 자동 전달
 ### 1. 시놀로지에 파일 업로드 (/volume1/docker/gils-flowdesk/)
 - Dockerfile, docker-compose.yml, .env (.env.example 복사), server.py, canvas.html 등
 
-### 2. `.env` 작성
+### 2. 시놀로지에 데이터 폴더 미리 생성
+```bash
+mkdir -p /volume1/FlowDesk/{db,workspace,creds,uploads}
+```
+- `db/` — PostgreSQL 데이터 (용량 커짐, SSD 권장)
+- `workspace/` — 각 노드가 파일 읽고 쓸 공간
+- `creds/` — Claude 인증 파일
+- `uploads/` — 업로드된 이미지/PDF
+
+### 3. `.env` 작성
 ```bash
 cp .env.example .env
-# DB_PASSWORD 변경
-# WORKSPACE_HOST=/volume1/Workspace (시놀로지 실제 경로)
+# DB_PASSWORD 변경 필수
+# PORT 변경 가능 (기본 8888)
+# DB_DATA_HOST, WORKSPACE_HOST 등 경로 확인
 ```
+
+**포인트**: DB 파일이 `/volume1/FlowDesk/db/`에 실제 저장되므로
+- 도커 컨테이너 지워도 데이터 유지
+- 파일 탐색기/FTP로 직접 접근/백업 가능
+- 다른 시놀로지 서비스와 공유 가능
 
 ### 3. 실행
 ```bash
