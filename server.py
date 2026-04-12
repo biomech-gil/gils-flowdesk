@@ -946,6 +946,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/claude/accounts/list": self._json(self._claude_accounts_list())
         elif p == "/api/claude/login/status": self._json(self._claude_login_status())
         elif p == "/api/fs/browse": self._json(self._browse_path(params))
+        elif p == "/api/fs/browse-system": self._json(self._fs_browse_system(params))
         elif p.startswith("/uploads/"):
             # uploads 디렉토리가 외부 경로일 수 있으므로 직접 서빙
             file_path = os.path.join(UPLOADS_DIR, p[len("/uploads/"):])
@@ -1032,6 +1033,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/login/submit": self._claude_login_submit,
             "/api/claude/login/cancel": self._claude_login_cancel,
             "/api/fs/mkdir": self._fs_mkdir,
+            "/api/fs/mkdir-system": self._fs_mkdir_system,
         }
         handler = handlers.get(p)
         if handler:
@@ -2285,6 +2287,55 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         try:
             os.makedirs(target_abs, exist_ok=True)
             return {"ok": True, "path": os.path.relpath(target_abs, root_abs).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _fs_browse_system(self, params):
+        """시스템 전체 파일 탐색 (workspace_root 선택용). 절대경로 기준."""
+        path = params.get("path", ["/"])[0] or "/"
+        try:
+            path = os.path.abspath(path)
+        except:
+            path = "/"
+        if not os.path.isdir(path):
+            return {"ok": False, "error": "디렉토리가 아닙니다", "path": path}
+        items = []
+        try:
+            for name in sorted(os.listdir(path)):
+                # 숨김 폴더 건너뛰기
+                if name.startswith("."): continue
+                full = os.path.join(path, name)
+                try:
+                    if os.path.isdir(full):
+                        items.append({"name": name, "path": full, "isDir": True})
+                except:
+                    continue
+        except PermissionError:
+            return {"ok": False, "error": "접근 권한 없음", "path": path}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": path}
+        # 추천 시작 경로들 (root일 때만)
+        suggestions = []
+        if path == "/":
+            for p in ["/workspace", "/app", "/mnt", "/home", "/volume1"]:
+                if os.path.isdir(p):
+                    suggestions.append(p)
+        return {"ok": True, "path": path, "items": items, "suggestions": suggestions}
+
+    def _fs_mkdir_system(self, body):
+        """절대 경로에 폴더 생성 (workspace_root 설정용)."""
+        parent = body.get("path", "").strip()
+        name = body.get("name", "").strip()
+        if not name:
+            return {"ok": False, "error": "이름이 필요합니다"}
+        if any(c in name for c in "/\\:*?\"<>|"):
+            return {"ok": False, "error": "사용할 수 없는 문자가 있습니다"}
+        if not parent or not os.path.isdir(parent):
+            return {"ok": False, "error": "부모 경로가 올바르지 않습니다"}
+        target = os.path.join(parent, name)
+        try:
+            os.makedirs(target, exist_ok=True)
+            return {"ok": True, "path": target}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
