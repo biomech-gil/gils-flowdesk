@@ -1031,6 +1031,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/login/start": self._claude_login_start,
             "/api/claude/login/submit": self._claude_login_submit,
             "/api/claude/login/cancel": self._claude_login_cancel,
+            "/api/fs/mkdir": self._fs_mkdir,
         }
         handler = handlers.get(p)
         if handler:
@@ -1077,7 +1078,27 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         def run():
             try:
                 env = get_claude_env_for_account(account_id)
-                run_cwd = cwd if cwd and os.path.isdir(cwd) else None
+                run_cwd = None
+                if cwd and os.path.isdir(cwd):
+                    run_cwd = cwd
+                else:
+                    # Auto-create folder: {workspace_root}/{YYYYMMDD_project_name}/{node_name}/
+                    try:
+                        ws_row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
+                        if ws_row and ws_row.get("value"):
+                            ws_root = ws_row["value"]
+                            project_name = body.get("projectName", "") or "Untitled"
+                            def safe_name(s):
+                                return re.sub(r'[/\\:*?"<>|]', '_', s).strip()[:100]
+                            date_str = datetime.now().strftime("%Y%m%d")
+                            project_folder = f"{date_str}_{safe_name(project_name)}"
+                            node_folder = safe_name(node_name)
+                            run_cwd = os.path.join(ws_root, project_folder, node_folder)
+                            os.makedirs(run_cwd, exist_ok=True)
+                            log(f"EXEC [{exec_id}] auto-cwd: {run_cwd}")
+                    except Exception as e:
+                        log(f"EXEC [{exec_id}] auto-cwd failed: {e}")
+                        run_cwd = None
                 cmd, final_prompt = build_claude_cmd(prompt, {
                     "chatOnly": chat_only,
                     "systemPrompt": body.get("systemPrompt", ""),
@@ -2240,6 +2261,32 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": False, "error": str(e)}
 
         return {"ok": True, "root": root.replace("\\", "/"), "path": rel_path, "items": items}
+
+    def _fs_mkdir(self, body):
+        """workspace root 내에 폴더 생성"""
+        row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
+        root = row["value"] if row and row.get("value") else os.path.expanduser("~")
+
+        rel_path = body.get("path", "").strip()
+        name = body.get("name", "").strip()
+        if not name:
+            return {"ok": False, "error": "폴더 이름이 필요합니다"}
+        # Sanitize name
+        if any(c in name for c in "/\\:*?\"<>|"):
+            return {"ok": False, "error": "폴더 이름에 사용할 수 없는 문자가 있습니다"}
+
+        target = os.path.normpath(os.path.join(root, rel_path.lstrip("/").lstrip("\\"), name))
+        # Security: must be within root
+        root_abs = os.path.abspath(root)
+        target_abs = os.path.abspath(target)
+        if not target_abs.startswith(root_abs):
+            return {"ok": False, "error": "접근 거부 (root 밖)"}
+
+        try:
+            os.makedirs(target_abs, exist_ok=True)
+            return {"ok": True, "path": os.path.relpath(target_abs, root_abs).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     # ── Auth ──
 
