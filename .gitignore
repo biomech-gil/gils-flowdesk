@@ -9,3 +9,6 @@ canvas.db
 uploads/
 __pycache__/
 *.pyc
+
+# Docker secrets
+.env

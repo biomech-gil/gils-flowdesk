@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+canvas.db
+canvas.db.lock
+uploads/
+.claude/
+config.json
+*.pyc
+__pycache__/
+check_*.py
+test_*.py
+launch-server.sh
+start.sh

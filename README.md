@@ -69,7 +69,40 @@ Claude AI → 응답 → 다음 노드로 자동 전달
 
 **핵심**: `claude -p` (print 모드)로 터미널 UI 없이 텍스트만 주고받습니다. tmux나 별도 터미널이 불필요합니다.
 
-## 설치
+## 시놀로지 NAS Docker 배포 (권장)
+
+### 1. 시놀로지에 파일 업로드 (/volume1/docker/gils-flowdesk/)
+- Dockerfile, docker-compose.yml, .env (.env.example 복사), server.py, canvas.html 등
+
+### 2. `.env` 작성
+```bash
+cp .env.example .env
+# DB_PASSWORD 변경
+# WORKSPACE_HOST=/volume1/Workspace (시놀로지 실제 경로)
+```
+
+### 3. 실행
+```bash
+docker-compose up -d
+```
+
+### 4. 첫 로그인
+- 브라우저: `http://시놀로지IP:8888`
+- 아이디: `gilhojong` / 비밀번호: `!!Il197119!!`
+
+### 5. Claude 인증 업로드
+1. 본인 PC에서 `claude login` 후 `~/.claude/.credentials.json` 복사
+2. 웹에서 **⚙️ 설정** → **🔑 Claude Code 인증** → 파일에서 선택 → 저장
+3. DB에 영구 저장됨 (컨테이너 재시작해도 유지)
+
+### 6. 작업 폴더 설정
+- **⚙️ 설정** → **📁 작업 폴더 루트**: `/workspace` (컨테이너 내부 경로)
+- 이후 툴바의 📁 버튼으로 폴더 탐색 가능
+
+### 7. 외부 접근 (전국 어디서든)
+- 시놀로지 포트 포워딩 또는 DDNS + 리버스 프록시 (HTTPS)
+
+## 로컬 설치 (WSL Ubuntu)
 
 ### 요구사항
 

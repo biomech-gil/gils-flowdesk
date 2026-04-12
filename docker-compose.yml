@@ -1,0 +1,63 @@
+version: "3.9"
+
+# Gil's FlowDesk — Synology NAS / Linux 서버 배포용
+#
+# 시놀로지 NAS 배포:
+#   1. 이 폴더를 /volume1/docker/gils-flowdesk/ 등에 복사
+#   2. .env 파일 작성 (아래 주석 참고)
+#   3. docker-compose up -d
+#   4. 브라우저에서 http://시놀로지IP:8888
+#
+# .env 파일 예시:
+#   DB_PASSWORD=your_strong_password_here
+#   WORKSPACE_HOST=/volume1/Workspace  # 시놀로지의 실제 작업 폴더
+#
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: flowdesk-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: canvas_db
+      POSTGRES_USER: canvas
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_strong_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - flowdesk-net
+    # 내부 네트워크에서만 접근 가능 (보안)
+
+  flowdesk:
+    build: .
+    container_name: flowdesk-app
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "${PORT:-8888}:8888"
+    environment:
+      # config.json 대신 환경변수로 DB 설정
+      DB_TYPE: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: canvas_db
+      DB_USER: canvas
+      DB_PASSWORD: ${DB_PASSWORD:-changeme_strong_password}
+    volumes:
+      # 시놀로지 작업 폴더 마운트 (각 노드가 접근할 파일들)
+      - ${WORKSPACE_HOST:-./workspace}:/workspace
+      # Claude 인증 (시스템 설정에서 업로드하면 여기 저장됨)
+      - claude_creds:/claude-creds
+      # 업로드 파일 (이미지 등)
+      - uploads_data:/app/uploads
+    networks:
+      - flowdesk-net
+
+networks:
+  flowdesk-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  claude_creds:
+  uploads_data:

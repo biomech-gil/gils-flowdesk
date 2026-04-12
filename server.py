@@ -42,10 +42,17 @@ def load_config():
     return defaults
 
 CONFIG = load_config()
-DB_TYPE = CONFIG.get("db_type", "sqlite")  # "sqlite" or "postgresql"
-DB_PATH = CONFIG.get("db_path", os.path.join(BASE_DIR, "canvas.db"))
-PORT = CONFIG.get("port", 8888)
-UPLOADS_DIR = CONFIG.get("uploads_dir", os.path.join(BASE_DIR, "uploads"))
+# 환경변수가 있으면 config.json보다 우선 (Docker 배포 지원)
+DB_TYPE = os.environ.get("DB_TYPE") or CONFIG.get("db_type", "sqlite")
+DB_PATH = os.environ.get("DB_PATH") or CONFIG.get("db_path", os.path.join(BASE_DIR, "canvas.db"))
+PORT = int(os.environ.get("PORT") or CONFIG.get("port", 8888))
+UPLOADS_DIR = os.environ.get("UPLOADS_DIR") or CONFIG.get("uploads_dir", os.path.join(BASE_DIR, "uploads"))
+# PostgreSQL 환경변수 오버라이드
+if os.environ.get("DB_HOST"): CONFIG["db_host"] = os.environ["DB_HOST"]
+if os.environ.get("DB_PORT"): CONFIG["db_port"] = int(os.environ["DB_PORT"])
+if os.environ.get("DB_NAME"): CONFIG["db_name"] = os.environ["DB_NAME"]
+if os.environ.get("DB_USER"): CONFIG["db_user"] = os.environ["DB_USER"]
+if os.environ.get("DB_PASSWORD"): CONFIG["db_password"] = os.environ["DB_PASSWORD"]
 
 if DB_TYPE == "postgresql" and not HAS_PSYCOPG2:
     print("[FATAL] db_type is 'postgresql' but psycopg2 is not installed.")
@@ -316,6 +323,11 @@ def init_db():
                 data TEXT NOT NULL,
                 deleted_at TEXT NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated TEXT
+            )""",
         ]
         for ddl in pg_tables:
             cur.execute(ddl)
@@ -442,6 +454,11 @@ def init_db():
             name TEXT,
             data TEXT NOT NULL,
             deleted_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated TEXT
         );
         """)
         try:
@@ -673,6 +690,33 @@ _create_manual_memo()
 _create_default_user()
 
 # ═══════════════════════════════════════
+# Claude credentials sync (DB → ~/.claude/.credentials.json)
+# ═══════════════════════════════════════
+def _sync_claude_credentials():
+    """DB → ~/.claude/.credentials.json 동기화 (서버 시작 시).
+    Docker 환경에서 DB는 영속되지만 파일시스템은 리셋될 수 있으므로 필요."""
+    try:
+        row = db_exec("SELECT value FROM system_settings WHERE key='claude_credentials'", fetchone=True)
+        if row and row.get("value"):
+            claude_dir = os.path.expanduser("~/.claude")
+            os.makedirs(claude_dir, exist_ok=True)
+            creds_path = os.path.join(claude_dir, ".credentials.json")
+            if not os.path.exists(creds_path):
+                with open(creds_path, "w", encoding="utf-8") as f:
+                    f.write(row["value"])
+                try:
+                    os.chmod(creds_path, 0o600)
+                except Exception:
+                    pass
+                log("Claude credentials synced from DB")
+    except Exception as e:
+        log(f"Claude credentials sync failed: {e}")
+
+# PostgreSQL (Docker)일 때 특히 중요
+if _is_pg():
+    _sync_claude_credentials()
+
+# ═══════════════════════════════════════
 # tmux
 # ═══════════════════════════════════════
 def run_tmux(*args):
@@ -809,6 +853,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
         elif p == "/api/trash/list": self._json(self._trash_list())
+        elif p == "/api/settings/get": self._json(self._settings_get())
+        elif p == "/api/fs/browse": self._json(self._browse_path(params))
         elif p.startswith("/uploads/"):
             # uploads 디렉토리가 외부 경로일 수 있으므로 직접 서빙
             file_path = os.path.join(UPLOADS_DIR, p[len("/uploads/"):])
@@ -884,6 +930,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/trash/restore": self._trash_restore,
             "/api/trash/delete": self._trash_delete,
             "/api/trash/empty": self._trash_empty,
+            "/api/settings/set": self._settings_set,
+            "/api/settings/delete": self._settings_delete,
         }
         handler = handlers.get(p)
         if handler:
@@ -1718,6 +1766,92 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         for cl in content_lines[-3:]:
             if re.search(r'❯|~\$\s*$|\$\s*$', cl): idle = True; break
         return {"ok": True, "idle": idle, "lastLines": content_lines[-3:] if content_lines else []}
+
+    # ── System Settings ──
+
+    def _settings_get(self):
+        rows = db_exec("SELECT key, value FROM system_settings", fetch=True)
+        settings = {r["key"]: r["value"] for r in rows}
+        return {"ok": True, "settings": settings}
+
+    def _settings_set(self, body):
+        key = body.get("key", "")
+        value = body.get("value", "")
+        if not key:
+            return {"ok": False, "error": "key required"}
+        now = datetime.now().isoformat()
+        existing = db_exec("SELECT key FROM system_settings WHERE key=?", (key,), fetchone=True)
+        if existing:
+            db_exec("UPDATE system_settings SET value=?, updated=? WHERE key=?", (value, now, key))
+        else:
+            db_exec("INSERT INTO system_settings (key, value, updated) VALUES (?,?,?)", (key, value, now))
+
+        # Special handling: claude_credentials → write to ~/.claude/.credentials.json
+        if key == "claude_credentials" and value:
+            try:
+                json.loads(value)  # Validate JSON
+                claude_dir = os.path.expanduser("~/.claude")
+                os.makedirs(claude_dir, exist_ok=True)
+                creds_path = os.path.join(claude_dir, ".credentials.json")
+                with open(creds_path, "w", encoding="utf-8") as f:
+                    f.write(value)
+                try:
+                    os.chmod(creds_path, 0o600)
+                except Exception:
+                    pass
+                log(f"Claude credentials saved to {creds_path}")
+            except json.JSONDecodeError as e:
+                log(f"Failed to save Claude credentials: invalid JSON")
+                return {"ok": False, "error": f"Invalid JSON: {e}"}
+            except Exception as e:
+                log(f"Failed to save Claude credentials: {e}")
+                return {"ok": False, "error": str(e)}
+
+        return {"ok": True}
+
+    def _settings_delete(self, body):
+        key = body.get("key", "")
+        if key:
+            db_exec("DELETE FROM system_settings WHERE key=?", (key,))
+        return {"ok": True}
+
+    # ── File Browser ──
+
+    def _browse_path(self, params):
+        """Browse filesystem from workspace root."""
+        row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
+        root = row["value"] if row and row.get("value") else os.path.expanduser("~")
+        root = os.path.normpath(root)
+
+        rel_path = params.get("path", [""])[0]
+        # Security: only allow paths within root
+        target = os.path.normpath(os.path.join(root, rel_path.lstrip("/").lstrip("\\")))
+        if not target.startswith(root):
+            return {"ok": False, "error": "접근 거부 (root 밖)"}
+
+        if not os.path.isdir(target):
+            return {"ok": False, "error": "디렉토리 아님"}
+
+        items = []
+        try:
+            for name in sorted(os.listdir(target)):
+                if name.startswith("."):
+                    continue
+                full = os.path.join(target, name)
+                try:
+                    is_dir = os.path.isdir(full)
+                    items.append({
+                        "name": name,
+                        "path": os.path.relpath(full, root).replace("\\", "/"),
+                        "isDir": is_dir,
+                        "size": os.path.getsize(full) if not is_dir else None
+                    })
+                except Exception:
+                    continue
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        return {"ok": True, "root": root.replace("\\", "/"), "path": rel_path, "items": items}
 
     # ── Auth ──
 
