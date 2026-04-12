@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SQLite → PostgreSQL Migration Script for Claude Flow Canvas
+SQLite → PostgreSQL Migration Script for Gil's FlowDesk
 
 Usage:
     python3 migrate_to_pg.py [--sqlite-path /path/to/canvas.db]

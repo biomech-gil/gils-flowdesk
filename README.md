@@ -1,4 +1,4 @@
-# Claude Flow Canvas
+# Gil's FlowDesk
 
 **브라우저 기반 비주얼 AI 워크플로우 에디터**
 
@@ -85,8 +85,8 @@ Claude AI → 응답 → 다음 노드로 자동 전달
 
 ```bash
 # WSL Ubuntu에서
-git clone https://github.com/biomech-gil/claude-flow-canvas.git
-cd claude-flow-canvas
+git clone https://github.com/biomech-gil/gils-flowdesk.git
+cd gils-flowdesk
 ```
 
 ### 2단계: 자동 설치
@@ -110,7 +110,7 @@ claude  # 첫 실행 시 Anthropic 로그인 (1회)
 
 **방법 A — 직접 실행:**
 ```bash
-cd ~/claude-flow-canvas
+cd ~/gils-flowdesk
 python3 server.py
 # 브라우저에서 http://127.0.0.1:8888 접속
 ```
@@ -121,8 +121,8 @@ python3 server.py
 ```bat
 @echo off
 chcp 65001 >con
-title Claude Flow Canvas
-wsl -d Ubuntu -- bash ~/claude-flow-canvas/launch-server.sh
+title Gil's FlowDesk
+wsl -d Ubuntu -- bash ~/gils-flowdesk/launch-server.sh
 timeout /t 4 /nobreak >con
 start "" http://127.0.0.1:8888
 pause
@@ -164,7 +164,7 @@ pause
 ## 파일 구조
 
 ```
-claude-flow-canvas/
+gils-flowdesk/
 ├── canvas.html          ← 메인 UI: 노드 캔버스 + 메모 시스템
 ├── chat.html            ← 채팅 UI: 노드별 대화 인터페이스
 ├── server.py            ← Python HTTP 서버 + Claude CLI 연동

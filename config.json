@@ -5,7 +5,7 @@
   "db_name": "canvas_db",
   "db_user": "canvas",
   "db_password": "canvas2026",
-  "db_path": "/mnt/z/00_Gils_Project/claude-flow-canvas/canvas.db",
+  "db_path": "/mnt/z/00_Gils_Project/gils-flowdesk/canvas.db",
   "port": 8888,
-  "uploads_dir": "/mnt/z/00_Gils_Project/claude-flow-canvas/uploads"
+  "uploads_dir": "/mnt/z/00_Gils_Project/gils-flowdesk/uploads"
 }

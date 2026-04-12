@@ -1,6 +1,6 @@
 #!/bin/bash
-# Claude Flow Canvas — 서버 백그라운드 실행
-cd ~/claude-flow-canvas
+# Gil's FlowDesk — 서버 백그라운드 실행
+cd ~/gils-flowdesk
 
 # PostgreSQL 시작 (WSL 재시작 후 필요)
 sudo pg_ctlcluster 16 main start 2>/dev/null
@@ -16,7 +16,7 @@ fi
 tmux kill-session -t server-bg 2>/dev/null
 
 # server-bg 세션에서 서버 실행
-tmux new-session -d -s server-bg -c ~/claude-flow-canvas
+tmux new-session -d -s server-bg -c ~/gils-flowdesk
 tmux send-keys -t server-bg 'python3 server.py' Enter
 
-echo "[+] Claude Flow Canvas server started (http://127.0.0.1:8888)"
+echo "[+] Gil's FlowDesk server started (http://127.0.0.1:8888)"

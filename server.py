@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Flow Canvas — Visual AI Workflow Editor Server (SQLite/PostgreSQL + Claude CLI)"""
+"""Gil's FlowDesk — Visual AI Workflow Editor Server (SQLite/PostgreSQL + Claude CLI)"""
 
 import subprocess, json, os, re, uuid, sys, time, sqlite3, threading, hashlib, secrets
 try:
@@ -536,10 +536,11 @@ def db_exec(sql, params=(), fetch=False, fetchone=False):
 # ═══════════════════════════════════════
 def _create_manual_memo():
     """Create the manual memo if it doesn't exist yet."""
-    manual_check = db_exec("SELECT id FROM memos WHERE name='📖 Claude Flow Canvas 매뉴얼'", fetchone=True)
+    MANUAL_NAME = "📖 Gil's FlowDesk 매뉴얼"
+    manual_check = db_exec("SELECT id FROM memos WHERE name=?", (MANUAL_NAME,), fetchone=True)
     if manual_check:
         return
-    manual_content = """# Claude Flow Canvas — JSON 구조 매뉴얼
+    manual_content = """# Gil's FlowDesk — JSON 구조 매뉴얼
 
 ## 프로젝트 JSON 구조
 
@@ -665,7 +666,7 @@ def _create_manual_memo():
     else:
         fid = manual_folder["id"]
     db_exec("INSERT INTO memos (name, content, folder_id, is_temp, pinned, created, modified) VALUES (?,?,?,?,?,?,?)",
-            ("📖 Claude Flow Canvas 매뉴얼", manual_content, fid, 0, 1, datetime.now().isoformat(), datetime.now().isoformat()))
+            ("📖 Gil's FlowDesk 매뉴얼", manual_content, fid, 0, 1, datetime.now().isoformat(), datetime.now().isoformat()))
     log("Manual memo created")
 
 _create_manual_memo()
@@ -1834,7 +1835,7 @@ if __name__ == "__main__":
     else:
         db_info = DB_PATH
     print(f"╔══════════════════════════════════════════════════╗")
-    print(f"║  Claude Flow Canvas on ::{PORT}                    ║")
+    print(f"║  Gil's FlowDesk on ::{PORT}                    ║")
     print(f"║  DB: {db_info}")
     print(f"║  User: {_get_machine_id()}")
     print(f"╚══════════════════════════════════════════════════╝")
