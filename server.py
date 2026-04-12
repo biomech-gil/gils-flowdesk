@@ -328,6 +328,13 @@ def init_db():
                 value TEXT,
                 updated TEXT
             )""",
+            """CREATE TABLE IF NOT EXISTS claude_accounts (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                credentials TEXT NOT NULL,
+                active INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
         ]
         for ddl in pg_tables:
             cur.execute(ddl)
@@ -460,6 +467,13 @@ def init_db():
             value TEXT,
             updated TEXT
         );
+        CREATE TABLE IF NOT EXISTS claude_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            credentials TEXT NOT NULL,
+            active INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
         """)
         try:
             db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
@@ -509,7 +523,7 @@ def db_exec(sql, params=(), fetch=False, fetchone=False):
                 need_returning = False
                 if adapted_sql.strip().upper().startswith("INSERT") and not fetch and not fetchone:
                     # Tables with SERIAL id: temps, memo_folders, memos, messages
-                    serial_tables = ("temps", "memo_folders", "memos", "messages")
+                    serial_tables = ("temps", "memo_folders", "memos", "messages", "claude_accounts")
                     sql_upper = adapted_sql.upper()
                     if any(f"INTO {t.upper()}" in sql_upper for t in serial_tables):
                         if "RETURNING" not in sql_upper:
@@ -694,8 +708,23 @@ _create_default_user()
 # ═══════════════════════════════════════
 def _sync_claude_credentials():
     """DB → ~/.claude/.credentials.json 동기화 (서버 시작 시).
-    Docker 환경에서 DB는 영속되지만 파일시스템은 리셋될 수 있으므로 필요."""
+    우선순위: claude_accounts(active=1) → 레거시 system_settings.claude_credentials."""
     try:
+        # 1) New system: claude_accounts active row
+        row = db_exec("SELECT credentials FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
+        if row and row.get("credentials"):
+            claude_dir = os.path.expanduser("~/.claude")
+            os.makedirs(claude_dir, exist_ok=True)
+            creds_path = os.path.join(claude_dir, ".credentials.json")
+            with open(creds_path, "w", encoding="utf-8") as f:
+                f.write(row["credentials"])
+            try:
+                os.chmod(creds_path, 0o600)
+            except Exception:
+                pass
+            log("Claude credentials synced from active account")
+            return
+        # 2) Legacy: old system_settings key
         row = db_exec("SELECT value FROM system_settings WHERE key='claude_credentials'", fetchone=True)
         if row and row.get("value"):
             claude_dir = os.path.expanduser("~/.claude")
@@ -708,13 +737,12 @@ def _sync_claude_credentials():
                     os.chmod(creds_path, 0o600)
                 except Exception:
                     pass
-                log("Claude credentials synced from DB")
+                log("Claude credentials synced from legacy system_settings")
     except Exception as e:
         log(f"Claude credentials sync failed: {e}")
 
-# PostgreSQL (Docker)일 때 특히 중요
-if _is_pg():
-    _sync_claude_credentials()
+# 서버 시작 시 항상 동기화 시도 (SQLite/PostgreSQL 공통)
+_sync_claude_credentials()
 
 # ═══════════════════════════════════════
 # tmux
@@ -798,6 +826,14 @@ def build_claude_cmd(prompt, opts=None):
 
     return cmd, final_prompt
 
+# ═══════════════════════════════════════
+# Claude login subprocess (web-based OAuth)
+# ═══════════════════════════════════════
+_claude_login_proc = None
+_claude_login_url = None
+_claude_login_output = []
+_claude_login_lock = threading.Lock()
+
 def get_claude_env():
     # nvm 또는 시스템 경로 자동 감지
     nvm_bin = os.path.expanduser("~/.nvm/versions/node/v22.22.2/bin")
@@ -854,6 +890,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
         elif p == "/api/trash/list": self._json(self._trash_list())
         elif p == "/api/settings/get": self._json(self._settings_get())
+        elif p == "/api/claude/accounts/list": self._json(self._claude_accounts_list())
+        elif p == "/api/claude/login/status": self._json(self._claude_login_status())
         elif p == "/api/fs/browse": self._json(self._browse_path(params))
         elif p.startswith("/uploads/"):
             # uploads 디렉토리가 외부 경로일 수 있으므로 직접 서빙
@@ -932,6 +970,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/trash/empty": self._trash_empty,
             "/api/settings/set": self._settings_set,
             "/api/settings/delete": self._settings_delete,
+            "/api/claude/accounts/save": self._claude_account_save,
+            "/api/claude/accounts/delete": self._claude_account_delete,
+            "/api/claude/accounts/activate": self._claude_account_activate,
+            "/api/claude/login/start": self._claude_login_start,
+            "/api/claude/login/submit": self._claude_login_submit,
+            "/api/claude/login/cancel": self._claude_login_cancel,
         }
         handler = handlers.get(p)
         if handler:
@@ -1766,6 +1810,217 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         for cl in content_lines[-3:]:
             if re.search(r'❯|~\$\s*$|\$\s*$', cl): idle = True; break
         return {"ok": True, "idle": idle, "lastLines": content_lines[-3:] if content_lines else []}
+
+    # ── Claude Accounts (multi-account manager) ──
+
+    def _claude_accounts_list(self):
+        try:
+            rows = db_exec(
+                "SELECT id, name, active, created FROM claude_accounts ORDER BY active DESC, created DESC",
+                fetch=True
+            ) or []
+            return {"ok": True, "accounts": rows}
+        except Exception as e:
+            return {"ok": False, "error": str(e), "accounts": []}
+
+    def _claude_account_save(self, body):
+        aid = body.get("id")
+        name = (body.get("name", "") or "").strip()
+        credentials = (body.get("credentials", "") or "").strip()
+        if not name:
+            return {"ok": False, "error": "이름이 필요합니다"}
+        if not credentials:
+            return {"ok": False, "error": "credentials가 비어있습니다"}
+        try:
+            json.loads(credentials)
+        except Exception as e:
+            return {"ok": False, "error": f"유효한 JSON이 아닙니다: {e}"}
+        now = datetime.now().isoformat()
+        try:
+            if aid:
+                db_exec(
+                    "UPDATE claude_accounts SET name=?, credentials=? WHERE id=?",
+                    (name, credentials, aid)
+                )
+                return {"ok": True, "id": aid}
+            else:
+                new_id = db_exec(
+                    "INSERT INTO claude_accounts (name, credentials, active, created) VALUES (?,?,?,?)",
+                    (name, credentials, 0, now)
+                )
+                return {"ok": True, "id": new_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _claude_account_delete(self, body):
+        aid = body.get("id")
+        if not aid:
+            return {"ok": False, "error": "id required"}
+        try:
+            db_exec("DELETE FROM claude_accounts WHERE id=?", (aid,))
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _claude_account_activate(self, body):
+        aid = body.get("id")
+        if not aid:
+            return {"ok": False, "error": "id required"}
+        try:
+            row = db_exec("SELECT * FROM claude_accounts WHERE id=?", (aid,), fetchone=True)
+            if not row:
+                return {"ok": False, "error": "not found"}
+            db_exec("UPDATE claude_accounts SET active=0")
+            db_exec("UPDATE claude_accounts SET active=1 WHERE id=?", (aid,))
+            claude_dir = os.path.expanduser("~/.claude")
+            os.makedirs(claude_dir, exist_ok=True)
+            creds_path = os.path.join(claude_dir, ".credentials.json")
+            with open(creds_path, "w", encoding="utf-8") as f:
+                f.write(row["credentials"])
+            try:
+                os.chmod(creds_path, 0o600)
+            except Exception:
+                pass
+            log(f"Claude account activated: {row['name']}")
+            return {"ok": True, "active": row["name"]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ── Claude Web-based Login (OAuth via subprocess) ──
+
+    def _claude_login_start(self, body):
+        global _claude_login_proc, _claude_login_url, _claude_login_output
+        with _claude_login_lock:
+            # Kill existing process if any
+            if _claude_login_proc and _claude_login_proc.poll() is None:
+                try:
+                    _claude_login_proc.kill()
+                except Exception:
+                    pass
+            _claude_login_url = None
+            _claude_login_output = []
+
+            env = get_claude_env()
+            # Try `claude setup-token` first (non-browser flow), fall back to `claude login`
+            tried = []
+            proc = None
+            for cmd in (["claude", "setup-token"], ["claude", "login"]):
+                try:
+                    proc = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        env=env
+                    )
+                    tried.append(" ".join(cmd))
+                    break
+                except Exception as e:
+                    tried.append(f"{' '.join(cmd)} ({e})")
+                    proc = None
+                    continue
+            if not proc:
+                return {"ok": False, "error": f"subprocess start failed (tried: {tried})"}
+            _claude_login_proc = proc
+
+            def reader():
+                global _claude_login_url, _claude_login_output
+                try:
+                    for line in _claude_login_proc.stdout:
+                        _claude_login_output.append(line)
+                        if not _claude_login_url:
+                            m = re.search(r'https?://[^\s]+', line)
+                            if m:
+                                _claude_login_url = m.group(0).rstrip(').,"\'')
+                        if len(_claude_login_output) > 200:
+                            _claude_login_output = _claude_login_output[-100:]
+                except Exception as e:
+                    log(f"claude login reader error: {e}")
+            threading.Thread(target=reader, daemon=True).start()
+
+            # Wait up to ~10 seconds for URL
+            for _ in range(50):
+                if _claude_login_url:
+                    break
+                if _claude_login_proc.poll() is not None:
+                    break
+                time.sleep(0.2)
+
+            if _claude_login_url:
+                return {"ok": True, "url": _claude_login_url}
+            # Process may have exited without URL (e.g. TTY required)
+            exited = _claude_login_proc.poll() is not None
+            return {
+                "ok": False,
+                "error": "URL 추출 실패 — claude CLI가 TTY를 요구할 수 있습니다. 파일 업로드/붙여넣기를 사용하세요.",
+                "exited": exited,
+                "output": "".join(_claude_login_output[-40:])
+            }
+
+    def _claude_login_submit(self, body):
+        global _claude_login_proc, _claude_login_output
+        code = (body.get("code", "") or "").strip()
+        if not code:
+            return {"ok": False, "error": "code required"}
+        if not _claude_login_proc or _claude_login_proc.poll() is not None:
+            return {"ok": False, "error": "로그인 세션이 없습니다 (프로세스 종료됨)"}
+        try:
+            _claude_login_proc.stdin.write(code + "\n")
+            _claude_login_proc.stdin.flush()
+        except Exception as e:
+            return {"ok": False, "error": f"stdin write 실패: {e}"}
+
+        # Wait for completion up to 30 seconds
+        for _ in range(150):
+            if _claude_login_proc.poll() is not None:
+                break
+            time.sleep(0.2)
+
+        if _claude_login_proc.poll() is None:
+            return {"ok": False, "error": "로그인 처리 시간 초과"}
+
+        creds_path = os.path.expanduser("~/.claude/.credentials.json")
+        if os.path.exists(creds_path):
+            try:
+                with open(creds_path, "r", encoding="utf-8") as f:
+                    creds = f.read()
+                now = datetime.now().isoformat()
+                name = (body.get("name") or "").strip() or f"Account {datetime.now().strftime('%m-%d %H:%M')}"
+                aid = db_exec(
+                    "INSERT INTO claude_accounts (name, credentials, active, created) VALUES (?,?,?,?)",
+                    (name, creds, 0, now)
+                )
+                return {"ok": True, "accountId": aid, "name": name}
+            except Exception as e:
+                return {"ok": False, "error": f"credentials 읽기 실패: {e}"}
+        else:
+            return {
+                "ok": False,
+                "error": "로그인 실패 (credentials 파일 없음)",
+                "output": "".join(_claude_login_output[-40:])
+            }
+
+    def _claude_login_status(self):
+        if not _claude_login_proc:
+            return {"ok": True, "running": False}
+        running = _claude_login_proc.poll() is None
+        return {
+            "ok": True,
+            "running": running,
+            "url": _claude_login_url,
+            "output": "".join(_claude_login_output[-10:])
+        }
+
+    def _claude_login_cancel(self, body):
+        global _claude_login_proc
+        if _claude_login_proc and _claude_login_proc.poll() is None:
+            try:
+                _claude_login_proc.kill()
+            except Exception:
+                pass
+        return {"ok": True}
 
     # ── System Settings ──
 

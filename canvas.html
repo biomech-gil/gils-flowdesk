@@ -515,19 +515,32 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         </div>
       </div>
 
-      <!-- Claude 인증 -->
+      <!-- Claude 계정 관리 -->
       <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
-        <div style="font-weight:600;color:#88c0d0;margin-bottom:6px">🔑 Claude Code 인증</div>
+        <div style="font-weight:600;color:#88c0d0;margin-bottom:6px">🔑 Claude Code 계정 관리</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
-          ~/.claude/.credentials.json 파일 내용을 붙여넣으세요.<br>
-          다른 컴퓨터에서 claude login 후 해당 파일을 복사해서 가져올 수 있습니다.
+          여러 계정을 저장하고 전환할 수 있습니다. 활성 계정의 인증이 사용됩니다.
         </div>
-        <textarea id="s-claude-creds" placeholder='{"claudeAiOauth": {"accessToken":"...", ...}}' style="width:100%;height:120px;padding:8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
-        <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+
+        <!-- Account list -->
+        <div id="claude-accounts-list" style="margin-bottom:10px"></div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="startClaudeWebLogin()" style="padding:6px 12px;background:linear-gradient(135deg,#3B82F6,#1E40AF);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">🌐 웹으로 로그인</button>
+          <button onclick="showClaudePasteForm()" style="padding:6px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📋 JSON 붙여넣기</button>
           <input type="file" id="s-claude-file" accept=".json" style="display:none">
-          <button onclick="document.getElementById('s-claude-file').click()" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📂 파일에서</button>
-          <button onclick="saveClaudeCredentials()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장 + 적용</button>
-          <span id="s-claude-status" style="font-size:11px;color:var(--text-dim);margin-left:auto"></span>
+          <button onclick="document.getElementById('s-claude-file').click()" style="padding:6px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📂 파일에서</button>
+        </div>
+
+        <!-- Paste form (hidden by default) -->
+        <div id="claude-paste-form" style="display:none;margin-top:10px">
+          <input type="text" id="claude-name-input" placeholder="계정 이름 (예: 회사용, 개인용)" style="width:100%;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <textarea id="claude-creds-input" placeholder='{"claudeAiOauth": {...}}' style="width:100%;height:80px;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
+          <div style="display:flex;gap:6px">
+            <button onclick="saveClaudeAccount()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장</button>
+            <button onclick="document.getElementById('claude-paste-form').style.display='none'" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+          </div>
         </div>
       </div>
 
@@ -3316,14 +3329,9 @@ async function openSettings(){
   const r = await api('GET', '/api/settings/get');
   const s = (r && r.ok) ? (r.settings || {}) : {};
   document.getElementById('s-workspace').value = s.workspace_root || '';
-  const hasCreds = s.claude_credentials && s.claude_credentials.length > 0;
-  document.getElementById('s-claude-creds').value = '';
-  document.getElementById('s-claude-creds').placeholder = hasCreds
-    ? '(설정됨 — 변경하려면 새 값을 붙여넣으세요)'
-    : '{"claudeAiOauth": {"accessToken":"..."}}';
-  document.getElementById('s-claude-status').textContent = hasCreds ? '✅ 설정됨' : '❌ 미설정';
   document.getElementById('s-db-info').textContent = 'PostgreSQL 연결됨 (canvas_db)';
   document.getElementById('settings-modal').style.display = 'flex';
+  loadClaudeAccounts();
 }
 
 function closeSettings(){
@@ -3336,23 +3344,121 @@ async function saveSetting(key, value){
   else alert('저장 실패: ' + ((r && r.error) || ''));
 }
 
-async function saveClaudeCredentials(){
-  const val = document.getElementById('s-claude-creds').value.trim();
-  if(!val) return alert('내용을 입력하세요');
-  try { JSON.parse(val); } catch(e) {
-    return alert('유효한 JSON이 아닙니다: ' + e.message);
+// ═══════════════════════════════════════
+// Claude multi-account manager
+// ═══════════════════════════════════════
+async function loadClaudeAccounts(){
+  const r = await api('GET', '/api/claude/accounts/list');
+  const accounts = (r && r.ok) ? (r.accounts || []) : [];
+  const el = document.getElementById('claude-accounts-list');
+  if(!el) return;
+  if(!accounts.length){
+    el.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center">저장된 계정이 없습니다</div>';
+    return;
   }
-  const r = await api('POST', '/api/settings/set', {key: 'claude_credentials', value: val});
+  el.innerHTML = accounts.map(a => `
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${a.active?'rgba(76,175,80,.15)':'var(--bg-0)'};border:1px solid ${a.active?'rgba(76,175,80,.4)':'var(--border)'};border-radius:4px;margin-bottom:4px">
+      <span style="color:${a.active?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'✓ ':'○ '}${escapeHtml(a.name)}</span>
+      <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
+      ${a.active?'':`<button onclick="activateClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;cursor:pointer">활성화</button>`}
+      <button onclick="deleteClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
+    </div>
+  `).join('');
+}
+
+async function activateClaudeAccount(id){
+  const r = await api('POST', '/api/claude/accounts/activate', {id});
   if(r && r.ok){
-    alert('Claude 인증 저장 완료');
-    document.getElementById('s-claude-creds').value = '';
-    document.getElementById('s-claude-status').textContent = '✅ 설정됨';
+    alert('활성화됨: ' + r.active);
+    loadClaudeAccounts();
+  } else alert('실패: ' + ((r && r.error) || ''));
+}
+
+async function deleteClaudeAccount(id){
+  if(!confirm('이 계정을 삭제할까요?')) return;
+  await api('POST', '/api/claude/accounts/delete', {id});
+  loadClaudeAccounts();
+}
+
+function showClaudePasteForm(){
+  document.getElementById('claude-paste-form').style.display = 'block';
+  document.getElementById('claude-name-input').value = '';
+  document.getElementById('claude-creds-input').value = '';
+}
+
+async function saveClaudeAccount(){
+  const name = document.getElementById('claude-name-input').value.trim() || '기본';
+  const creds = document.getElementById('claude-creds-input').value.trim();
+  if(!creds) return alert('인증 내용을 입력하세요');
+  try { JSON.parse(creds); } catch(e){ return alert('유효한 JSON이 아닙니다'); }
+  const r = await api('POST', '/api/claude/accounts/save', {name, credentials: creds});
+  if(r && r.ok){
+    document.getElementById('claude-paste-form').style.display = 'none';
+    loadClaudeAccounts();
+    alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
+  } else alert('실패: ' + ((r && r.error) || ''));
+}
+
+// Web OAuth flow
+async function startClaudeWebLogin(){
+  const popup = document.createElement('div');
+  popup.id = 'claude-login-popup';
+  popup.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;display:flex;align-items:center;justify-content:center';
+  popup.innerHTML = `
+    <div style="width:500px;background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:20px;color:var(--text)">
+      <h3 style="margin-top:0;color:var(--accent)">🌐 Claude Code 웹 로그인</h3>
+      <div id="claude-login-status" style="margin-bottom:12px;font-size:12px;color:var(--text-dim)">로그인 시작 중...</div>
+      <div id="claude-login-url-section" style="display:none;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">① 아래 링크를 브라우저에서 여세요:</div>
+        <div style="background:var(--bg-0);padding:8px;border-radius:4px;font-family:var(--mono);font-size:10px;word-break:break-all" id="claude-login-url"></div>
+        <button onclick="window.open(document.getElementById('claude-login-url').textContent, '_blank')" style="margin-top:6px;padding:5px 12px;background:#3B82F6;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">🌐 새 탭에서 열기</button>
+      </div>
+      <div id="claude-login-code-section" style="display:none">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">② Anthropic에서 승인 후 받은 코드를 붙여넣으세요:</div>
+        <input type="text" id="claude-login-code" placeholder="승인 코드" style="width:100%;padding:8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);margin-bottom:6px">
+        <input type="text" id="claude-login-name" placeholder="계정 이름 (선택)" style="width:100%;padding:8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;margin-bottom:6px">
+        <button onclick="submitClaudeCode()" style="padding:6px 14px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">승인 완료</button>
+      </div>
+      <button onclick="cancelClaudeWebLogin()" style="margin-top:10px;padding:6px 14px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px;float:right">닫기</button>
+    </div>`;
+  document.body.appendChild(popup);
+
+  const r = await api('POST', '/api/claude/login/start', {});
+  if(r && r.ok && r.url){
+    document.getElementById('claude-login-status').textContent = '✅ 브라우저에서 아래 URL을 열어주세요';
+    document.getElementById('claude-login-url').textContent = r.url;
+    document.getElementById('claude-login-url-section').style.display = 'block';
+    document.getElementById('claude-login-code-section').style.display = 'block';
   } else {
-    alert('저장 실패: ' + ((r && r.error) || ''));
+    const msg = (r && r.error) || '실패';
+    document.getElementById('claude-login-status').innerHTML = '❌ ' + escapeHtml(msg) +
+      '<br><br><span style="font-size:10px;color:var(--text-dim)">웹 로그인이 지원되지 않는 환경일 수 있습니다. 대신 "📋 JSON 붙여넣기" 또는 "📂 파일에서"를 사용하세요.</span>';
   }
 }
 
-// Wire up the Claude credentials file picker once
+async function cancelClaudeWebLogin(){
+  try { await api('POST', '/api/claude/login/cancel', {}); } catch(e){}
+  const el = document.getElementById('claude-login-popup');
+  if(el) el.remove();
+}
+
+async function submitClaudeCode(){
+  const code = document.getElementById('claude-login-code').value.trim();
+  const name = document.getElementById('claude-login-name').value.trim() || undefined;
+  if(!code) return alert('승인 코드를 입력하세요');
+  document.getElementById('claude-login-status').textContent = '처리 중...';
+  const r = await api('POST', '/api/claude/login/submit', {code, name});
+  if(r && r.ok){
+    alert('계정 추가 완료: ' + r.name + '\n활성화 버튼을 눌러 사용하세요');
+    const el = document.getElementById('claude-login-popup');
+    if(el) el.remove();
+    loadClaudeAccounts();
+  } else {
+    document.getElementById('claude-login-status').textContent = '❌ ' + ((r && r.error) || '실패');
+  }
+}
+
+// File picker for Claude credentials (save as new account)
 document.addEventListener('DOMContentLoaded', ()=>{
   const fi = document.getElementById('s-claude-file');
   if(fi){
@@ -3360,8 +3466,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const f = e.target.files[0];
       if(!f) return;
       const reader = new FileReader();
-      reader.onload = () => {
-        document.getElementById('s-claude-creds').value = reader.result;
+      reader.onload = async () => {
+        const name = prompt('계정 이름:', f.name.replace('.json',''));
+        if(!name) return;
+        try { JSON.parse(reader.result); } catch(err){ alert('유효한 JSON이 아닙니다'); return; }
+        const r = await api('POST', '/api/claude/accounts/save', {name, credentials: reader.result});
+        if(r && r.ok){
+          loadClaudeAccounts();
+          alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
+        } else alert('실패: ' + ((r && r.error) || ''));
+        fi.value = '';
       };
       reader.readAsText(f);
     });
