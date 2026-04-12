@@ -421,6 +421,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
         <select id="sb-conv" onchange="sbConvSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">분기</option></select><button onclick="forkConv()" style="font-size:9px;padding:1px 3px">+</button>
         <select id="sb-pane" onchange="sbPane(this.value)" style="font-size:9px;padding:1px;width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px;display:none"></select>
+        <select id="sb-account" onchange="sbSetAccount(this.value)" title="이 노드에 사용할 Claude 계정" style="font-size:9px;padding:1px;max-width:120px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(자동)</option></select>
       </div>
     </div>
   </div>
@@ -520,6 +521,26 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <div style="font-weight:600;color:#88c0d0;margin-bottom:6px">🔑 Claude Code 계정 관리</div>
         <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
           여러 계정을 저장하고 전환할 수 있습니다. 활성 계정의 인증이 사용됩니다.
+        </div>
+
+        <!-- Rotation mode -->
+        <div style="margin-bottom:10px;padding:10px;background:var(--bg-0);border-radius:4px;border:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:600;color:#b48ead;margin-bottom:6px">🔄 계정 자동 배정 방식 (새 Agent 노드 생성 시)</div>
+          <div style="display:flex;flex-direction:column;gap:4px;font-size:11px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="rot-mode" value="round-robin" onchange="saveRotationMode(this.value)">
+              <span><b>🔄 번갈아 사용 (권장)</b> — 생성 순서대로 돌아가며 배정</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="rot-mode" value="sequential" onchange="saveRotationMode(this.value)">
+              <span><b>📊 우선순위 순서</b> — 1순위 계정 먼저 사용, 나중에 수동 변경</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+              <input type="radio" name="rot-mode" value="manual" onchange="saveRotationMode(this.value)">
+              <span><b>✋ 수동</b> — 활성 계정 하나만 사용</span>
+            </label>
+          </div>
+          <div id="rot-mode-indicator" style="margin-top:6px;font-size:10px;color:var(--text-dim)"></div>
         </div>
 
         <!-- Account list -->
@@ -898,6 +919,7 @@ function mkNode(opts={}){
     paneIndex:opts.paneIndex||null,collapsed:opts.collapsed||false,textSize:opts.textSize||1,chatOnly:opts.chatOnly??true,
     systemPrompt:opts.systemPrompt||'',images:opts.images||[],customImage:opts.customImage||'',
     inputTemplate:opts.inputTemplate||'',inputResolved:'',outputCapture:opts.outputCapture||'',
+    accountId:opts.accountId||null,
     status:opts.status||'idle',history:opts.history||[],el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
 }
@@ -949,7 +971,10 @@ function buildDom(n){
 async function addNode(type='agent',x,y){
   const pos=x!==undefined?{x,y}:s2c(cw.clientWidth/2,cw.clientHeight/2);
   const opts={type,x:pos.x-140,y:pos.y-120};
-  if(type==='agent'){const r=await api('POST','/api/add-pane',{});if(r.ok)opts.paneIndex=r.paneIndex}
+  if(type==='agent'){
+    try{const acct=await api('POST','/api/claude/accounts/next',{});if(acct&&acct.ok)opts.accountId=acct.accountId;}catch(e){}
+    const r=await api('POST','/api/add-pane',{});if(r.ok)opts.paneIndex=r.paneIndex;
+  }
   const n=mkNode(opts);selNode(n);autoSave();return n;
 }
 function selNode(n){nodes.forEach(nd=>nd.el.classList.remove('sel','multi-sel'));multiSel=[];n.el.classList.add('sel');selectedNode=n;selectedConn=null;openSb(n);drawConns();document.getElementById('ctx').classList.remove('show')}
@@ -1833,7 +1858,23 @@ function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';documen
   if(isAgent)ps.style.display='';else ps.style.display='none';
   // reset resolved preview
   if(resolvedPreviewOn){resolvedPreviewOn=false;document.getElementById('rv-toggle').classList.remove('active');document.getElementById('sb-input').style.display='';document.getElementById('sb-resolved').style.display='none'}
-  loadExecHistory();loadConvList();setupImageInput();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
+  loadExecHistory();loadConvList();populateAccountSelect();setupImageInput();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
+async function populateAccountSelect(){
+  const sel = document.getElementById('sb-account');
+  if(!sel) return;
+  if(!selectedNode || selectedNode.type !== 'agent'){ sel.style.display='none'; return; }
+  sel.style.display='';
+  const r = await api('GET', '/api/claude/accounts/list');
+  const accounts = (r && r.ok) ? (r.accounts || []) : [];
+  sel.innerHTML = '<option value="">(자동)</option>' +
+    accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
+  if(selectedNode && selectedNode.accountId) sel.value = String(selectedNode.accountId);
+}
+function sbSetAccount(val){
+  if(!selectedNode) return;
+  selectedNode.accountId = val ? parseInt(val) : null;
+  autoSave();
+}
 function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout(drawConns,10)}
 function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('.nd-name').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
 function sbPane(v){if(selectedNode)selectedNode.paneIndex=v?parseInt(v):null;autoSave()}
@@ -2002,7 +2043,7 @@ const engine={
 
     const cwd=document.getElementById('wf-cwd').value.trim()||undefined;
     const chatOnly=nd.chatOnly!==undefined?nd.chatOnly:true;
-    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input,inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:nd.images||[],projectId:workflowId||''});
+    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input,inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:nd.images||[],projectId:workflowId||'',accountId:nd.accountId||null});
 
     if(!exec.ok){
       console.log(`[${nd.name}] API 실패`);
@@ -2057,7 +2098,7 @@ const engine={
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,
-  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,status:n.status==='running'?'idle':n.status,history:n.history})),
+  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,status:n.status==='running'?'idle':n.status,history:n.history})),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5})),
   canvasElements:canvasEls.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,w:c.w,h:c.h,color:c.color,label:c.label,content:c.content,fontSize:c.fontSize,src:c.src}))}}
 let _saveTimer=null;
@@ -3350,20 +3391,56 @@ async function saveSetting(key, value){
 async function loadClaudeAccounts(){
   const r = await api('GET', '/api/claude/accounts/list');
   const accounts = (r && r.ok) ? (r.accounts || []) : [];
+  window._claudeAccountsCache = accounts;
+  // Load rotation mode
+  try {
+    const sr = await api('GET', '/api/settings/get');
+    const mode = (sr && sr.ok && sr.settings && sr.settings.claude_rotation_mode) || 'round-robin';
+    const radio = document.querySelector(`input[name="rot-mode"][value="${mode}"]`);
+    if(radio) radio.checked = true;
+    const ind = document.getElementById('rot-mode-indicator');
+    if(ind){
+      const labels = {'round-robin':'🔄 번갈아 사용','sequential':'📊 우선순위 순서','manual':'✋ 수동'};
+      ind.textContent = '현재 모드: ' + (labels[mode]||mode) + ' · ' + accounts.length + '개 계정';
+    }
+  } catch(e){}
   const el = document.getElementById('claude-accounts-list');
   if(!el) return;
   if(!accounts.length){
     el.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center">저장된 계정이 없습니다</div>';
     return;
   }
-  el.innerHTML = accounts.map(a => `
+  el.innerHTML = accounts.map((a, i) => `
     <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${a.active?'rgba(76,175,80,.15)':'var(--bg-0)'};border:1px solid ${a.active?'rgba(76,175,80,.4)':'var(--border)'};border-radius:4px;margin-bottom:4px">
-      <span style="color:${a.active?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'✓ ':'○ '}${escapeHtml(a.name)}</span>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <button onclick="moveAccount(${a.id},-1)" style="font-size:8px;padding:0 4px;background:var(--bg-3);border:1px solid var(--border);cursor:pointer;color:var(--text)">▲</button>
+        <button onclick="moveAccount(${a.id},1)" style="font-size:8px;padding:0 4px;background:var(--bg-3);border:1px solid var(--border);cursor:pointer;color:var(--text)">▼</button>
+      </div>
+      <span style="color:${a.active?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'✓ ':'○ '}${i+1}. ${escapeHtml(a.name)}</span>
       <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
       ${a.active?'':`<button onclick="activateClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;cursor:pointer">활성화</button>`}
       <button onclick="deleteClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
     </div>
   `).join('');
+}
+
+async function saveRotationMode(mode){
+  await api('POST', '/api/settings/set', {key:'claude_rotation_mode', value:mode});
+  const ind = document.getElementById('rot-mode-indicator');
+  const labels = {'round-robin':'🔄 번갈아 사용','sequential':'📊 우선순위 순서','manual':'✋ 수동'};
+  if(ind) ind.textContent = '현재 모드: ' + (labels[mode]||mode);
+}
+
+async function moveAccount(id, delta){
+  const accounts = window._claudeAccountsCache || [];
+  const idx = accounts.findIndex(a => a.id === id);
+  if(idx < 0) return;
+  const newIdx = idx + delta;
+  if(newIdx < 0 || newIdx >= accounts.length) return;
+  const ids = accounts.map(a => a.id);
+  [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
+  await api('POST', '/api/claude/accounts/reorder', {ids});
+  loadClaudeAccounts();
 }
 
 async function activateClaudeAccount(id){

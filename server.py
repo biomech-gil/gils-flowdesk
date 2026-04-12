@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gil's FlowDesk — Visual AI Workflow Editor Server (SQLite/PostgreSQL + Claude CLI)"""
 
-import subprocess, json, os, re, uuid, sys, time, sqlite3, threading, hashlib, secrets
+import subprocess, json, os, re, uuid, sys, time, sqlite3, threading, hashlib, secrets, tempfile
 try:
     import psycopg2
     import psycopg2.extras
@@ -333,6 +333,7 @@ def init_db():
                 name TEXT NOT NULL,
                 credentials TEXT NOT NULL,
                 active INTEGER DEFAULT 0,
+                priority INTEGER DEFAULT 0,
                 created TEXT NOT NULL
             )""",
         ]
@@ -352,6 +353,7 @@ def init_db():
             ("memos", "pinned", "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0"),
             ("memos", "color", "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''"),
             ("memo_folders", "color", "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''"),
+            ("claude_accounts", "priority", "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0"),
         ]
         for tbl, col, alter_sql in alter_checks:
             cur.execute("""
@@ -472,6 +474,7 @@ def init_db():
             name TEXT NOT NULL,
             credentials TEXT NOT NULL,
             active INTEGER DEFAULT 0,
+            priority INTEGER DEFAULT 0,
             created TEXT NOT NULL
         );
         """)
@@ -483,6 +486,7 @@ def init_db():
             "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0",
             "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''",
             "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
+            "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0",
         ]:
             try:
                 db.execute(stmt)
@@ -745,6 +749,38 @@ def _sync_claude_credentials():
 _sync_claude_credentials()
 
 # ═══════════════════════════════════════
+# Per-account credential directories (multi-account simultaneous use)
+# ═══════════════════════════════════════
+def _get_account_dir(account_id):
+    """각 계정의 CLAUDE_CONFIG_DIR 경로 반환. 없으면 생성."""
+    base = os.path.join(tempfile.gettempdir(), "flowdesk-accts", str(account_id))
+    os.makedirs(base, exist_ok=True)
+    return base
+
+def _sync_account_to_dir(account_id, credentials):
+    """계정 credentials를 전용 디렉토리에 동기화."""
+    d = _get_account_dir(account_id)
+    creds_path = os.path.join(d, ".credentials.json")
+    with open(creds_path, "w", encoding="utf-8") as f:
+        f.write(credentials)
+    try:
+        os.chmod(creds_path, 0o600)
+    except Exception:
+        pass
+    return d
+
+def _sync_all_accounts():
+    try:
+        rows = db_exec("SELECT id, credentials FROM claude_accounts", fetch=True) or []
+        for row in rows:
+            _sync_account_to_dir(row["id"], row["credentials"])
+        log(f"Synced {len(rows)} Claude accounts to temp dirs")
+    except Exception as e:
+        log(f"Sync accounts failed: {e}")
+
+_sync_all_accounts()
+
+# ═══════════════════════════════════════
 # tmux
 # ═══════════════════════════════════════
 def run_tmux(*args):
@@ -844,6 +880,20 @@ def get_claude_env():
         nvm_bin = os.path.dirname(claude_path) if claude_path else "/usr/bin"
     env = os.environ.copy()
     env["PATH"] = nvm_bin + ":" + env.get("PATH", "")
+    return env
+
+def get_claude_env_for_account(account_id=None):
+    """특정 계정의 CLAUDE_CONFIG_DIR를 설정한 env 반환. account_id=None이면 기본값."""
+    env = get_claude_env()
+    if account_id:
+        try:
+            account_dir = _get_account_dir(int(account_id))
+            creds_path = os.path.join(account_dir, ".credentials.json")
+            if os.path.exists(creds_path):
+                env["CLAUDE_CONFIG_DIR"] = account_dir
+                env["HOME"] = account_dir
+        except Exception as e:
+            log(f"Failed to set account env: {e}")
     return env
 
 # ═══════════════════════════════════════
@@ -973,6 +1023,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/accounts/save": self._claude_account_save,
             "/api/claude/accounts/delete": self._claude_account_delete,
             "/api/claude/accounts/activate": self._claude_account_activate,
+            "/api/claude/accounts/next": self._claude_next_account,
+            "/api/claude/accounts/reorder": self._claude_accounts_reorder,
             "/api/claude/login/start": self._claude_login_start,
             "/api/claude/login/submit": self._claude_login_submit,
             "/api/claude/login/cancel": self._claude_login_cancel,
@@ -1002,6 +1054,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         cwd = body.get("cwd", "")
         chat_only = body.get("chatOnly", True)
         project_id = body.get("projectId", "")
+        account_id = body.get("accountId")
         if not node_id or not prompt:
             return {"ok": False, "error": "nodeId and prompt required"}
 
@@ -1014,13 +1067,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         # DB에 실행 기록 생성
         db_exec("INSERT INTO executions (id, project_id, node_id, node_name, input_raw, input_resolved, chat_only, started, status) VALUES (?,?,?,?,?,?,?,?,?)",
                 (exec_id, project_id, node_id, node_name, body.get("inputRaw", ""), prompt, 1 if chat_only else 0, datetime.now().isoformat(), "running"))
-        log(f"EXEC [{exec_id}] node={node_name} prompt={len(prompt)}자 chatOnly={chat_only}")
+        log(f"EXEC [{exec_id}] node={node_name} account={account_id} prompt={len(prompt)}자 chatOnly={chat_only}")
         if len(prompt) > 23000:
             log(f"EXEC [{exec_id}] WARNING: 프롬프트 {len(prompt)}자 — 23,000자 초과, 타임아웃 가능성 높음")
 
         def run():
             try:
-                env = get_claude_env()
+                env = get_claude_env_for_account(account_id)
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
                 cmd, final_prompt = build_claude_cmd(prompt, {
                     "chatOnly": chat_only,
@@ -1816,7 +1869,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _claude_accounts_list(self):
         try:
             rows = db_exec(
-                "SELECT id, name, active, created FROM claude_accounts ORDER BY active DESC, created DESC",
+                "SELECT id, name, active, priority, created FROM claude_accounts ORDER BY priority ASC, created DESC",
                 fetch=True
             ) or []
             return {"ok": True, "accounts": rows}
@@ -1842,12 +1895,16 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     "UPDATE claude_accounts SET name=?, credentials=? WHERE id=?",
                     (name, credentials, aid)
                 )
+                try: _sync_account_to_dir(aid, credentials)
+                except Exception as e: log(f"sync acct dir failed: {e}")
                 return {"ok": True, "id": aid}
             else:
                 new_id = db_exec(
                     "INSERT INTO claude_accounts (name, credentials, active, created) VALUES (?,?,?,?)",
                     (name, credentials, 0, now)
                 )
+                try: _sync_account_to_dir(new_id, credentials)
+                except Exception as e: log(f"sync acct dir failed: {e}")
                 return {"ok": True, "id": new_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -1881,8 +1938,61 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 os.chmod(creds_path, 0o600)
             except Exception:
                 pass
+            try: _sync_account_to_dir(row["id"], row["credentials"])
+            except Exception as e: log(f"sync acct dir failed: {e}")
             log(f"Claude account activated: {row['name']}")
             return {"ok": True, "active": row["name"]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _claude_next_account(self, body):
+        """회전 전략에 따라 다음 account_id 반환."""
+        try:
+            mode_row = db_exec("SELECT value FROM system_settings WHERE key='claude_rotation_mode'", fetchone=True)
+            mode = mode_row["value"] if mode_row and mode_row.get("value") else "round-robin"
+
+            accounts = db_exec("SELECT id, name, priority FROM claude_accounts ORDER BY priority ASC, id ASC", fetch=True) or []
+            if not accounts:
+                return {"ok": False, "error": "계정이 없습니다"}
+
+            if mode == "manual":
+                active = db_exec("SELECT id FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
+                return {"ok": True, "accountId": active["id"] if active else accounts[0]["id"], "mode": mode}
+
+            elif mode == "sequential":
+                return {"ok": True, "accountId": accounts[0]["id"], "mode": mode}
+
+            else:  # round-robin
+                last_row = db_exec("SELECT value FROM system_settings WHERE key='claude_last_used_id'", fetchone=True)
+                last_id = 0
+                try:
+                    if last_row and last_row.get("value"):
+                        last_id = int(last_row["value"])
+                except Exception:
+                    last_id = 0
+                ids = [a["id"] for a in accounts]
+                try:
+                    idx = ids.index(last_id)
+                    next_idx = (idx + 1) % len(ids)
+                except ValueError:
+                    next_idx = 0
+                next_id = ids[next_idx]
+                now = datetime.now().isoformat()
+                existing = db_exec("SELECT key FROM system_settings WHERE key='claude_last_used_id'", fetchone=True)
+                if existing:
+                    db_exec("UPDATE system_settings SET value=?, updated=? WHERE key='claude_last_used_id'", (str(next_id), now))
+                else:
+                    db_exec("INSERT INTO system_settings (key, value, updated) VALUES (?,?,?)", ("claude_last_used_id", str(next_id), now))
+                return {"ok": True, "accountId": next_id, "mode": mode}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _claude_accounts_reorder(self, body):
+        ids = body.get("ids", [])
+        try:
+            for priority, aid in enumerate(ids):
+                db_exec("UPDATE claude_accounts SET priority=? WHERE id=?", (priority, aid))
+            return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -1992,6 +2102,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     "INSERT INTO claude_accounts (name, credentials, active, created) VALUES (?,?,?,?)",
                     (name, creds, 0, now)
                 )
+                try: _sync_account_to_dir(aid, creds)
+                except Exception as e: log(f"sync acct dir failed: {e}")
                 return {"ok": True, "accountId": aid, "name": name}
             except Exception as e:
                 return {"ok": False, "error": f"credentials 읽기 실패: {e}"}
