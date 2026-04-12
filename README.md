@@ -71,6 +71,9 @@ Claude AI → 응답 → 다음 노드로 자동 전달
 
 ## 시놀로지 NAS Docker 배포 (권장)
 
+> **처음 배포하거나 Docker가 익숙하지 않다면**: [📖 DEPLOYMENT.md](./DEPLOYMENT.md) 문서에 단계별 전체 가이드, 포트 선택 기준, 외부 접속 방법, 트러블슈팅 등이 자세히 정리되어 있습니다.
+
+
 ### 1. 시놀로지에 파일 업로드 (/volume1/docker/gils-flowdesk/)
 - Dockerfile, docker-compose.yml, .env (.env.example 복사), server.py, canvas.html 등
 
