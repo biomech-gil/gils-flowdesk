@@ -3256,27 +3256,51 @@ async function applySysPromptMemo(id){
   const picker=document.getElementById('sp-memo-picker');
   if(picker)picker.remove();
 }
-// 스페이스바로 확대 팝업 (Ctrl+Space)
+// ═══ 키보드 단축키 ═══
+// e.code(물리적 키)를 사용해 Alt 조합 시 OS 인터셉트 회피
 document.addEventListener('keydown',function(e){
+  // Ctrl+Space: Input/Output 확대 팝업
   if(e.ctrlKey&&e.code==='Space'&&selectedNode){
     const ae=document.activeElement;
-    if(ae&&ae.id==='sb-input'){e.preventDefault();openModal('input')}
-    else if(ae&&ae.id==='sb-output'){e.preventDefault();openModal('output')}
+    if(ae&&ae.id==='sb-input'){e.preventDefault();openModal('input');return}
+    else if(ae&&ae.id==='sb-output'){e.preventDefault();openModal('output');return}
   }
-  // Alt+N 또는 Ctrl+Shift+M: 신규 메모 탭 생성 + 바로 열림
-  // (Ctrl+N은 브라우저 신규 창 단축키라 가로챌 수 없음)
-  const isAltN=e.altKey&&(e.key==='n'||e.key==='N')&&!e.shiftKey&&!e.ctrlKey;
-  const isCtrlShiftM=e.ctrlKey&&e.shiftKey&&(e.key==='m'||e.key==='M')&&!e.altKey;
-  if(isAltN||isCtrlShiftM){
-    const ae=document.activeElement;
-    // 입력 필드에 포커스가 있으면 동작하지 않음 (타이핑 방해 방지)
-    if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
+
+  // Alt 조합 단축키 (입력 필드 포커스 시 비활성)
+  if(!e.altKey||e.ctrlKey||e.metaKey)return;
+  const ae=document.activeElement;
+  if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
+
+  // e.code는 물리 키 (KeyQ, KeyW, ...). IME/OS 영향 없음
+  const code=e.code;
+  const focusMemoContent=()=>setTimeout(()=>{const ta=document.getElementById('me-content');if(ta)ta.focus()},150);
+
+  const handlers={
+    // 노드 생성 (QWER)
+    'KeyQ':()=>{if(typeof addNode==='function')addNode('agent')},
+    'KeyW':()=>{if(typeof addNode==='function')addNode('memo')},
+    'KeyE':()=>{if(typeof addNode==='function')addNode('input')},
+    'KeyR':()=>{if(typeof addNode==='function')addNode('trigger')},
+    // 액션/파일 (ASDF)
+    'KeyA':()=>{if(typeof engine!=='undefined'&&engine.startAll)engine.startAll()},
+    'KeyS':()=>{if(typeof saveWorkflow==='function')saveWorkflow()},
+    'KeyD':()=>{if(typeof deleteSelectedNode==='function')deleteSelectedNode()},
+    'KeyF':()=>{if(typeof openFileManager==='function')openFileManager()},
+    // 편집/뷰 (ZXCV)
+    'KeyZ':()=>{if(typeof undo==='function')undo();else console.log('undo 미구현')},
+    'KeyX':()=>{if(typeof engine!=='undefined'&&engine.execSelected)engine.execSelected()},
+    'KeyC':()=>{if(typeof collapseAll==='function')collapseAll(true)},
+    'KeyV':()=>{if(typeof collapseAll==='function')collapseAll(false)},
+    // 보조
+    'KeyN':()=>{if(typeof newMemo==='function'){newMemo();focusMemoContent()}},
+    'KeyM':()=>{if(typeof toggleFolderPanel==='function')toggleFolderPanel()},
+    'KeyG':()=>{if(typeof arrangeAll==='function')arrangeAll()},
+    'KeyT':()=>{if(typeof fmOpenTrash==='function'){openFileManager();setTimeout(fmOpenTrash,200)}},
+    'Backquote':()=>{if(typeof toggleFocusMode==='function')toggleFocusMode()}
+  };
+  if(handlers[code]){
     e.preventDefault();
-    if(typeof newMemo==='function')newMemo();
-    setTimeout(()=>{
-      const ta=document.getElementById('me-content');
-      if(ta)ta.focus();
-    },150);
+    try{handlers[code]()}catch(err){console.error('shortcut error:',err)}
   }
 });
 function clearInput(){
