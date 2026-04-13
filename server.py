@@ -1184,6 +1184,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/accounts/activate": self._claude_account_activate,
             "/api/claude/accounts/test": self._claude_account_test,
             "/api/claude/accounts/next": self._claude_next_account,
+            "/api/claude/accounts/next-preview": self._claude_next_preview,
             "/api/claude/accounts/reorder": self._claude_accounts_reorder,
             "/api/claude/login/start": self._claude_login_start,
             "/api/claude/login/submit": self._claude_login_submit,
@@ -2457,6 +2458,33 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 else:
                     db_exec("INSERT INTO system_settings (key, value, updated) VALUES (?,?,?)", ("claude_last_used_id", str(next_id), now))
                 return {"ok": True, "accountId": next_id, "mode": mode}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _claude_next_preview(self, body):
+        """다음에 사용될 계정만 반환 (counter 증가 안 함, UI 표시용)"""
+        try:
+            mode_row = db_exec("SELECT value FROM system_settings WHERE key='claude_rotation_mode'", fetchone=True)
+            mode = mode_row["value"] if mode_row and mode_row.get("value") else "round-robin"
+            accounts = db_exec("SELECT id FROM claude_accounts ORDER BY priority ASC, id ASC", fetch=True) or []
+            if not accounts: return {"ok": False}
+            if mode == "manual":
+                active = db_exec("SELECT id FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
+                return {"ok": True, "accountId": active["id"] if active else accounts[0]["id"], "mode": mode}
+            elif mode == "sequential":
+                return {"ok": True, "accountId": accounts[0]["id"], "mode": mode}
+            else:
+                last_row = db_exec("SELECT value FROM system_settings WHERE key='claude_last_used_id'", fetchone=True)
+                last_id = 0
+                try:
+                    if last_row and last_row.get("value"): last_id = int(last_row["value"])
+                except: pass
+                ids = [a["id"] for a in accounts]
+                try:
+                    idx = ids.index(last_id); next_idx = (idx + 1) % len(ids)
+                except ValueError:
+                    next_idx = 0
+                return {"ok": True, "accountId": ids[next_idx], "mode": mode}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

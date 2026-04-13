@@ -671,18 +671,23 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
           <div style="display:flex;flex-direction:column;gap:4px;font-size:11px">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
               <input type="radio" name="rot-mode" value="round-robin" onchange="saveRotationMode(this.value)">
-              <span><b>🔄 번갈아 사용 (권장)</b> — 생성 순서대로 돌아가며 배정</span>
+              <span><b>🔄 번갈아 사용 (권장)</b> — 모든 계정을 순환 배정 <span style="color:#a3e635">(아래 ★ 활성 표시 무시됨)</span></span>
             </label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
               <input type="radio" name="rot-mode" value="sequential" onchange="saveRotationMode(this.value)">
-              <span><b>📊 우선순위 순서</b> — 1순위 계정 먼저 사용, 나중에 수동 변경</span>
+              <span><b>📊 우선순위 순서</b> — 1순위 계정 먼저 사용</span>
             </label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
               <input type="radio" name="rot-mode" value="manual" onchange="saveRotationMode(this.value)">
-              <span><b>✋ 수동</b> — 활성 계정 하나만 사용</span>
+              <span><b>✋ 수동</b> — ★ 활성 계정 1개만 사용</span>
             </label>
           </div>
           <div id="rot-mode-indicator" style="margin-top:6px;font-size:10px;color:var(--text-dim)"></div>
+          <div style="margin-top:8px;padding:8px;background:rgba(76,175,80,.08);border-left:3px solid var(--accent);border-radius:3px;font-size:10.5px;color:var(--text-dim);line-height:1.5">
+            💡 <b style="color:var(--text)">"활성"(★)은 수동 모드 전용</b>입니다.<br>
+            <b style="color:#a3e635">번갈아 모드</b>에서는 ★ 표시와 무관하게 등록된 <b>모든 계정이 차례대로 사용</b>됩니다.<br>
+            각 Agent 노드는 생성 시 배정받은 계정을 계속 씁니다 (사이드바 [계정] 드롭다운에서 확인/변경 가능).
+          </div>
         </div>
 
         <!-- Account list -->
@@ -4269,19 +4274,30 @@ async function loadClaudeAccounts(){
     el.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center">저장된 계정이 없습니다</div>';
     return;
   }
-  el.innerHTML = accounts.map((a, i) => `
-    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${a.active?'rgba(76,175,80,.15)':'var(--bg-0)'};border:1px solid ${a.active?'rgba(76,175,80,.4)':'var(--border)'};border-radius:4px;margin-bottom:4px">
+  // 현재 모드에 따라 표시 다르게
+  const curMode = document.querySelector('input[name="rot-mode"]:checked')?.value || 'round-robin';
+  const isManual = curMode === 'manual';
+  // 다음에 사용될 계정 미리보기 (round-robin)
+  let nextId = null;
+  if(curMode === 'round-robin'){
+    try{const nx=await api('POST','/api/claude/accounts/next-preview',{});if(nx.ok)nextId=nx.accountId}catch(e){}
+  }
+  el.innerHTML = accounts.map((a, i) => {
+    const isNext = a.id === nextId;
+    const highlight = isManual ? a.active : isNext;
+    return `
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${highlight?'rgba(76,175,80,.15)':'var(--bg-0)'};border:1px solid ${highlight?'rgba(76,175,80,.4)':'var(--border)'};border-radius:4px;margin-bottom:4px">
       <div style="display:flex;flex-direction:column;gap:1px">
         <button onclick="moveAccount(${a.id},-1)" style="font-size:8px;padding:0 4px;background:var(--bg-3);border:1px solid var(--border);cursor:pointer;color:var(--text)">▲</button>
         <button onclick="moveAccount(${a.id},1)" style="font-size:8px;padding:0 4px;background:var(--bg-3);border:1px solid var(--border);cursor:pointer;color:var(--text)">▼</button>
       </div>
-      <span style="color:${a.active?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'✓ ':'○ '}${i+1}. ${escapeHtml(a.name)}</span>
+      <span style="color:${highlight?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'★':'○'} ${i+1}. ${escapeHtml(a.name)}${isNext?' <span style="color:#a3e635;font-size:10px">(다음 차례)</span>':''}</span>
       <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
-      ${a.active?'':`<button onclick="activateClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;cursor:pointer">활성화</button>`}
+      ${a.active?'':`<button onclick="activateClaudeAccount(${a.id})" title="${isManual?'이 계정으로 활성화':'수동 모드일 때만 의미 있음'}" style="font-size:10px;padding:2px 6px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;cursor:pointer">${isManual?'활성화':'★ 마크만'}</button>`}
       <button onclick="testClaudeAccount(${a.id})" title="이 계정으로 인증 테스트" style="font-size:10px;padding:2px 6px;background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:3px;cursor:pointer">🧪 테스트</button>
       <button onclick="deleteClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 async function saveRotationMode(mode){
