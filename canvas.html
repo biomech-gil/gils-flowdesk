@@ -3275,28 +3275,42 @@ document.addEventListener('keydown',function(e){
   const code=e.code;
   const focusMemoContent=()=>setTimeout(()=>{const ta=document.getElementById('me-content');if(ta)ta.focus()},150);
 
+  // 화면 중앙의 캔버스 좌표 (캔버스 요소 생성 위치)
+  const centerCoord=()=>{
+    try{const p=s2c(cw.clientWidth/2,cw.clientHeight/2);return {x:p.x,y:p.y}}
+    catch{return {x:200,y:200}}
+  };
+
   const handlers={
     // 노드 생성 (QWER)
-    'KeyQ':()=>{if(typeof addNode==='function')addNode('agent')},
-    'KeyW':()=>{if(typeof addNode==='function')addNode('memo')},
-    'KeyE':()=>{if(typeof addNode==='function')addNode('input')},
-    'KeyR':()=>{if(typeof addNode==='function')addNode('trigger')},
+    'KeyQ':()=>{if(typeof addNode==='function')addNode('agent')},           // 🤖 Agent
+    'KeyW':()=>{if(typeof addNode==='function')addNode('memo')},            // 📝 Memo 노드
+    'KeyE':()=>{if(typeof addNode==='function')addNode('input')},           // 📎 Input
+    'KeyR':()=>{if(typeof addNode==='function')addNode('trigger')},         // ⚡ Trigger
+
+    // 캔버스 요소 (RTYB 계열)
+    'KeyB':()=>{if(typeof startCeCreate==='function')startCeCreate('region')}, // 🟦 영역(Box) 드래그 모드
+    'KeyT':()=>{const c=centerCoord();if(typeof addCeText==='function')addCeText(c.x,c.y)}, // 📝 텍스트 메모 즉시 추가
+    'KeyI':()=>{const inp=document.getElementById('ce-img-input');if(inp){try{ctxPos=centerCoord()}catch{};inp.click()}}, // 🖼 이미지 추가
+
     // 액션/파일 (ASDF)
-    'KeyA':()=>{if(typeof engine!=='undefined'&&engine.startAll)engine.startAll()},
-    'KeyS':()=>{if(typeof saveWorkflow==='function')saveWorkflow()},
-    'KeyD':()=>{if(typeof deleteSelectedNode==='function')deleteSelectedNode()},
-    'KeyF':()=>{if(typeof openFileManager==='function')openFileManager()},
+    'KeyA':()=>{if(typeof engine!=='undefined'&&engine.startAll)engine.startAll()},   // ▶ 전체 실행
+    'KeyS':()=>{if(typeof saveWorkflow==='function')saveWorkflow()},                  // 💾 저장
+    'KeyD':()=>{if(typeof deleteSelectedNode==='function')deleteSelectedNode()},      // 🗑 선택 삭제
+    'KeyF':()=>{if(typeof openFileManager==='function')openFileManager()},            // 📁 파일 탐색기
+
     // 편집/뷰 (ZXCV)
-    'KeyZ':()=>{if(typeof undo==='function')undo();else console.log('undo 미구현')},
-    'KeyX':()=>{if(typeof engine!=='undefined'&&engine.execSelected)engine.execSelected()},
-    'KeyC':()=>{if(typeof collapseAll==='function')collapseAll(true)},
-    'KeyV':()=>{if(typeof collapseAll==='function')collapseAll(false)},
-    // 보조
-    'KeyN':()=>{if(typeof newMemo==='function'){newMemo();focusMemoContent()}},
-    'KeyM':()=>{if(typeof toggleFolderPanel==='function')toggleFolderPanel()},
-    'KeyG':()=>{if(typeof arrangeAll==='function')arrangeAll()},
-    'KeyT':()=>{if(typeof fmOpenTrash==='function'){openFileManager();setTimeout(fmOpenTrash,200)}},
-    'Backquote':()=>{if(typeof toggleFocusMode==='function')toggleFocusMode()}
+    'KeyZ':()=>{if(typeof undo==='function')undo();else console.log('undo 미구현')},   // ↶ 되돌리기
+    'KeyX':()=>{if(typeof engine!=='undefined'&&engine.execSelected)engine.execSelected()}, // ▶ 선택 실행
+    'KeyC':()=>{if(typeof collapseAll==='function')collapseAll(true)},                // 🔽 전체 접기
+    'KeyV':()=>{if(typeof collapseAll==='function')collapseAll(false)},               // 🔼 전체 펼치기
+
+    // 메모/정렬/기타
+    'KeyN':()=>{if(typeof newMemo==='function'){newMemo();focusMemoContent()}},       // 📝 새 메모 탭
+    'KeyM':()=>{if(typeof toggleFolderPanel==='function')toggleFolderPanel()},        // 📂 메모폴더 패널
+    'KeyG':()=>{if(typeof arrangeAll==='function')arrangeAll()},                      // 📐 즉각 정렬
+    'KeyH':()=>{if(typeof showCtx==='function'){const c=centerCoord();showCtx(window.innerWidth/2,window.innerHeight/2,'canvas')}}, // ℹ️ 우클릭 메뉴(도움말) 열기
+    'Backquote':()=>{if(typeof toggleFocusMode==='function')toggleFocusMode()}        // 🔲 집중모드
   };
   if(handlers[code]){
     e.preventDefault();
