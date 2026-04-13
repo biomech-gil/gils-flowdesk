@@ -672,7 +672,7 @@ function renderMd(text){try{
   const preserved=(text||'').replace(/\n\n/g,'\n\n&nbsp;\n\n');
   return marked.parse(preserved,{breaks:true})
 }catch(e){return text}}
-const API=`http://${location.hostname}:8888`,LS_KEY='tmux_canvas_state';
+const API=location.origin,LS_KEY='tmux_canvas_state';
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
 const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};

@@ -60,7 +60,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div style="padding:7px 14px;font-size:12px;cursor:pointer;transition:.1s" onmouseover="this.style.background='var(--bg-4)'" onmouseout="this.style.background=''" onclick="chatFork()">🔀 대화 분기 생성</div>
 </div>
 <script>
-const API=`http://${location.hostname}:8888`,LS_KEY='tmux_canvas_state';
+const API=location.origin,LS_KEY='tmux_canvas_state';
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
