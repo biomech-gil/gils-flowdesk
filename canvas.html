@@ -2193,14 +2193,15 @@ document.addEventListener('click',e=>{
 });
 
 // ═══ COPY ═══
-function copyText(type){
+async function copyText(type){
   if(!selectedNode)return;let text='';
   if(type==='input')text=selectedNode.inputTemplate;
   else if(type==='output')text=selectedNode.outputCapture||'';
   else if(type==='resolved'){
-    // 실제 전송될 풀텍스트 ({{변수}} 치환 후)
+    // 실제 전송될 풀텍스트 ({{노드}} + {{@메모}} 모두 치환)
     text=selectedNode.inputTemplate;
     nodes.forEach(n=>{const ph=`{{${n.name}}}`;if(text.includes(ph))text=text.replaceAll(ph,n.outputCapture||'')});
+    text=await resolveMemoPlaceholders(text);
   }
   navigator.clipboard.writeText(text).then(()=>{
     const msg=type==='resolved'?'풀텍스트(치환됨)':'텍스트';
@@ -2255,15 +2256,30 @@ function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout
 function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('[data-role="name"]').textContent=v;selectedNode.el.querySelector('.nd-name-edit').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
 function sbPane(v){if(selectedNode)selectedNode.paneIndex=v?parseInt(v):null;autoSave()}
 function sbInput(v){if(!selectedNode)return;selectedNode.inputTemplate=v;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=v;updateCharCount();checkTokenLimit(selectedNode);updateResolvedPreview()}
-function updateCharCount(){
+async function updateCharCount(){
   const el=document.getElementById('sb-charcount');if(!el||!selectedNode)return;
   const raw=selectedNode.inputTemplate||'';
   let resolved=raw;
   [...nodes,...canvasEls.filter(c=>c.nodeType)].forEach(n=>{const ph=`{{${n.name||n.nodeName}}}`;if(resolved.includes(ph))resolved=resolved.replaceAll(ph,n.outputCapture||`[${n.name}:비어있음]`)});
+  // 메모 placeholder 캐시 기반 동기 치환 → 즉시 표시
+  resolved=resolveMemoPlaceholdersSync(resolved);
   const len=resolved.length;const LIMIT=23000;
-  if(len>LIMIT){el.textContent=`${len.toLocaleString()}자 (${(len-LIMIT).toLocaleString()}자 초과!)`;el.style.color='#f44'}
-  else if(len>18000){el.textContent=`${len.toLocaleString()}자`;el.style.color='#fa0'}
-  else{el.textContent=`${len.toLocaleString()}자`;el.style.color='var(--text-muted)'}
+  // 캐시 안 된 메모가 있으면 표시
+  const hasUnresolved=resolved.includes('{{@');
+  const suffix=hasUnresolved?' (메모 로딩 중...)':'';
+  if(len>LIMIT){el.textContent=`${len.toLocaleString()}자 (${(len-LIMIT).toLocaleString()}자 초과!)${suffix}`;el.style.color='#f44'}
+  else if(len>18000){el.textContent=`${len.toLocaleString()}자${suffix}`;el.style.color='#fa0'}
+  else{el.textContent=`${len.toLocaleString()}자${suffix}`;el.style.color='var(--text-muted)'}
+  // 캐시 안된 메모가 있으면 비동기로 풀 치환 후 다시 갱신
+  if(hasUnresolved){
+    const full=await resolveMemoPlaceholders(raw);
+    let r2=full;
+    [...nodes,...canvasEls.filter(c=>c.nodeType)].forEach(n=>{const ph=`{{${n.name||n.nodeName}}}`;if(r2.includes(ph))r2=r2.replaceAll(ph,n.outputCapture||`[${n.name}:비어있음]`)});
+    const l2=r2.length;
+    if(l2>LIMIT){el.textContent=`${l2.toLocaleString()}자 (${(l2-LIMIT).toLocaleString()}자 초과!)`;el.style.color='#f44'}
+    else if(l2>18000){el.textContent=`${l2.toLocaleString()}자`;el.style.color='#fa0'}
+    else{el.textContent=`${l2.toLocaleString()}자`;el.style.color='var(--text-muted)'}
+  }
 }
 function sbTsz(d){document.querySelectorAll('.sb-sec textarea,.sb-sec .ov').forEach(v=>{const c=parseFloat(v.style.fontSize||'11')||11;v.style.fontSize=Math.max(8,Math.min(24,c+d*10))+'px'})}
 function sbHist(i){if(!selectedNode||i==='')return;const h=selectedNode.history[parseInt(i)];if(h){document.getElementById('sb-input').value=h.input||'';document.getElementById('sb-output').textContent=h.output||''}}
@@ -2384,10 +2400,12 @@ const engine={
   upstream(nid){return conns.filter(c=>c.tid===nid).map(c=>findNodeOrCe(c.sid)).filter(Boolean)},
   downstream(nid){return conns.filter(c=>c.sid===nid).map(c=>findNodeOrCe(c.tid)).filter(Boolean)},
   canExec(nid){return this.upstream(nid).every(n=>n.status==='complete'||(n.outputCapture&&n.outputCapture.trim()))},
-  resolve(nd){
+  async resolve(nd){
     let t=nd.inputTemplate;
     const all=[...nodes,...canvasEls.filter(c=>c.nodeType)];
     all.forEach(n=>{const ph=`{{${n.name||n.nodeName}}}`;if(t.includes(ph))t=t.replaceAll(ph,n.outputCapture||'')});
+    // {{@메모이름}} placeholder 풀 내용으로 치환
+    t=await resolveMemoPlaceholders(t);
     nd.inputResolved=t;return t;
   },
   async executeNode(nd, retryCount=0){
@@ -2408,7 +2426,7 @@ const engine={
     const upstreamImages=upstream.filter(u=>u.type==='image'&&u.src).map(u=>u.src);
     const mergedImages=[...new Set([...(nd.images||[]),...upstreamImages])];
 
-    const input=this.resolve(nd);
+    const input=await this.resolve(nd);
     // 입력이 비어있어도 이미지가 있으면 실행 허용 (이미지 분석)
     if(!input.trim()&&mergedImages.length===0){this.setSt(nd,'error');return}
 
@@ -3663,33 +3681,78 @@ function closeAtPicker(){
   if(atPickerEl){atPickerEl.remove();atPickerEl=null}
   atPickerCtx=null;
 }
+// 메모 본문 캐시 — placeholder 치환용
+const memoContentCache={};
 async function insertMemoAtCursor(memoId){
   if(!atPickerCtx)return;
   const {ta,nd,atIdx}=atPickerCtx;
-  // 메모 본문 가져오기
+  // 메모 본문 미리 가져와 캐시
   const r=await api('GET',`/api/memo/get?id=${memoId}`);
   if(!r.ok||!r.memo){alert('메모 로드 실패');closeAtPicker();return}
   const memo=r.memo;
+  memoContentCache[memoId]={id:memoId,name:memo.name||'무제',content:memo.content||''};
+  // 짧은 placeholder 만 input에 삽입 → 실행/완성본/카운트시 풀내용 치환
+  const placeholder=`{{@${memo.name||'무제'}}}`;
   const before=ta.value.substring(0,atIdx);
   const after=ta.value.substring(ta.selectionStart);
-  // 포맷팅: 구분선 + 제목 + 내용 + 구분선
-  const formatted=`\n\n────────────────────\n📝 ${memo.name||'무제'}\n────────────────────\n${memo.content||''}\n────────────────────\n\n`;
-  const newVal=before+formatted+after;
+  const newVal=before+placeholder+after;
   ta.value=newVal;
-  // 커서 위치 = 삽입 끝
-  const newCur=before.length+formatted.length;
+  const newCur=before.length+placeholder.length;
   ta.selectionStart=ta.selectionEnd=newCur;
-  // 노드 모델 갱신 + 사이드바 동기화
   if(nd){
     nd.inputTemplate=newVal;
     if(selectedNode===nd){const sb=document.getElementById('sb-input');if(sb&&sb!==ta)sb.value=newVal}
     const ndTa=nd.el?nd.el.querySelector('.nd-in textarea'):null;
     if(ndTa&&ndTa!==ta)ndTa.value=newVal;
     if(typeof checkTokenLimit==='function')checkTokenLimit(nd);
+    if(typeof updateCharCount==='function')updateCharCount();
+    if(typeof updateResolvedPreview==='function')updateResolvedPreview();
   }
   if(typeof autoSave==='function')autoSave();
   closeAtPicker();
   ta.focus();
+}
+
+// {{@메모이름}} 패턴을 실제 메모 내용(구분선+제목+본문+구분선)으로 치환
+async function resolveMemoPlaceholders(text){
+  if(!text||!text.includes('{{@'))return text;
+  const regex=/\{\{@([^}]+)\}\}/g;
+  const matches=[...text.matchAll(regex)];
+  if(matches.length===0)return text;
+  // 메모 목록 캐시 보장
+  if(typeof loadAtMemoData==='function')await loadAtMemoData();
+  for(const m of matches){
+    const name=m[1];
+    let memo=Object.values(memoContentCache).find(mc=>mc.name===name);
+    if(!memo&&atMemoCache){
+      const found=atMemoCache.find(mm=>(mm.name||'')===name);
+      if(found){
+        const r=await api('GET',`/api/memo/get?id=${found.id}`);
+        if(r.ok&&r.memo){
+          memo={id:found.id,name:r.memo.name||'무제',content:r.memo.content||''};
+          memoContentCache[found.id]=memo;
+        }
+      }
+    }
+    if(memo){
+      const formatted=`\n────────────────────\n📝 ${memo.name}\n────────────────────\n${memo.content}\n────────────────────\n`;
+      text=text.split(m[0]).join(formatted);
+    }
+    // 못 찾으면 그대로 둠 (사용자가 보고 알 수 있게)
+  }
+  return text;
+}
+// 동기 버전 — 캐시에만 의존 (token count 등 빠른 응답 필요 시)
+function resolveMemoPlaceholdersSync(text){
+  if(!text||!text.includes('{{@'))return text;
+  const regex=/\{\{@([^}]+)\}\}/g;
+  return text.replace(regex,(full,name)=>{
+    const memo=Object.values(memoContentCache).find(mc=>mc.name===name);
+    if(memo){
+      return `\n────────────────────\n📝 ${memo.name}\n────────────────────\n${memo.content}\n────────────────────\n`;
+    }
+    return full;  // 캐시 없으면 placeholder 그대로 (정확한 카운트는 비동기 resolve 후 갱신)
+  });
 }
 // 외부 클릭 시 picker 닫기
 document.addEventListener('mousedown',e=>{
@@ -3703,6 +3766,8 @@ function checkTokenLimit(nd){
   let t=nd.inputTemplate||'';
   const all=[...nodes,...canvasEls.filter(c=>c.nodeType)];
   all.forEach(n=>{const ph=`{{${n.name||n.nodeName}}}`;if(t.includes(ph))t=t.replaceAll(ph,n.outputCapture||'')});
+  // {{@메모}} placeholder 동기 치환 (캐시 기반)
+  t=resolveMemoPlaceholdersSync(t);
   const over=t.length>TOKEN_LIMIT;
   nd.el.classList.toggle('token-warn',over);
   // collapsed badge: add/remove red dot
@@ -3730,22 +3795,44 @@ function toggleResolvedPreview(){
     ta.style.display='';rv.style.display='none';
   }
 }
-function updateResolvedPreview(){
+async function updateResolvedPreview(){
   if(!resolvedPreviewOn||!selectedNode)return;
   const rv=document.getElementById('sb-resolved');
   const tpl=selectedNode.inputTemplate||'';
-  // Build HTML with color-coded substitutions
   let html='';let last=0;
   const regex=/\{\{([^}]+)\}\}/g;let m;
+  // 메모 placeholder 캐시 보장 (비동기)
+  if(tpl.includes('{{@')&&typeof loadAtMemoData==='function')await loadAtMemoData();
   while((m=regex.exec(tpl))!==null){
-    // text before match
     html+=escapeHtml(tpl.substring(last,m.index));
-    // find the source node
-    const srcName=m[1];
-    const src=nodes.find(n=>n.name===srcName)||canvasEls.find(c=>(c.name||c.nodeName)===srcName);
-    const val=src?(src.outputCapture||''):'';
-    if(val){html+=`<span class="rv-var">${escapeHtml(val)}</span>`}
-    else{html+=`<span style="color:var(--red)">${escapeHtml(m[0])}</span>`}
+    const inner=m[1];
+    if(inner.startsWith('@')){
+      // 메모 placeholder
+      const memoName=inner.substring(1);
+      let memo=Object.values(memoContentCache).find(mc=>mc.name===memoName);
+      if(!memo&&atMemoCache){
+        const found=atMemoCache.find(mm=>(mm.name||'')===memoName);
+        if(found){
+          const r=await api('GET',`/api/memo/get?id=${found.id}`);
+          if(r.ok&&r.memo){
+            memo={id:found.id,name:r.memo.name||'무제',content:r.memo.content||''};
+            memoContentCache[found.id]=memo;
+          }
+        }
+      }
+      if(memo){
+        const formatted=`\n────────────────────\n📝 ${memo.name}\n────────────────────\n${memo.content}\n────────────────────\n`;
+        html+=`<span class="rv-var" style="background:rgba(245,158,11,.15);border-left:3px solid #ebcb8b;padding:2px 4px">${escapeHtml(formatted)}</span>`;
+      }else{
+        html+=`<span style="color:var(--red)">[메모 못 찾음: ${escapeHtml(memoName)}]</span>`;
+      }
+    }else{
+      // 노드 출력 placeholder
+      const src=nodes.find(n=>n.name===inner)||canvasEls.find(c=>(c.name||c.nodeName)===inner);
+      const val=src?(src.outputCapture||''):'';
+      if(val){html+=`<span class="rv-var">${escapeHtml(val)}</span>`}
+      else{html+=`<span style="color:var(--red)">${escapeHtml(m[0])}</span>`}
+    }
     last=m.index+m[0].length;
   }
   html+=escapeHtml(tpl.substring(last));
