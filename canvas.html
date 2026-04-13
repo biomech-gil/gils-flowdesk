@@ -558,10 +558,28 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 
         <!-- Actions -->
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="startClaudeWebLogin()" style="padding:6px 12px;background:linear-gradient(135deg,#3B82F6,#1E40AF);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">🌐 웹으로 로그인</button>
+          <button onclick="document.getElementById('s-claude-file').click()" style="padding:6px 12px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600" title="가장 권장: claude login 후 파일 업로드">📂 .credentials.json 파일 (권장)</button>
+          <button onclick="showClaudeTokenForm()" style="padding:6px 12px;background:rgba(245,158,11,.2);color:#ebcb8b;border:1px solid rgba(245,158,11,.3);border-radius:4px;cursor:pointer;font-size:12px">🔑 토큰만 붙여넣기</button>
           <button onclick="showClaudePasteForm()" style="padding:6px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📋 JSON 붙여넣기</button>
+          <button onclick="startClaudeWebLogin()" style="padding:6px 12px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:4px;cursor:pointer;font-size:12px" title="제한적 권한 (inference만)">🌐 웹으로 로그인 (제한적)</button>
           <input type="file" id="s-claude-file" accept=".json" style="display:none">
-          <button onclick="document.getElementById('s-claude-file').click()" style="padding:6px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📂 파일에서</button>
+        </div>
+
+        <!-- 토큰 직접 입력 폼 -->
+        <div id="claude-token-form" style="display:none;margin-top:10px;padding:10px;background:var(--bg-0);border:1px solid rgba(245,158,11,.3);border-radius:4px">
+          <div style="font-size:11px;color:#ebcb8b;margin-bottom:6px;line-height:1.6">
+            <b>사용 방법:</b><br>
+            1. 로컬 터미널(PC)에서 <code>claude setup-token</code> 실행<br>
+            2. URL로 Anthropic 승인 → 코드 붙여넣기<br>
+            3. 표시된 토큰(<code>sk-ant-oat01-...</code>)을 복사<br>
+            4. 아래에 붙여넣기
+          </div>
+          <input type="text" id="claude-token-name" placeholder="계정 이름" style="width:100%;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <input type="text" id="claude-token-value" placeholder="sk-ant-oat01-..." style="width:100%;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px">
+          <div style="display:flex;gap:6px">
+            <button onclick="saveClaudeToken()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장</button>
+            <button onclick="document.getElementById('claude-token-form').style.display='none'" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+          </div>
         </div>
 
         <!-- Paste form (hidden by default) -->
@@ -3498,6 +3516,31 @@ async function deleteClaudeAccount(id){
   loadClaudeAccounts();
 }
 
+function showClaudeTokenForm(){
+  document.getElementById('claude-token-form').style.display='block';
+  document.getElementById('claude-token-name').value='';
+  document.getElementById('claude-token-value').value='';
+}
+async function saveClaudeToken(){
+  const name=document.getElementById('claude-token-name').value.trim()||'토큰 계정';
+  const token=document.getElementById('claude-token-value').value.trim();
+  if(!token)return alert('토큰을 입력하세요');
+  if(!token.startsWith('sk-ant-'))return alert('올바른 Claude 토큰이 아닙니다 (sk-ant-으로 시작해야 함)');
+  // credentials.json 호환 형식으로 저장
+  const creds=JSON.stringify({
+    claudeAiOauth:{
+      accessToken:token,
+      refreshToken:"",
+      expiresAt:Date.now()+365*24*60*60*1000
+    }
+  });
+  const r=await api('POST','/api/claude/accounts/save',{name,credentials:creds});
+  if(r.ok){
+    document.getElementById('claude-token-form').style.display='none';
+    loadClaudeAccounts();
+    alert('저장 완료 — 활성화 버튼을 눌러 사용하세요\n\n⚠️ 이 토큰은 inference 권한만 있습니다.\n도구 사용이 필요하면 .credentials.json 파일 업로드를 권장합니다.');
+  } else alert('실패: '+r.error);
+}
 function showClaudePasteForm(){
   document.getElementById('claude-paste-form').style.display = 'block';
   document.getElementById('claude-name-input').value = '';
