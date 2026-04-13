@@ -388,11 +388,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     </div>
   </div>
 </div>
-<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="fav-nav" id="fav-nav"></div><button onclick="openFileManager()" title="작업 폴더 파일 탐색" style="margin-left:8px;background:none;border:1px solid rgba(245,158,11,.3);color:#ebcb8b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">📁 파일</button><button onclick="openSettings()" title="시스템 설정" style="background:none;border:1px solid rgba(139,92,246,.3);color:#b48ead;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">⚙️ 설정</button><button onclick="doLogout()" title="로그아웃" style="background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;flex-shrink:0">🔒 로그아웃</button></nav>
+<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><span style="margin-left:16px;font-size:.7em;color:#ebcb8b;font-weight:600;letter-spacing:.5px">⭐ 프로젝트 즐겨찾기:</span><div class="fav-nav" id="fav-nav"></div><button onclick="openFileManager()" title="작업 폴더 파일 탐색" style="margin-left:8px;background:none;border:1px solid rgba(245,158,11,.3);color:#ebcb8b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">📁 파일</button><button onclick="openSettings()" title="시스템 설정" style="background:none;border:1px solid rgba(139,92,246,.3);color:#b48ead;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">⚙️ 설정</button><button onclick="doLogout()" title="로그아웃" style="background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;flex-shrink:0">🔒 로그아웃</button></nav>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 생성">📝 메모생성</button>
   <button class="fld" onclick="toggleFolderPanel()" title="메모 폴더 관리">📁 메모폴더</button>
-  <button class="fld" onclick="openFavPopup()" title="즐겨찾기 메모">⭐</button>
+  <button class="fld" onclick="openFavPopup()" title="📌 핀 고정한 메모 빠른접근 (메모 즐겨찾기)">⭐ 메모즐겨찾기</button>
   <span style="font-size:10px;color:var(--text-muted);margin-left:6px">최근:</span>
 </div>
 <div id="folder-panel">
@@ -589,7 +589,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div class="fav-modal-bd" id="fav-modal-bd"></div>
   <div class="fav-modal-tools">
     <button onclick="favNewSubfolder()">+ 하위폴더</button>
-    <button onclick="favAddMemo()">+ 메모 추가</button>
+    <button onclick="favAddProject()">+ 프로젝트 추가</button>
+    <button onclick="favAddMemo()" title="메모도 같이 묶고 싶을 때">+ 메모 추가</button>
     <button onclick="favRenameCurrent()" id="fav-rename-btn">✏ 폴더명 수정</button>
     <button onclick="favDeleteCurrent()" id="fav-delete-btn" style="color:#bf616a;border-color:rgba(244,67,54,.3)">🗑 폴더 삭제</button>
   </div>
@@ -3571,7 +3572,8 @@ async function loadPinnedMemos(){
 let favCurrentFolderId=null,favCrumbStack=[],_allMemosCache=[];
 
 async function loadFavNav(){
-  const r=await api('GET','/api/fav/folders');
+  // 프로젝트 즐겨찾기 (kind=project)
+  const r=await api('GET','/api/fav/folders?kind=project');
   const el=document.getElementById('fav-nav');
   if(!el)return;
   const folders=(r.ok&&r.folders)||[];
@@ -3580,7 +3582,7 @@ async function loadFavNav(){
     const color=f.color||'rgba(245,158,11,.3)';
     html+=`<span class="fav-folder-chip" style="border-color:${color}" onclick="openFavFolder(${f.id},'${escH(f.name)}')" oncontextmenu="event.preventDefault();favRenameFolder(${f.id},'${escH(f.name)}')" title="${escH(f.name)} (우클릭=이름변경)">${renderIcon(f.icon||'⭐',14)} ${escH(f.name)}</span>`;
   });
-  html+=`<span class="fav-add-btn" onclick="favNewTopFolder()" title="새 즐겨찾기 폴더">+ 새 폴더</span>`;
+  html+=`<span class="fav-add-btn" onclick="favNewTopFolder()" title="새 프로젝트 즐겨찾기 폴더">+ 새 폴더</span>`;
   el.innerHTML=html;
 }
 
@@ -3595,9 +3597,9 @@ function renderIcon(ic,size){
 }
 
 async function favNewTopFolder(){
-  const name=prompt('새 즐겨찾기 폴더 이름:');
+  const name=prompt('새 프로젝트 즐겨찾기 폴더 이름:');
   if(!name)return;
-  await api('POST','/api/fav/folder/save',{name,parentId:null});
+  await api('POST','/api/fav/folder/save',{name,parentId:null,kind:'project'});
   loadFavNav();
 }
 
@@ -3630,9 +3632,8 @@ function closeFavModal(){
 
 async function renderFavModal(){
   const fid=favCurrentFolderId;if(!fid)return;
-  // 빵부스러기
   const crumb=document.getElementById('fav-crumb');
-  let cb=`<a onclick="closeFavModal()">⭐ 즐겨찾기</a>`;
+  let cb=`<a onclick="closeFavModal()">⭐ 프로젝트 즐겨찾기</a>`;
   favCrumbStack.forEach((c,i)=>{
     cb+=` › `;
     if(i<favCrumbStack.length-1){cb+=`<a onclick="openFavFolder(${c.id},'${escH(c.name)}')">${escH(c.name)}</a>`;}
@@ -3640,9 +3641,8 @@ async function renderFavModal(){
   });
   crumb.innerHTML=cb;
 
-  // 하위 폴더 + 항목 동시 로드
   const [foldersR,itemsR]=await Promise.all([
-    api('GET',`/api/fav/folders?parentId=${fid}`),
+    api('GET',`/api/fav/folders?parentId=${fid}&kind=project`),
     api('GET',`/api/fav/items?folderId=${fid}`)
   ]);
   const folders=(foldersR.ok&&foldersR.folders)||[];
@@ -3651,13 +3651,13 @@ async function renderFavModal(){
   const bd=document.getElementById('fav-modal-bd');
   let html='';
   if(folders.length===0&&items.length===0){
-    html='<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:.85em">비어있음<br><span style="font-size:.9em">아래 [+ 하위폴더] 또는 [+ 메모 추가] 버튼으로 채우세요</span></div>';
+    html='<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:.85em">비어있음<br><span style="font-size:.9em">아래 [+ 하위폴더] 또는 [+ 프로젝트 추가] 버튼으로 채우세요</span></div>';
   } else {
     if(folders.length){
       html+='<div style="font-size:.7em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:4px 4px 6px">📁 하위 폴더</div>';
       folders.forEach(f=>{
         html+=`<div class="fav-row folder" onclick="openFavFolder(${f.id},'${escH(f.name)}')">
-          <span class="ic">${f.icon||'📁'}</span>
+          <span class="ic">${renderIcon(f.icon||'📁',16)}</span>
           <span class="nm">${escH(f.name)}</span>
           <div class="actions">
             <button onclick="event.stopPropagation();favRenameFolder(${f.id},'${escH(f.name)}')" title="이름 변경">✏</button>
@@ -3667,11 +3667,14 @@ async function renderFavModal(){
       });
     }
     if(items.length){
-      html+='<div style="font-size:.7em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 4px 6px">📝 메모</div>';
+      html+='<div style="font-size:.7em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 4px 6px">📂 프로젝트 / 메모</div>';
       items.forEach(it=>{
-        html+=`<div class="fav-row" onclick="openMemoEditor(${it.memo_id})">
-          <span class="ic">📝</span>
-          <span class="nm">${escH(it.memo_name||'무제')}</span>
+        const isProj=it.kind==='project';
+        const icon=isProj?'📂':'📝';
+        const action=isProj?`window.open(location.origin+'/#wf=${it.targetId}','_blank')`:`openMemoEditor(${it.targetId})`;
+        html+=`<div class="fav-row" onclick="${action}">
+          <span class="ic">${icon}</span>
+          <span class="nm">${escH(it.title||'무제')}</span>
           <span class="pv">${escH((it.preview||'').substring(0,40))}</span>
           <div class="actions">
             <button onclick="event.stopPropagation();favRemoveItem(${it.id})" title="이 폴더에서 제거">✕</button>
@@ -3687,7 +3690,7 @@ async function favNewSubfolder(){
   if(!favCurrentFolderId)return;
   const name=prompt('새 하위 폴더 이름:');
   if(!name)return;
-  await api('POST','/api/fav/folder/save',{name,parentId:favCurrentFolderId});
+  await api('POST','/api/fav/folder/save',{name,parentId:favCurrentFolderId,kind:'project'});
   renderFavModal();
 }
 
@@ -3727,16 +3730,42 @@ async function favRemoveItem(itemId){
 
 async function favAddMemo(){
   if(!favCurrentFolderId)return;
-  // 전체 메모 로드
   const r=await api('GET','/api/memo/list');
   _allMemosCache=(r.ok&&r.memos)||[];
   document.getElementById('memo-picker-search').value='';
   document.getElementById('memo-picker').style.display='block';
+  window._memoPickerMode='fav-memo';
   renderMemoPicker('');
+}
+async function favAddProject(){
+  if(!favCurrentFolderId)return;
+  const r=await api('GET','/api/project/list-meta');
+  const projects=(r.ok&&r.projects)||[];
+  if(projects.length===0)return alert('저장된 프로젝트가 없습니다');
+  const list=document.getElementById('memo-picker-list');
+  document.querySelector('#memo-picker > div > span').textContent='📂 즐겨찾기에 추가할 프로젝트 선택';
+  document.getElementById('memo-picker-search').value='';
+  list.innerHTML=projects.slice(0,200).map(p=>`
+    <div onclick="favPickProject('${p.id}')" style="display:flex;gap:8px;align-items:center;padding:7px 10px;cursor:pointer;border-radius:4px;font-size:.82em" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">
+      <span>📂</span>
+      <span style="flex:1;color:var(--text)">${escH(p.name||'무제')}</span>
+      <span style="font-size:.75em;color:var(--text-muted)">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount||0}</span>
+    </div>`).join('');
+  document.getElementById('memo-picker').style.display='block';
+}
+async function favPickProject(projectId){
+  if(!favCurrentFolderId)return;
+  const r=await api('POST','/api/fav/item/add',{folderId:favCurrentFolderId,kind:'project',targetId:projectId});
+  document.getElementById('memo-picker').style.display='none';
+  if(r.duplicate)alert('이미 이 폴더에 있는 프로젝트입니다');
+  renderFavModal();
 }
 
 function renderMemoPicker(filter){
   const list=document.getElementById('memo-picker-list');
+  // 타이틀을 메모 모드로 복원 (이전에 프로젝트 picker로 변경됐을 수 있음)
+  const ttl=document.querySelector('#memo-picker > div > span');
+  if(ttl)ttl.textContent='📝 추가할 메모 선택';
   const q=(filter||'').toLowerCase();
   const filtered=_allMemosCache.filter(m=>!q||(m.name||'').toLowerCase().includes(q)||(m.preview||'').toLowerCase().includes(q));
   if(filtered.length===0){list.innerHTML='<div style="padding:30px;text-align:center;color:var(--text-muted)">메모 없음</div>';return}
@@ -3748,7 +3777,6 @@ function renderMemoPicker(filter){
 }
 
 async function favPickMemo(memoId){
-  // 첨부 모드 분기 (attachAddMemo가 트리거함)
   if(window._memoPickerMode==='attach'){
     window._memoPickerMode=null;
     document.getElementById('memo-picker').style.display='none';
@@ -3758,8 +3786,10 @@ async function favPickMemo(memoId){
     renderAttachments();
     return;
   }
+  // fav-memo 모드 (즐겨찾기에 메모 첨부)
   if(!favCurrentFolderId)return;
-  const r=await api('POST','/api/fav/item/add',{folderId:favCurrentFolderId,memoId});
+  window._memoPickerMode=null;
+  const r=await api('POST','/api/fav/item/add',{folderId:favCurrentFolderId,kind:'memo',targetId:memoId});
   document.getElementById('memo-picker').style.display='none';
   if(r.duplicate)alert('이미 이 폴더에 있는 메모입니다');
   renderFavModal();

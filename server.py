@@ -392,6 +392,9 @@ def init_db():
             ("messages", "chat_only", "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1"),
             ("claude_accounts", "rate_limited_until", "ALTER TABLE claude_accounts ADD COLUMN rate_limited_until TEXT"),
             ("claude_accounts", "rate_limit_reason", "ALTER TABLE claude_accounts ADD COLUMN rate_limit_reason TEXT"),
+            ("fav_items", "kind", "ALTER TABLE fav_items ADD COLUMN kind TEXT DEFAULT 'project'"),
+            ("fav_items", "target_id", "ALTER TABLE fav_items ADD COLUMN target_id TEXT"),
+            ("fav_folders", "kind", "ALTER TABLE fav_folders ADD COLUMN kind TEXT DEFAULT 'project'"),
         ]
         for tbl, col, alter_sql in alter_checks:
             cur.execute("""
@@ -562,6 +565,9 @@ def init_db():
             "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1",
             "ALTER TABLE claude_accounts ADD COLUMN rate_limited_until TEXT",
             "ALTER TABLE claude_accounts ADD COLUMN rate_limit_reason TEXT",
+            "ALTER TABLE fav_items ADD COLUMN kind TEXT DEFAULT 'project'",
+            "ALTER TABLE fav_items ADD COLUMN target_id TEXT",
+            "ALTER TABLE fav_folders ADD COLUMN kind TEXT DEFAULT 'project'",
         ]:
             try:
                 db.execute(stmt)
@@ -2139,11 +2145,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _fav_folders(self, params):
         parent_id = params.get("parentId", [""])[0]
+        kind = params.get("kind", ["project"])[0]  # 기본: 프로젝트 즐겨찾기
         if parent_id and parent_id != "null":
-            rows = db_exec("SELECT id, name, parent_id, color, icon, sort_order FROM fav_folders WHERE parent_id=? ORDER BY sort_order, id", (int(parent_id),), fetch=True)
+            rows = db_exec("SELECT id, name, parent_id, color, icon, sort_order, kind FROM fav_folders WHERE parent_id=? AND (kind=? OR kind IS NULL) ORDER BY sort_order, id", (int(parent_id), kind), fetch=True)
         else:
-            rows = db_exec("SELECT id, name, parent_id, color, icon, sort_order FROM fav_folders WHERE parent_id IS NULL ORDER BY sort_order, id", fetch=True)
-        return {"ok": True, "folders": rows}
+            rows = db_exec("SELECT id, name, parent_id, color, icon, sort_order, kind FROM fav_folders WHERE parent_id IS NULL AND (kind=? OR kind IS NULL) ORDER BY sort_order, id", (kind,), fetch=True)
+        return {"ok": True, "folders": rows or []}
 
     def _fav_folder_save(self, body):
         fid = body.get("id")
@@ -2170,9 +2177,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             name = body.get("name", "새 폴더")
             color = body.get("color", "")
             icon = body.get("icon", "⭐")
+            kind = body.get("kind", "project")
             parent_id = body.get("parentId")
             if parent_id in ("", 0, None): parent_id = None
-            new_id = db_exec("INSERT INTO fav_folders (name, parent_id, color, icon, created) VALUES (?,?,?,?,?)", (name, parent_id, color, icon, now))
+            new_id = db_exec("INSERT INTO fav_folders (name, parent_id, color, icon, kind, created) VALUES (?,?,?,?,?,?)", (name, parent_id, color, icon, kind, now))
             return {"ok": True, "id": new_id}
 
     def _fav_folder_delete(self, body):
@@ -2187,34 +2195,57 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _fav_items(self, params):
         fid = params.get("folderId", [""])[0]
         if not fid: return {"ok": True, "items": []}
-        # join memos
+        # 양쪽 호환: 신규는 target_id+kind, 레거시는 memo_id (kind='memo'로 간주)
         rows = db_exec("""
-            SELECT i.id, i.memo_id, i.sort_order,
-                   m.name as memo_name, substr(m.content,1,80) as preview, m.pinned
-            FROM fav_items i LEFT JOIN memos m ON m.id=i.memo_id
-            WHERE i.folder_id=? ORDER BY i.sort_order, i.id
-        """, (int(fid),), fetch=True)
-        return {"ok": True, "items": rows}
+            SELECT id, memo_id, target_id, kind, sort_order
+            FROM fav_items WHERE folder_id=? ORDER BY sort_order, id
+        """, (int(fid),), fetch=True) or []
+        out = []
+        for r in rows:
+            kind = r.get("kind") or ('memo' if r.get("memo_id") else 'project')
+            tid = r.get("target_id") or (str(r.get("memo_id")) if r.get("memo_id") else None)
+            if not tid: continue
+            item = {"id": r["id"], "kind": kind, "targetId": tid, "sortOrder": r["sort_order"]}
+            try:
+                if kind == 'memo':
+                    m = db_exec("SELECT name, substr(content,1,80) as preview FROM memos WHERE id=?", (int(tid),), fetchone=True)
+                    if m: item["title"] = m.get("name") or "무제"; item["preview"] = m.get("preview") or ""
+                elif kind == 'project':
+                    p = db_exec("SELECT name, modified FROM projects WHERE id=?", (tid,), fetchone=True)
+                    if p: item["title"] = p.get("name") or "무제"; item["preview"] = (p.get("modified") or "")[:16]
+            except Exception:
+                pass
+            out.append(item)
+        return {"ok": True, "items": out}
 
     def _fav_item_add(self, body):
         fid = body.get("folderId")
-        mid = body.get("memoId")
-        if not fid or not mid: return {"ok": False, "error": "folderId and memoId required"}
+        kind = body.get("kind", "project")
+        target_id = body.get("targetId") or body.get("memoId") or body.get("projectId")
+        if not fid or target_id is None: return {"ok": False, "error": "folderId and targetId required"}
+        target_id = str(target_id)
         # 중복 방지
-        existing = db_exec("SELECT id FROM fav_items WHERE folder_id=? AND memo_id=?", (int(fid), int(mid)), fetchone=True)
+        existing = db_exec("SELECT id FROM fav_items WHERE folder_id=? AND kind=? AND target_id=?",
+                           (int(fid), kind, target_id), fetchone=True)
         if existing: return {"ok": True, "id": existing["id"], "duplicate": True}
-        new_id = db_exec("INSERT INTO fav_items (folder_id, memo_id, created) VALUES (?,?,?)",
-                         (int(fid), int(mid), datetime.now().isoformat()))
+        # memo면 호환성 위해 memo_id에도 채우기
+        memo_id = int(target_id) if kind == 'memo' and str(target_id).isdigit() else None
+        new_id = db_exec("INSERT INTO fav_items (folder_id, memo_id, target_id, kind, created) VALUES (?,?,?,?,?)",
+                         (int(fid), memo_id, target_id, kind, datetime.now().isoformat()))
         return {"ok": True, "id": new_id}
 
     def _fav_item_remove(self, body):
         iid = body.get("id")
         fid = body.get("folderId")
-        mid = body.get("memoId")
+        kind = body.get("kind")
+        target_id = body.get("targetId") or body.get("memoId")
         if iid:
             db_exec("DELETE FROM fav_items WHERE id=?", (int(iid),))
-        elif fid and mid:
-            db_exec("DELETE FROM fav_items WHERE folder_id=? AND memo_id=?", (int(fid), int(mid)))
+        elif fid and target_id is not None:
+            if kind:
+                db_exec("DELETE FROM fav_items WHERE folder_id=? AND kind=? AND target_id=?", (int(fid), kind, str(target_id)))
+            else:
+                db_exec("DELETE FROM fav_items WHERE folder_id=? AND (target_id=? OR memo_id=?)", (int(fid), str(target_id), int(target_id) if str(target_id).isdigit() else -1))
         return {"ok": True}
 
     def _state_save(self, body):
