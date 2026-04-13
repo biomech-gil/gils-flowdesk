@@ -2140,6 +2140,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                             if not chunk:
                                 break
                             buf += chunk
+                            # 디버그: 원본 바이트를 파일에 덤프
+                            try:
+                                with open('/tmp/claude_login_raw.log', 'ab') as df:
+                                    df.write(chunk)
+                            except: pass
                             clean = ansi_re.sub(b'', buf).decode('utf-8', errors='replace')
                             _claude_login_output = clean.split('\n')
 
