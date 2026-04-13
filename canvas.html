@@ -316,6 +316,18 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 #sel-box{position:absolute;border:1px solid var(--blue);background:rgba(33,150,243,.08);z-index:50;pointer-events:none;display:none}
 .snap-guide{position:absolute;background:var(--red);z-index:40;pointer-events:none;opacity:.5}
 .snap-guide-h{height:1px;left:0;right:0}.snap-guide-v{width:1px;top:0;bottom:0}
+/* @ 메모 picker (인라인 인서트) */
+.at-picker{position:fixed;background:var(--bg-1);border:2px solid var(--accent);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:9999;min-width:340px;max-width:420px;max-height:340px;display:flex;flex-direction:column;font-family:'Segoe UI','Malgun Gothic',sans-serif}
+.at-picker .at-search{padding:8px 10px;border-bottom:1px solid var(--border);background:var(--bg-2);color:var(--text);font-size:12px;display:flex;align-items:center;gap:6px}
+.at-picker .at-search input{flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:3px;font-size:12px;outline:none}
+.at-picker .at-list{flex:1;overflow-y:auto;padding:4px;min-height:60px}
+.at-picker .at-cat{font-size:9px;color:var(--text-muted);padding:6px 8px 3px;text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.at-picker .at-item{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:3px;cursor:pointer;font-size:12px;color:var(--text)}
+.at-picker .at-item:hover,.at-picker .at-item.active{background:rgba(76,175,80,.18);color:#fff}
+.at-picker .at-item .ic{flex-shrink:0;font-size:11px}
+.at-picker .at-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.at-picker .at-item .pv{font-size:10px;color:var(--text-muted);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.at-picker .at-hint{padding:4px 8px;border-top:1px solid var(--border);background:var(--bg-2);font-size:9.5px;color:var(--text-muted);text-align:center}
 /* TOKEN LIMIT WARNING — 작고 정적인 태그 (펄스/글로우 제거) */
 .nd.token-warn{position:relative}
 .nd.token-warn::after{content:'⚠ 23K+';position:absolute;top:-7px;right:6px;font-size:9px;font-weight:600;padding:1px 6px;background:rgba(244,67,54,.15);color:#ff8a80;border:1px solid rgba(244,67,54,.35);border-radius:8px;pointer-events:none;letter-spacing:.3px;white-space:nowrap;z-index:5}
@@ -459,7 +471,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <span style="flex:1"></span>
         <span id="sb-charcount" style="font-size:10px;font-weight:600"></span>
       </div>
-      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="clearInput()" title="입력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('resolved')" title="{{노드명}}이 실제 내용으로 바뀐 완성본 복사" style="color:#88c0d0">📋완성본</button><button onclick="copyText('input')" title="입력 원문 복사" style="color:#d8dee9">📋원문</button><button onclick="openModal('input')" title="전체화면 확대" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="변수 치환 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value)" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
+      <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="clearInput()" title="입력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('resolved')" title="{{노드명}}이 실제 내용으로 바뀐 완성본 복사" style="color:#88c0d0">📋완성본</button><button onclick="copyText('input')" title="입력 원문 복사" style="color:#d8dee9">📋원문</button><button onclick="openModal('input')" title="전체화면 확대" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="변수 치환 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value);handleAtTrigger(this,selectedNode)" onkeydown="handleAtPickerKeydown(event,this,selectedNode)" placeholder="@ 누르면 메모 삽입 / {{노드명}} 으로 다른 노드 출력 참조" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
       <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>출력 (Output) <span><button onclick="outputToMemo()" title="이 출력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="toggleOutputEdit()" title="출력 내용 직접 수정" style="color:#5e81ac">✏️수정</button><button onclick="clearOutput()" title="출력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('output')" title="출력 텍스트 복사" style="color:#d8dee9">📋복사</button><button onclick="openModal('output')" title="전체화면 확대" style="color:#a3be8c">⤢확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
@@ -1319,7 +1331,10 @@ function buildDom(n){
     nmInp.addEventListener('click',e=>e.stopPropagation());
   }
   d.addEventListener('mousedown',e=>{if(!e.target.classList.contains('port')&&!e.target.classList.contains('nd-resize')&&e.target!==hd&&!hd.contains(e.target)&&e.target!==cb&&(!cb||!cb.contains(e.target))){if(e.ctrlKey)toggleMultiSel(n);else if(!multiSel.includes(n))selNode(n)}});
-  const ta=d.querySelector('.nd-in textarea');if(ta)ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value;checkTokenLimit(n)});
+  const ta=d.querySelector('.nd-in textarea');if(ta){
+    ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value;checkTokenLimit(n);handleAtTrigger(ta,n)});
+    ta.addEventListener('keydown',e=>handleAtPickerKeydown(e,ta,n));
+  }
   const dv=d.querySelector('.nd-div');if(dv&&ta)dv.addEventListener('mousedown',e=>{e.stopPropagation();isDiv=true;divNd=n;divSY=e.clientY;divSH=ta.offsetHeight});
   d.querySelectorAll('.port').forEach(port=>port.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();isConn=true;connSrc={node:n,side:port.dataset.side};cw.classList.add('connecting')}));
   // RESIZE
@@ -3481,6 +3496,172 @@ async function moveProjectFolder(projId){
   await api('POST','/api/project/move',{id:projId,folderId:folderId});
   loadLandingLists();
 }
+
+// ═══ @ 메모 인서트 picker ═══
+let atPickerEl=null,atPickerCtx=null,atMemoCache=null,atFolderCache=null,atFavFolderCache=null;
+let _atCacheTime=0;
+function invalidateAtCache(){atMemoCache=null;atFolderCache=null;atFavFolderCache=null;_atCacheTime=0}
+async function loadAtMemoData(){
+  // 캐시 30초 만료
+  if(atMemoCache&&Date.now()-_atCacheTime<30000)return;
+  const [m,f,ff]=await Promise.all([
+    api('GET','/api/memo/list'),
+    api('GET','/api/folder/list'),
+    api('GET','/api/fav/folders?kind=memo')
+  ]);
+  atMemoCache=(m.ok&&m.memos)||[];
+  atFolderCache=(f.ok&&f.folders)||[];
+  atFavFolderCache=(ff.ok&&ff.folders)||[];
+  _atCacheTime=Date.now();
+}
+function handleAtTrigger(ta,nd){
+  if(!ta)return;
+  const v=ta.value;
+  const cur=ta.selectionStart;
+  // 가장 최근 @ 위치 찾기
+  const before=v.substring(0,cur);
+  const atIdx=before.lastIndexOf('@');
+  if(atIdx<0){closeAtPicker();return}
+  // @ 뒤가 공백/줄바꿈이면 취소
+  const after=before.substring(atIdx+1);
+  if(/[\s\n]/.test(after)){closeAtPicker();return}
+  // 너무 길면 취소
+  if(after.length>30){closeAtPicker();return}
+  openAtPicker(ta,nd,atIdx,after);
+}
+function handleAtPickerKeydown(e,ta,nd){
+  if(!atPickerEl)return;
+  if(e.key==='Escape'){e.preventDefault();closeAtPicker();return}
+  if(e.key==='ArrowDown'){e.preventDefault();moveAtSel(1);return}
+  if(e.key==='ArrowUp'){e.preventDefault();moveAtSel(-1);return}
+  if(e.key==='Enter'||e.key==='Tab'){
+    const sel=atPickerEl.querySelector('.at-item.active');
+    if(sel){e.preventDefault();sel.click()}
+  }
+}
+function moveAtSel(dir){
+  const items=atPickerEl.querySelectorAll('.at-item');if(!items.length)return;
+  let idx=Array.from(items).findIndex(i=>i.classList.contains('active'));
+  if(idx<0)idx=0;
+  items[idx].classList.remove('active');
+  idx=(idx+dir+items.length)%items.length;
+  items[idx].classList.add('active');
+  items[idx].scrollIntoView({block:'nearest'});
+}
+async function openAtPicker(ta,nd,atIdx,filter){
+  await loadAtMemoData();
+  if(!atPickerEl){
+    atPickerEl=document.createElement('div');
+    atPickerEl.className='at-picker';
+    document.body.appendChild(atPickerEl);
+  }
+  atPickerCtx={ta,nd,atIdx};
+  // textarea 위치 기준으로 picker 띄우기 (커서 부근)
+  const r=ta.getBoundingClientRect();
+  const top=Math.min(r.top+30,window.innerHeight-360);
+  const left=Math.min(r.left+10,window.innerWidth-440);
+  atPickerEl.style.top=top+'px';
+  atPickerEl.style.left=left+'px';
+  renderAtPicker(filter);
+}
+function renderAtPicker(filter){
+  if(!atPickerEl)return;
+  const q=(filter||'').toLowerCase();
+  // 메모 필터링
+  const filtered=atMemoCache.filter(m=>!q||(m.name||'').toLowerCase().includes(q)||(m.preview||'').toLowerCase().includes(q));
+  // 카테고리: 핀 / 폴더별 / 즐겨찾기
+  const pinned=filtered.filter(m=>m.pinned);
+  const byFolder={};
+  filtered.forEach(m=>{
+    const fid=m.folder_id||0;
+    if(!byFolder[fid])byFolder[fid]=[];
+    byFolder[fid].push(m);
+  });
+
+  let html=`<div class="at-search">
+    <span style="color:var(--accent)">@</span>
+    <input id="at-search-input" value="${escH(filter||'')}" placeholder="메모 검색..." autocomplete="off">
+    <span style="color:var(--text-muted);font-size:10px">${filtered.length}/${atMemoCache.length}</span>
+  </div><div class="at-list">`;
+
+  if(filtered.length===0){
+    html+=`<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:11px">'${escH(filter)}' 일치 메모 없음</div>`;
+  } else {
+    // 핀 고정 우선
+    if(pinned.length){
+      html+='<div class="at-cat">📌 핀 고정</div>';
+      pinned.slice(0,8).forEach(m=>html+=atItemHtml(m));
+    }
+    // 메모폴더별
+    atFolderCache.forEach(f=>{
+      const items=byFolder[f.id]||[];
+      if(items.length===0)return;
+      html+=`<div class="at-cat">${renderIcon(f.icon||'📁',12)} ${escH(f.name)}</div>`;
+      items.slice(0,15).forEach(m=>html+=atItemHtml(m));
+    });
+    // 분류 없음
+    const orphans=byFolder[0]||[];
+    if(orphans.length){
+      html+='<div class="at-cat">📋 분류 없음</div>';
+      orphans.slice(0,15).forEach(m=>html+=atItemHtml(m));
+    }
+  }
+  html+=`</div><div class="at-hint">↑↓ 이동 · Enter 선택 · Esc 취소</div>`;
+  atPickerEl.innerHTML=html;
+  // 첫 항목 active
+  const first=atPickerEl.querySelector('.at-item');if(first)first.classList.add('active');
+  // 검색 입력 동기화 (textarea가 진짜 입력원이라 input은 표시용)
+  const si=atPickerEl.querySelector('#at-search-input');
+  if(si){
+    si.addEventListener('mousedown',e=>e.preventDefault());
+    si.tabIndex=-1;
+  }
+  // 클릭 핸들러
+  atPickerEl.querySelectorAll('.at-item').forEach(el=>{
+    el.addEventListener('click',()=>insertMemoAtCursor(parseInt(el.dataset.id)));
+  });
+}
+function atItemHtml(m){
+  const pin=m.pinned?'📌':'📝';
+  const pv=(m.preview||'').replace(/\n/g,' ').substring(0,40);
+  return `<div class="at-item" data-id="${m.id}"><span class="ic">${pin}</span><span class="nm">${escH(m.name||'무제')}</span><span class="pv">${escH(pv)}</span></div>`;
+}
+function closeAtPicker(){
+  if(atPickerEl){atPickerEl.remove();atPickerEl=null}
+  atPickerCtx=null;
+}
+async function insertMemoAtCursor(memoId){
+  if(!atPickerCtx)return;
+  const {ta,nd,atIdx}=atPickerCtx;
+  // 메모 본문 가져오기
+  const r=await api('GET',`/api/memo/get?id=${memoId}`);
+  if(!r.ok||!r.memo){alert('메모 로드 실패');closeAtPicker();return}
+  const memo=r.memo;
+  const before=ta.value.substring(0,atIdx);
+  const after=ta.value.substring(ta.selectionStart);
+  // 포맷팅: 구분선 + 제목 + 내용 + 구분선
+  const formatted=`\n\n────────────────────\n📝 ${memo.name||'무제'}\n────────────────────\n${memo.content||''}\n────────────────────\n\n`;
+  const newVal=before+formatted+after;
+  ta.value=newVal;
+  // 커서 위치 = 삽입 끝
+  const newCur=before.length+formatted.length;
+  ta.selectionStart=ta.selectionEnd=newCur;
+  // 노드 모델 갱신 + 사이드바 동기화
+  if(nd){
+    nd.inputTemplate=newVal;
+    if(selectedNode===nd){const sb=document.getElementById('sb-input');if(sb&&sb!==ta)sb.value=newVal}
+    const ndTa=nd.el?nd.el.querySelector('.nd-in textarea'):null;
+    if(ndTa&&ndTa!==ta)ndTa.value=newVal;
+    if(typeof checkTokenLimit==='function')checkTokenLimit(nd);
+  }
+  if(typeof autoSave==='function')autoSave();
+  closeAtPicker();
+  ta.focus();
+}
+// 외부 클릭 시 picker 닫기
+document.addEventListener('mousedown',e=>{
+  if(atPickerEl&&!atPickerEl.contains(e.target)){closeAtPicker()}
+});
 
 // ═══ TOKEN LIMIT WARNING ═══
 const TOKEN_LIMIT=23000;
