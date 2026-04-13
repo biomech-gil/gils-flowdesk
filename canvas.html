@@ -3085,7 +3085,12 @@ async function loadLandingLists(){
         <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
       </div>`;
-    let projHtml='<div class="pf-bar"><button onclick="newProjectFolder()">📂 새 폴더</button><button onclick="newProjectFolder(true)" style="margin-left:6px" title="하위 폴더 만들때는 폴더의 + 버튼 사용">📅 오늘 날짜 폴더 자동 생성</button></div>';
+    let projHtml=`<div class="pf-bar">
+      <button onclick="newProjectFolder()">📂 새 폴더</button>
+      <button onclick="newProjectFolder(true)" style="margin-left:6px" title="연도/날짜 폴더 자동 생성">📅 오늘 날짜 폴더</button>
+      <button onclick="debugProjectList()" style="margin-left:auto;font-size:10px" title="DB에 저장된 프로젝트 목록 강제 확인">🔍 DB 확인</button>
+      <span style="font-size:10px;color:var(--text-muted);margin-left:8px">총 ${pj.projects.length}개</span>
+    </div>`;
     // 계층 트리 빌드 (parent_id 기반)
     const folderById={};projFolders.forEach(f=>{folderById[f.id]={...f,children:[]}});
     const topFolders=[];
@@ -3406,6 +3411,23 @@ async function emptyTrash(){
 }
 
 // ═══ PROJECT FOLDERS ═══
+// DB 디버그 — 프로젝트 목록 강제 출력
+async function debugProjectList(){
+  const r=await api('GET','/api/project/list-meta');
+  if(!r.ok)return alert('API 실패: '+(r.error||''));
+  const projects=r.projects||[];
+  let msg=`📊 DB에 저장된 프로젝트: ${projects.length}개\n\n`;
+  if(projects.length===0){
+    msg+='❌ DB에 프로젝트가 0개입니다.\n\n원인 가능성:\n';
+    msg+='1) 저장이 실패함 (alert 안 봤거나 무시됨)\n';
+    msg+='2) 서버가 최신 server.py로 재빌드 안 됨\n';
+    msg+='3) DB 연결 문제 → Container Manager 로그 확인\n';
+  }else{
+    msg+=projects.slice(0,20).map((p,i)=>`${i+1}. ${p.name||'(이름없음)'} [id:${p.id}] folder:${p.folder_id||'없음'}`).join('\n');
+    if(projects.length>20)msg+=`\n... 외 ${projects.length-20}개`;
+  }
+  alert(msg);
+}
 async function newProjectFolder(autoDate){
   if(autoDate){
     // 오늘 날짜 폴더 자동 생성 (연도 > YYYYMMDD 계층)

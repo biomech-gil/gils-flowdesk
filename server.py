@@ -602,7 +602,8 @@ def db_exec(sql, params=(), fetch=False, fetchone=False):
                 need_returning = False
                 if adapted_sql.strip().upper().startswith("INSERT") and not fetch and not fetchone:
                     # Tables with SERIAL id: temps, memo_folders, memos, messages
-                    serial_tables = ("temps", "memo_folders", "memos", "messages", "claude_accounts")
+                    serial_tables = ("temps", "memo_folders", "memos", "messages", "claude_accounts",
+                                     "project_folders", "fav_folders", "fav_items", "project_attachments", "icons")
                     sql_upper = adapted_sql.upper()
                     if any(f"INTO {t.upper()}" in sql_upper for t in serial_tables):
                         if "RETURNING" not in sql_upper:
@@ -1607,12 +1608,18 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "project": json.loads(row["data"])}
 
     def _project_list(self):
-        rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects WHERE id NOT LIKE '\\_\\_current%' ESCAPE '\\' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
+        # __current__ 류는 Python에서 필터링 (LIKE ESCAPE 호환성 이슈 회피)
+        rows = [r for r in rows if not (r.get("id") or "").startswith("__current")]
+        log(f"[PROJECT_LIST] {len(rows)}개 반환")
         return {"ok": True, "projects": rows}
 
     def _project_list_meta(self):
         """메타데이터만 (data 필드 제외, 가벼움) — 노드 수도 함께"""
-        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id FROM projects WHERE id NOT LIKE '\\_\\_current%' ESCAPE '\\' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
+        # __current__ 류는 Python에서 필터링
+        rows = [r for r in rows if not (r.get("id") or "").startswith("__current")]
+        log(f"[PROJECT_LIST_META] {len(rows)}개 반환")
         # 노드 수만 추가 추출
         for r in rows:
             try:
