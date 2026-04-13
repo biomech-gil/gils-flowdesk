@@ -2196,21 +2196,37 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         try:
             # PTY에 코드 작성 (끝에 개행)
             os.write(_claude_login_master_fd, (code + "\r\n").encode())
+            log(f"CLAUDE_LOGIN submit code len={len(code)} first={code[:10]}...")
         except Exception as e:
             return {"ok": False, "error": f"PTY write 실패: {e}"}
 
         # credentials 파일이 갱신되거나 프로세스 종료되면 완료로 간주 (최대 60초)
+        # 또는 CLI가 "Invalid code" / "OAuth error" 출력하면 즉시 실패
         success = False
+        cli_error = None
         for _ in range(300):
             if os.path.exists(creds_path):
                 new_mtime = os.path.getmtime(creds_path)
                 if new_mtime > old_mtime:
                     success = True
-                    time.sleep(0.3)  # 파일 완전 쓰기 대기
+                    time.sleep(0.3)
+                    log(f"CLAUDE_LOGIN success - credentials updated")
                     break
+            # CLI 에러 메시지 체크
+            recent = "\n".join(_claude_login_output[-10:])
+            if "Invalid code" in recent or "OAuth error" in recent or "authentication failed" in recent.lower():
+                cli_error = recent
+                log(f"CLAUDE_LOGIN CLI error detected: {recent[-300:]}")
+                break
             if not _is_claude_proc_alive():
+                log(f"CLAUDE_LOGIN process exited without updating creds")
                 break
             time.sleep(0.2)
+
+        # 실패 시 마지막 출력을 로그에 남김
+        if not success:
+            tail = "\n".join(_claude_login_output[-30:])
+            log(f"CLAUDE_LOGIN failed — last output:\n{tail[-1000:]}")
 
         # 프로세스 아직 살아있으면 정리
         if _is_claude_proc_alive():
@@ -2235,9 +2251,19 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             except Exception as e:
                 return {"ok": False, "error": f"credentials 읽기 실패: {e}"}
         else:
+            err_msg = "로그인 실패 — "
+            if cli_error:
+                if "Invalid code" in cli_error:
+                    err_msg += "❌ 유효하지 않은 코드입니다.\n\n올바른 절차:\n1. 새 URL로 다시 시작하세요 (취소 후 재시작)\n2. Anthropic 페이지에서 승인\n3. 화면에 표시된 '승인 코드'만 복사 (전체 URL 아님)\n4. 여기에 붙여넣고 완료 클릭"
+                elif "OAuth error" in cli_error:
+                    err_msg += f"OAuth 오류 — {cli_error[-200:]}"
+                else:
+                    err_msg += cli_error[-200:]
+            else:
+                err_msg += "credentials 파일이 갱신되지 않았습니다. 코드가 만료되었거나 잘못되었을 수 있습니다."
             return {
                 "ok": False,
-                "error": "로그인 실패 — credentials 파일이 갱신되지 않았습니다. 코드가 잘못되었거나 만료되었을 수 있습니다. 다시 시도하세요.",
+                "error": err_msg,
                 "output": "\n".join(_claude_login_output[-60:])
             }
 
