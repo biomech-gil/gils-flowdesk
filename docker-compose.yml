@@ -35,7 +35,7 @@ services:
     depends_on:
       - postgres
     ports:
-      - "${PORT:-8888}:8888"
+      - "${PORT:-9090}:8888"
     environment:
       DB_TYPE: postgresql
       DB_HOST: ${DB_HOST:-postgres}
