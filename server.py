@@ -2113,7 +2113,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 os.dup2(slave, 2)
                 os.close(slave)
                 try:
-                    os.execvpe("claude", ["claude", "setup-token"], env)
+                    # auth login 사용 (전체 권한: profile, inference, sessions:claude_code, mcp_servers, api_key, file_upload)
+                    os.execvpe("claude", ["claude", "auth", "login"], env)
                 except Exception:
                     os._exit(1)
             else:
@@ -2208,29 +2209,32 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         if not _claude_login_proc or not _is_claude_proc_alive():
             return {"ok": False, "error": "로그인 세션이 없습니다 (프로세스 종료됨)"}
 
+        # claude auth login은 .credentials.json 파일에 저장
+        creds_path = os.path.expanduser("~/.claude/.credentials.json")
+        old_mtime = os.path.getmtime(creds_path) if os.path.exists(creds_path) else 0
+
         try:
             os.write(_claude_login_master_fd, (code + "\r").encode())
             log(f"CLAUDE_LOGIN submit code len={len(code)} has_hash={'#' in code}")
         except Exception as e:
             return {"ok": False, "error": f"PTY write 실패: {e}"}
 
-        # setup-token의 출력에서 OAuth 토큰 추출 대기 (최대 60초)
-        # 형식: "export CLAUDE_CODE_OAUTH_TOKEN=<token>"
-        token = None
+        # .credentials.json 파일 갱신 대기 (최대 60초)
         cli_error = None
-        token_re = re.compile(r'CLAUDE_CODE_OAUTH_TOKEN=([A-Za-z0-9_\-\.]+)')
+        creds = None
         for _iter in range(300):
-            full_output = "\n".join(_claude_login_output)
-            # 공백/개행 제거 (출력이 줄바꿈된 경우)
-            joined = re.sub(r'\s+', '', full_output)
-            m = token_re.search(joined)
-            if m:
-                candidate = m.group(1)
-                # 토큰은 보통 길이가 길고 sk-ant-oat 등으로 시작. 최소 길이 체크
-                if len(candidate) > 40:
-                    token = candidate
-                    log(f"CLAUDE_LOGIN token captured len={len(token)}")
-                    break
+            if os.path.exists(creds_path):
+                new_mtime = os.path.getmtime(creds_path)
+                if new_mtime > old_mtime:
+                    time.sleep(0.5)  # 파일 완전 쓰기 대기
+                    try:
+                        with open(creds_path, "r", encoding="utf-8") as f:
+                            creds = f.read()
+                        json.loads(creds)  # 검증
+                        log(f"CLAUDE_LOGIN creds updated size={len(creds)}")
+                        break
+                    except Exception as e:
+                        log(f"creds read error: {e}")
             recent = "\n".join(_claude_login_output[-10:])
             if "Invalid code" in recent or "OAuth error" in recent or "authentication failed" in recent.lower():
                 cli_error = recent
@@ -2238,13 +2242,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 break
             if not _is_claude_proc_alive():
                 log(f"CLAUDE_LOGIN process exited")
-                # 프로세스 종료 후에도 출력에서 토큰 찾아봄
-                full_output = "\n".join(_claude_login_output)
-                joined = re.sub(r'\s+', '', full_output)
-                m = token_re.search(joined)
-                if m and len(m.group(1)) > 40:
-                    token = m.group(1)
-                    log(f"CLAUDE_LOGIN token captured (post-exit) len={len(token)}")
+                # 마지막 확인
+                if os.path.exists(creds_path) and os.path.getmtime(creds_path) > old_mtime:
+                    try:
+                        with open(creds_path, "r", encoding="utf-8") as f:
+                            creds = f.read()
+                        json.loads(creds)
+                    except: pass
                 break
             time.sleep(0.2)
 
@@ -2253,17 +2257,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try: os.kill(_claude_login_proc, 9)
             except Exception: pass
 
-        if token:
-            # 토큰을 credentials.json 호환 형식으로 저장
-            # (기존 계정 시스템과 호환되도록 claudeAiOauth.accessToken 형태로)
-            creds_data = {
-                "claudeAiOauth": {
-                    "accessToken": token,
-                    "refreshToken": "",  # setup-token은 장기 토큰 자체라 refresh 불필요
-                    "expiresAt": int((time.time() + 86400 * 365) * 1000)  # 1년 후
-                }
-            }
-            creds = json.dumps(creds_data, ensure_ascii=False)
+        if creds:
             now = datetime.now().isoformat()
             name = (body.get("name") or "").strip() or f"Account {datetime.now().strftime('%m-%d %H:%M')}"
             try:
@@ -2273,31 +2267,18 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 )
                 try: _sync_account_to_dir(aid, creds)
                 except Exception as e: log(f"sync acct dir failed: {e}")
-
-                # ~/.claude/.credentials.json 에도 저장 (호환성)
-                try:
-                    creds_path = os.path.expanduser("~/.claude/.credentials.json")
-                    os.makedirs(os.path.dirname(creds_path), exist_ok=True)
-                    with open(creds_path, "w", encoding="utf-8") as f:
-                        f.write(creds)
-                    os.chmod(creds_path, 0o600)
-                except Exception as e:
-                    log(f"global creds write failed: {e}")
-
-                return {"ok": True, "accountId": aid, "name": name}
+                return {"ok": True, "accountId": aid, "name": name, "scope": "full"}
             except Exception as e:
                 return {"ok": False, "error": f"DB 저장 실패: {e}"}
         else:
             err_msg = "로그인 실패 — "
             if cli_error:
                 if "Invalid code" in cli_error:
-                    err_msg += "❌ 유효하지 않은 코드입니다.\n\n올바른 절차:\n1. 취소 후 새 URL로 다시 시작\n2. Anthropic 승인 후 나오는 코드 전체 복사 (# 포함)\n3. 붙여넣고 바로 완료"
-                elif "OAuth error" in cli_error:
-                    err_msg += f"OAuth 오류 — {cli_error[-200:]}"
+                    err_msg += "❌ 유효하지 않은 코드입니다.\n\n1. 취소 후 새 URL로 다시 시작\n2. Anthropic 승인 후 나오는 코드 복사 (# 포함 전체)\n3. 붙여넣고 완료"
                 else:
                     err_msg += cli_error[-200:]
             else:
-                err_msg += "토큰이 출력에 없습니다. 코드가 만료되었거나 잘못되었을 수 있습니다."
+                err_msg += "credentials.json이 갱신되지 않았습니다. 코드가 만료되었을 수 있습니다."
             return {
                 "ok": False,
                 "error": err_msg,
