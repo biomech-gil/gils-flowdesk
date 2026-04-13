@@ -2075,12 +2075,17 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
             # PTY로 실행 - claude CLI가 터미널 크기를 자체 감지하므로
             # COLUMNS 환경변수로는 안 되고 PTY의 winsize를 크게 설정해야 함
-            import pty, fcntl, termios, struct
+            import pty, fcntl, termios, struct, tty
             try:
                 master, slave = pty.openpty()
-                # 터미널 크기를 9999 칸으로 설정 → URL이 줄바꿈되지 않음
+                # 터미널 크기 9999칸 (URL 줄바꿈 방지)
                 ws = struct.pack('HHHH', 50, 9999, 0, 0)
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, ws)
+                # ECHO 끄기 — 입력 문자가 화면에 다시 에코되는 것 방지
+                # (이것 때문에 우리가 보낸 코드가 출력에 섞이고 파싱이 꼬임)
+                attrs = termios.tcgetattr(slave)
+                attrs[3] = attrs[3] & ~termios.ECHO & ~termios.ICANON  # lflags
+                termios.tcsetattr(slave, termios.TCSANOW, attrs)
             except Exception as e:
                 return {"ok": False, "error": f"PTY 생성 실패: {e}"}
 
@@ -2194,17 +2199,18 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         old_mtime = os.path.getmtime(creds_path) if os.path.exists(creds_path) else 0
 
         try:
-            # PTY에 코드 작성 (끝에 개행)
-            os.write(_claude_login_master_fd, (code + "\r\n").encode())
-            log(f"CLAUDE_LOGIN submit code len={len(code)} first={code[:10]}...")
+            # PTY에 코드 작성 (LF만; \r는 echo 중복 유발)
+            os.write(_claude_login_master_fd, (code + "\n").encode())
+            log(f"CLAUDE_LOGIN submit code len={len(code)} first={code[:10]}... has_hash={'#' in code}")
         except Exception as e:
             return {"ok": False, "error": f"PTY write 실패: {e}"}
 
-        # credentials 파일이 갱신되거나 프로세스 종료되면 완료로 간주 (최대 60초)
+        # credentials 파일이 갱신되거나 프로세스 종료되면 완료로 간주 (최대 120초)
         # 또는 CLI가 "Invalid code" / "OAuth error" 출력하면 즉시 실패
         success = False
         cli_error = None
-        for _ in range(300):
+        last_log_tail = ""
+        for _iter in range(600):
             if os.path.exists(creds_path):
                 new_mtime = os.path.getmtime(creds_path)
                 if new_mtime > old_mtime:
@@ -2214,10 +2220,25 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     break
             # CLI 에러 메시지 체크
             recent = "\n".join(_claude_login_output[-10:])
+            # 주기적으로 현재 출력을 로그에 남겨 디버깅
+            if _iter % 25 == 5:
+                tail = recent[-300:]
+                if tail != last_log_tail:
+                    last_log_tail = tail
+                    log(f"CLAUDE_LOGIN wait[{_iter}] tail: {tail}")
             if "Invalid code" in recent or "OAuth error" in recent or "authentication failed" in recent.lower():
                 cli_error = recent
                 log(f"CLAUDE_LOGIN CLI error detected: {recent[-300:]}")
                 break
+            if "Logged in" in recent or "Successfully" in recent.lower() or "saved" in recent.lower():
+                log(f"CLAUDE_LOGIN success indicator in output")
+                # 파일 갱신 대기용 한번 더
+                time.sleep(1)
+                if os.path.exists(creds_path):
+                    new_mtime = os.path.getmtime(creds_path)
+                    if new_mtime > old_mtime:
+                        success = True
+                        break
             if not _is_claude_proc_alive():
                 log(f"CLAUDE_LOGIN process exited without updating creds")
                 break
