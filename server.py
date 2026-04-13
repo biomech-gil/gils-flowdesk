@@ -2188,27 +2188,41 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": False, "error": "code required"}
         if not _claude_login_proc or not _is_claude_proc_alive():
             return {"ok": False, "error": "로그인 세션이 없습니다 (프로세스 종료됨)"}
+
+        creds_path = os.path.expanduser("~/.claude/.credentials.json")
+        # 현재 credentials 파일 mtime 기록 (이후 변경 감지용)
+        old_mtime = os.path.getmtime(creds_path) if os.path.exists(creds_path) else 0
+
         try:
-            os.write(_claude_login_master_fd, (code + "\n").encode())
+            # PTY에 코드 작성 (끝에 개행)
+            os.write(_claude_login_master_fd, (code + "\r\n").encode())
         except Exception as e:
             return {"ok": False, "error": f"PTY write 실패: {e}"}
 
-        # 완료 대기 (최대 30초)
-        for _ in range(150):
+        # credentials 파일이 갱신되거나 프로세스 종료되면 완료로 간주 (최대 60초)
+        success = False
+        for _ in range(300):
+            if os.path.exists(creds_path):
+                new_mtime = os.path.getmtime(creds_path)
+                if new_mtime > old_mtime:
+                    success = True
+                    time.sleep(0.3)  # 파일 완전 쓰기 대기
+                    break
             if not _is_claude_proc_alive():
                 break
             time.sleep(0.2)
 
+        # 프로세스 아직 살아있으면 정리
         if _is_claude_proc_alive():
             try: os.kill(_claude_login_proc, 9)
             except Exception: pass
-            return {"ok": False, "error": "로그인 처리 시간 초과"}
 
-        creds_path = os.path.expanduser("~/.claude/.credentials.json")
-        if os.path.exists(creds_path):
+        if success or (os.path.exists(creds_path) and os.path.getmtime(creds_path) > old_mtime):
             try:
                 with open(creds_path, "r", encoding="utf-8") as f:
                     creds = f.read()
+                # JSON 유효성 확인
+                json.loads(creds)
                 now = datetime.now().isoformat()
                 name = (body.get("name") or "").strip() or f"Account {datetime.now().strftime('%m-%d %H:%M')}"
                 aid = db_exec(
@@ -2223,8 +2237,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         else:
             return {
                 "ok": False,
-                "error": "로그인 실패 (credentials 파일 없음)",
-                "output": "\n".join(_claude_login_output[-40:])
+                "error": "로그인 실패 — credentials 파일이 갱신되지 않았습니다. 코드가 잘못되었거나 만료되었을 수 있습니다. 다시 시도하세요.",
+                "output": "\n".join(_claude_login_output[-60:])
             }
 
     def _claude_login_status(self):
