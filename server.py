@@ -1018,6 +1018,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/claude/login/status": self._json(self._claude_login_status())
         elif p == "/api/fs/browse": self._json(self._browse_path(params))
         elif p == "/api/fs/browse-system": self._json(self._fs_browse_system(params))
+        elif p == "/api/fs/download":
+            self._fs_download(params)
+            return
         elif p.startswith("/uploads/"):
             # uploads 디렉토리가 외부 경로일 수 있으므로 직접 서빙
             file_path = os.path.join(UPLOADS_DIR, p[len("/uploads/"):])
@@ -2518,6 +2521,42 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": True, "path": os.path.relpath(target_abs, root_abs).replace("\\", "/")}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _fs_download(self, params):
+        """파일 다운로드 - workspace root 내만 허용"""
+        row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
+        root = row["value"] if row and row.get("value") else os.path.expanduser("~")
+        root = os.path.normpath(os.path.abspath(root))
+        rel_path = params.get("path", [""])[0]
+        target = os.path.normpath(os.path.abspath(os.path.join(root, rel_path.lstrip("/").lstrip("\\"))))
+        if not target.startswith(root):
+            self.send_error(403, "Access denied")
+            return
+        if not os.path.isfile(target):
+            self.send_error(404, "Not a file")
+            return
+        try:
+            import mimetypes, urllib.parse
+            mime = mimetypes.guess_type(target)[0] or 'application/octet-stream'
+            fname = os.path.basename(target)
+            encoded = urllib.parse.quote(fname)
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", os.path.getsize(target))
+            # 브라우저 미리보기 vs 다운로드 선택
+            as_download = params.get("download", ["0"])[0] == "1"
+            if as_download:
+                self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{encoded}")
+            else:
+                self.send_header("Content-Disposition", f"inline; filename*=UTF-8''{encoded}")
+            self.end_headers()
+            with open(target, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk: break
+                    self.wfile.write(chunk)
+        except Exception as e:
+            self.send_error(500, str(e))
 
     def _fs_browse_system(self, params):
         """시스템 전체 파일 탐색 (workspace_root 선택용). 절대경로 기준."""
