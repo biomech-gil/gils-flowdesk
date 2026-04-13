@@ -353,6 +353,21 @@ def init_db():
                 sort_order INTEGER DEFAULT 0,
                 created TEXT NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS project_attachments (
+                id SERIAL PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS icons (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                data TEXT NOT NULL,
+                kind TEXT DEFAULT 'image',
+                created TEXT NOT NULL
+            )""",
         ]
         for ddl in pg_tables:
             cur.execute(ddl)
@@ -373,6 +388,8 @@ def init_db():
             ("memo_folders", "parent_id", "ALTER TABLE memo_folders ADD COLUMN parent_id INTEGER"),
             ("claude_accounts", "priority", "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0"),
             ("conversations", "account_id", "ALTER TABLE conversations ADD COLUMN account_id INTEGER"),
+            ("project_folders", "parent_id", "ALTER TABLE project_folders ADD COLUMN parent_id INTEGER"),
+            ("messages", "chat_only", "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1"),
         ]
         for tbl, col, alter_sql in alter_checks:
             cur.execute("""
@@ -513,6 +530,21 @@ def init_db():
             sort_order INTEGER DEFAULT 0,
             created TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS project_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS icons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            data TEXT NOT NULL,
+            kind TEXT DEFAULT 'image',
+            created TEXT NOT NULL
+        );
         """)
         try:
             db.execute("ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0")
@@ -524,6 +556,8 @@ def init_db():
             "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
             "ALTER TABLE memo_folders ADD COLUMN parent_id INTEGER",
             "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0",
+            "ALTER TABLE project_folders ADD COLUMN parent_id INTEGER",
+            "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1",
         ]:
             try:
                 db.execute(stmt)
@@ -1045,6 +1079,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/memo/pinned": self._json(self._memo_pinned())
         elif p == "/api/fav/folders": self._json(self._fav_folders(params))
         elif p == "/api/fav/items": self._json(self._fav_items(params))
+        elif p == "/api/proj-attach/list": self._json(self._proj_attach_list(params))
+        elif p == "/api/icons/list": self._json(self._icons_list())
         elif p == "/api/state/load": self._json(self._state_load(params))
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
@@ -1116,6 +1152,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/fav/folder/delete": self._fav_folder_delete,
             "/api/fav/item/add": self._fav_item_add,
             "/api/fav/item/remove": self._fav_item_remove,
+            "/api/project/date-folder": self._project_date_folder,
+            "/api/proj-attach/add": self._proj_attach_add,
+            "/api/proj-attach/remove": self._proj_attach_remove,
+            "/api/icon/save": self._icon_save,
+            "/api/icon/delete": self._icon_delete,
             "/api/project/star": self._project_star,
             "/api/project/move": self._project_move,
             "/api/project-folder/save": self._project_folder_save,
@@ -1293,9 +1334,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 if conv and conv.get("account_id"):
                     account_id = conv["account_id"]
 
-        # 유저 메시지 저장
-        db_exec("INSERT INTO messages (conv_id, role, content, ts) VALUES (?,?,?,?)",
-                (conv_id, "user", message, datetime.now().isoformat()))
+        # 유저 메시지 저장 (chat_only 모드도 함께 — 각 메시지가 어느 모드로 처리됐는지 추적)
+        db_exec("INSERT INTO messages (conv_id, role, content, ts, chat_only) VALUES (?,?,?,?,?)",
+                (conv_id, "user", message, datetime.now().isoformat(), 1 if chat_only else 0))
 
         # 이전 대화 로드
         rows = db_exec("SELECT role, content FROM messages WHERE conv_id=? ORDER BY id", (conv_id,), fetch=True)
@@ -1322,13 +1363,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=600, env=env, cwd=run_cwd)
                 reply = result.stdout.strip()
                 log(f"CHAT [{conv_id}] reply={len(reply)}자")
-                db_exec("INSERT INTO messages (conv_id, role, content, ts) VALUES (?,?,?,?)",
-                        (conv_id, "assistant", reply, datetime.now().isoformat()))
+                db_exec("INSERT INTO messages (conv_id, role, content, ts, chat_only) VALUES (?,?,?,?,?)",
+                        (conv_id, "assistant", reply, datetime.now().isoformat(), 1 if chat_only else 0))
                 with open(done_file, "w") as f: f.write(reply)
             except Exception as e:
                 log(f"CHAT [{conv_id}] ERROR: {e}")
-                db_exec("INSERT INTO messages (conv_id, role, content, ts) VALUES (?,?,?,?)",
-                        (conv_id, "assistant", f"(오류: {e})", datetime.now().isoformat()))
+                db_exec("INSERT INTO messages (conv_id, role, content, ts, chat_only) VALUES (?,?,?,?,?)",
+                        (conv_id, "assistant", f"(오류: {e})", datetime.now().isoformat(), 1 if chat_only else 0))
                 with open(done_file, "w") as f: f.write(f"(오류: {e})")
 
         threading.Thread(target=run, daemon=True).start()
@@ -1406,7 +1447,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _conv_messages(self, params):
         conv_id = params.get("convId", [""])[0]
-        rows = db_exec("SELECT role, content, ts FROM messages WHERE conv_id=? ORDER BY id", (conv_id,), fetch=True)
+        rows = db_exec("SELECT id, role, content, ts, chat_only FROM messages WHERE conv_id=? ORDER BY id", (conv_id,), fetch=True)
         return {"ok": True, "messages": rows}
 
     # ── Project CRUD ──
@@ -1478,19 +1519,118 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         name = body.get("name", "새 폴더")
         icon = body.get("icon", "📂")
         color = body.get("color", "")
+        parent_id = body.get("parentId")
+        if parent_id in ("", 0, None): parent_id = None
         now = datetime.now().isoformat()
         if fid:
-            db_exec("UPDATE project_folders SET name=?, icon=?, color=? WHERE id=?", (name, icon, color, fid))
+            # 부분 업데이트 — body에 있는 필드만 갱신
+            updates, params = [], []
+            if "name" in body: updates.append("name=?"); params.append(name)
+            if "icon" in body: updates.append("icon=?"); params.append(icon)
+            if "color" in body: updates.append("color=?"); params.append(color)
+            if "parentId" in body: updates.append("parent_id=?"); params.append(parent_id)
+            if updates:
+                params.append(fid)
+                db_exec(f"UPDATE project_folders SET {', '.join(updates)} WHERE id=?", tuple(params))
             return {"ok": True, "id": fid}
         else:
-            new_id = db_exec("INSERT INTO project_folders (name, icon, color, created) VALUES (?,?,?,?)", (name, icon, color, now))
+            new_id = db_exec("INSERT INTO project_folders (name, icon, color, parent_id, created) VALUES (?,?,?,?,?)", (name, icon, color, parent_id, now))
             return {"ok": True, "id": new_id}
 
     def _project_folder_delete(self, body):
         fid = body.get("id", "")
         if fid:
+            # 하위 폴더는 부모 NULL로 (최상단으로 이동), 프로젝트도 폴더 NULL로
+            db_exec("UPDATE project_folders SET parent_id=NULL WHERE parent_id=?", (fid,))
             db_exec("UPDATE projects SET folder_id=NULL WHERE folder_id=?", (fid,))
             db_exec("DELETE FROM project_folders WHERE id=?", (fid,))
+        return {"ok": True}
+
+    # ── 날짜 폴더 자동 생성 (YYYY > YYYYMMDD_xxx 계층) ──
+    def _project_date_folder(self, body):
+        """오늘 날짜의 폴더 자동 생성 (없으면). 연도 폴더 → 일자 폴더 계층"""
+        from datetime import datetime
+        today = datetime.now()
+        year = today.strftime("%Y")
+        date = today.strftime("%Y%m%d")
+        suffix = (body.get("suffix") or "").strip()
+        date_folder_name = f"{date}_{suffix}" if suffix else date
+        # 1) 연도 폴더 찾기/생성
+        year_row = db_exec("SELECT id FROM project_folders WHERE name=? AND parent_id IS NULL", (year,), fetchone=True)
+        if year_row:
+            year_id = year_row["id"]
+        else:
+            year_id = db_exec("INSERT INTO project_folders (name, icon, color, parent_id, created) VALUES (?,?,?,?,?)",
+                              (year, "📅", "#3B82F6", None, today.isoformat()))
+        # 2) 일자 폴더 찾기/생성 (연도 폴더 안에)
+        date_row = db_exec("SELECT id FROM project_folders WHERE name=? AND parent_id=?", (date_folder_name, year_id), fetchone=True)
+        if date_row:
+            date_id = date_row["id"]
+        else:
+            date_id = db_exec("INSERT INTO project_folders (name, icon, color, parent_id, created) VALUES (?,?,?,?,?)",
+                              (date_folder_name, "📂", "", year_id, today.isoformat()))
+        return {"ok": True, "yearFolderId": year_id, "dateFolderId": date_id, "dateFolderName": date_folder_name}
+
+    # ── 프로젝트 첨부 (메모, 대화) ──
+    def _proj_attach_list(self, params):
+        pid = params.get("projectId", [""])[0]
+        if not pid: return {"ok": True, "attachments": []}
+        rows = db_exec("SELECT id, kind, target_id, sort_order FROM project_attachments WHERE project_id=? ORDER BY sort_order, id", (pid,), fetch=True)
+        # enrich with target metadata
+        out = []
+        for r in rows:
+            item = {"id": r["id"], "kind": r["kind"], "targetId": r["target_id"], "sortOrder": r["sort_order"]}
+            try:
+                if r["kind"] == "memo":
+                    m = db_exec("SELECT name, substr(content,1,80) as preview FROM memos WHERE id=?", (int(r["target_id"]),), fetchone=True)
+                    if m: item["title"] = m.get("name") or "무제"; item["preview"] = m.get("preview") or ""
+                elif r["kind"] == "conversation":
+                    c = db_exec("SELECT title, node_name FROM conversations WHERE id=?", (r["target_id"],), fetchone=True)
+                    if c: item["title"] = c.get("title") or "대화"; item["preview"] = c.get("node_name") or ""
+            except Exception as e:
+                pass
+            out.append(item)
+        return {"ok": True, "attachments": out}
+
+    def _proj_attach_add(self, body):
+        pid = body.get("projectId")
+        kind = body.get("kind")
+        target_id = body.get("targetId")
+        if not pid or not kind or target_id is None:
+            return {"ok": False, "error": "projectId, kind, targetId required"}
+        # 중복 방지
+        existing = db_exec("SELECT id FROM project_attachments WHERE project_id=? AND kind=? AND target_id=?",
+                           (pid, kind, str(target_id)), fetchone=True)
+        if existing: return {"ok": True, "id": existing["id"], "duplicate": True}
+        new_id = db_exec("INSERT INTO project_attachments (project_id, kind, target_id, created) VALUES (?,?,?,?)",
+                         (pid, kind, str(target_id), datetime.now().isoformat()))
+        return {"ok": True, "id": new_id}
+
+    def _proj_attach_remove(self, body):
+        iid = body.get("id")
+        if iid:
+            db_exec("DELETE FROM project_attachments WHERE id=?", (int(iid),))
+        return {"ok": True}
+
+    # ── 아이콘 라이브러리 (커스텀 업로드 이미지) ──
+    def _icons_list(self):
+        rows = db_exec("SELECT id, name, data, kind, created FROM icons ORDER BY id DESC LIMIT 200", fetch=True)
+        return {"ok": True, "icons": rows or []}
+
+    def _icon_save(self, body):
+        name = body.get("name", "icon")
+        data = body.get("data", "")  # data URL
+        kind = body.get("kind", "image")
+        if not data: return {"ok": False, "error": "data required"}
+        # 5MB 제한
+        if len(data) > 6_500_000: return {"ok": False, "error": "icon too large (>5MB base64)"}
+        new_id = db_exec("INSERT INTO icons (name, data, kind, created) VALUES (?,?,?,?)",
+                         (name, data, kind, datetime.now().isoformat()))
+        return {"ok": True, "id": new_id}
+
+    def _icon_delete(self, body):
+        iid = body.get("id")
+        if iid: db_exec("DELETE FROM icons WHERE id=?", (int(iid),))
         return {"ok": True}
 
     # ── Temp Saves (날짜 기준 자동 백업) ──

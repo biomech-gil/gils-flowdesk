@@ -52,6 +52,17 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .chat-input-bar button:hover{background:#66BB6A}.chat-input-bar button:disabled{opacity:.4;cursor:not-allowed}
 .empty-msg{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.82em;padding:20px;text-align:center}
 .pending-badge{display:inline-block;font-size:9px;padding:1px 5px;background:var(--blue);color:#fff;border-radius:4px;margin-left:4px;animation:tp 1.5s infinite}
+/* 메시지 모드 배지 — 대화전용/툴사용 구분 */
+.mode-badge{display:inline-block;font-size:8.5px;padding:0 4px;border-radius:3px;margin-left:4px;font-weight:700;letter-spacing:.3px;vertical-align:middle}
+.mode-badge.chat{background:rgba(33,150,243,.18);color:#7ecfff;border:1px solid rgba(33,150,243,.35)}
+.mode-badge.tool{background:rgba(245,158,11,.2);color:#ebcb8b;border:1px solid rgba(245,158,11,.4)}
+/* 패널 헤더 토글/툴 버튼 */
+.chat-header .tools{display:flex;gap:4px;align-items:center}
+.chat-header .tools .toggle{display:flex;align-items:center;gap:3px;font-size:.65em;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:3px;background:var(--bg-3);border:1px solid var(--border)}
+.chat-header .tools .toggle:hover{background:var(--bg-4)}
+.chat-header .tools .toggle.tool-mode{color:#ebcb8b;border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.1)}
+.chat-header .tools button{background:var(--bg-3);border:1px solid var(--border);color:var(--text-dim);padding:3px 7px;border-radius:3px;cursor:pointer;font-size:.7em}
+.chat-header .tools button:hover{background:var(--bg-4);color:var(--text)}
 ::-webkit-scrollbar{width:6px;height:8px}::-webkit-scrollbar-track{background:var(--bg-0)}::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:2px}
 ::-webkit-scrollbar-thumb:hover{background:var(--bg-4)}
 </style>
@@ -60,9 +71,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 <nav class="nav"><a href="/">캔버스</a><a href="/chat.html" class="active">채팅</a><a href="/index.html">컨트롤러</a></nav>
 <div class="tb">
   <span class="lbl">CWD:</span>
-  <input type="text" id="chat-cwd" placeholder="작업 디렉토리" style="width:200px">
+  <input type="text" id="chat-cwd" placeholder="작업 디렉토리 (모든 패널 공통)" style="width:240px">
   <div class="sep"></div>
-  <label style="font-size:.75em;color:var(--text-dim);display:flex;align-items:center;gap:3px"><input type="checkbox" id="chat-only" checked> 대화전용</label>
+  <span class="lbl" style="font-size:.7em;color:var(--text-muted)">💡 대화전용/툴사용은 각 패널에서 개별 설정</span>
   <div class="sep"></div>
   <button onclick="closeAllPanels()" title="모든 채팅 닫기">🗑 모두닫기</button>
   <span style="font-size:.7em;color:var(--text-muted);margin-left:auto">패널: <span id="panel-count">0</span></span>
@@ -94,6 +105,31 @@ function savePanelList(){
 }
 function loadPanelList(){
   try{return JSON.parse(localStorage.getItem(LS_PANELS))||[]}catch(e){return[]}
+}
+
+// 패널별 chatOnly 모드 — convId별 localStorage
+function panelModeKey(convId){return 'chat_mode_'+convId}
+function loadPanelMode(convId){
+  if(!convId)return null;
+  const v=localStorage.getItem(panelModeKey(convId));
+  if(v===null)return null;
+  return v==='1';
+}
+function savePanelMode(convId,chatOnly){
+  if(!convId)return;
+  localStorage.setItem(panelModeKey(convId),chatOnly?'1':'0');
+}
+
+function togglePanelMode(key,chatOnly){
+  const state=panels.get(key);if(!state)return;
+  state.chatOnly=chatOnly;
+  if(state.convId)savePanelMode(state.convId,chatOnly);
+  // 라벨/스타일 갱신
+  const lbl=document.querySelector(`[data-mode-label="${key}"]`);
+  if(lbl)lbl.textContent=chatOnly?'💬 대화전용':'🔧 툴사용';
+  const tog=document.querySelector(`[data-toggle="${key}"]`);
+  if(tog)tog.classList.toggle('tool-mode',!chatOnly);
+  console.log(`[MODE] ${key} → ${chatOnly?'chat-only':'tool-use'}`);
 }
 
 async function renderSidePanel(){
@@ -129,7 +165,9 @@ async function openChat(convId,nodeId,nodeName,nodeType){
   // 빈 패널 제거
   const empty=document.querySelector('.chat-panel.empty');if(empty)empty.remove();
 
-  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew};
+  // chatOnly 기본 = true (대화전용), localStorage에 패널별 저장된 값 우선
+  const savedMode=loadPanelMode(convId);
+  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew,chatOnly:savedMode!==null?savedMode:true};
   panels.set(key,state);
 
   const multi=document.getElementById('chat-multi');
@@ -141,7 +179,14 @@ async function openChat(convId,nodeId,nodeName,nodeType){
     <div class="chat-header">
       <span style="font-size:1.1em">${t.icon}</span>
       <span class="ttl">${escH(nodeName)}${isNew?' <span style="color:var(--text-muted);font-size:.85em">(새 대화)</span>':''}</span>
-      <span class="x" onclick="closePanel('${key}')" title="닫기">✕</span>
+      <div class="tools">
+        <label class="toggle ${state.chatOnly?'':'tool-mode'}" data-toggle="${key}" title="대화전용 = 도구 안 씀 (빠름) / 툴사용 = 파일·웹 등 사용 가능 (느림)">
+          <input type="checkbox" ${state.chatOnly?'':'checked'} onchange="togglePanelMode('${key}',!this.checked)" style="cursor:pointer">
+          <span data-mode-label="${key}">${state.chatOnly?'💬 대화전용':'🔧 툴사용'}</span>
+        </label>
+        <button onclick="exportChatToMemo('${key}')" title="이 대화 전체를 메모로 저장">📝→메모</button>
+        <span class="x" onclick="closePanel('${key}')" title="닫기" style="cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px">✕</span>
+      </div>
     </div>
     <div class="chat-messages" data-msgs="${key}"></div>
     <div class="chat-input-bar">
@@ -169,7 +214,7 @@ async function reloadMessages(key){
   el.innerHTML='';
   if(r.ok&&r.messages){
     r.messages.forEach((m,i)=>{
-      addMsgUI(key,m.role,m.content,m.ts,m.role==='user'?'YOU':'CLAUDE');
+      addMsgUI(key,m.role,m.content,m.ts,m.role==='user'?'YOU':'CLAUDE',m.chat_only);
       state.lastMsgId=m.id;
     });
     state.lastRole=r.messages.length?r.messages[r.messages.length-1].role:null;
@@ -204,11 +249,17 @@ function closeAllPanels(){
   [...panels.keys()].forEach(closePanel);
 }
 
-function addMsgUI(key,role,content,ts,label){
+function addMsgUI(key,role,content,ts,label,chatOnlyFlag){
   const el=document.querySelector(`[data-msgs="${key}"]`);if(!el)return;
   const d=document.createElement('div');d.className='msg '+role;
   const time=ts?new Date(ts).toLocaleTimeString('ko-KR'):'';
-  d.innerHTML=`<div class="msg-label">${label||role.toUpperCase()}</div><div class="msg-bubble">${escH(content)}</div><div class="msg-time">${time}</div>`;
+  // 모드 배지 (대화전용/툴사용)
+  let modeBadge='';
+  if(chatOnlyFlag!==undefined&&chatOnlyFlag!==null){
+    const isChat=(chatOnlyFlag==1||chatOnlyFlag===true);
+    modeBadge=`<span class="mode-badge ${isChat?'chat':'tool'}" title="${isChat?'대화전용 모드 (도구 사용 안 함)':'툴사용 모드 (파일/웹/Bash 등 가능)'}">${isChat?'💬':'🔧'}</span>`;
+  }
+  d.innerHTML=`<div class="msg-label">${label||role.toUpperCase()}${modeBadge}</div><div class="msg-bubble">${escH(content)}</div><div class="msg-time">${time}</div>`;
   el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
 
@@ -228,12 +279,14 @@ async function sendChat(key){
   const btn=document.querySelector(`[data-send="${key}"]`);
   const msg=input.value.trim();if(!msg)return;
   input.value='';btn.disabled=true;state.pending=true;
-  addMsgUI(key,'user',msg,new Date().toISOString(),'YOU');
+  // 메시지에 현재 모드 배지 표시 (이번 메시지가 어느 모드로 보내지는지)
+  addMsgUI(key,'user',msg,new Date().toISOString(),'YOU',state.chatOnly);
   showTyping(key);
 
   const cwd=document.getElementById('chat-cwd').value.trim()||undefined;
-  const chatOnly=document.getElementById('chat-only').checked;
-  const r=await api('POST','/api/chat',{convId:state.convId||'',nodeId:state.nodeId,nodeName:state.nodeName,message:msg,cwd,chatOnly});
+  // 패널별 chatOnly 사용 (전역이 아님 — 각 패널이 독립 모드)
+  state._lastSentChatOnly=state.chatOnly;
+  const r=await api('POST','/api/chat',{convId:state.convId||'',nodeId:state.nodeId,nodeName:state.nodeName,message:msg,cwd,chatOnly:state.chatOnly});
 
   if(r.ok&&r.convId){
     // 새 대화면 진짜 convId로 키 교체
@@ -242,17 +295,23 @@ async function sendChat(key){
       const newKey=r.convId;
       state.convId=r.convId;state.key=newKey;state.isNew=false;
       panels.delete(oldKey);panels.set(newKey,state);
-      // DOM 업데이트
-      ['data-panel-key','data-msgs','data-input','data-send','data-typing'].forEach(attr=>{
+      // 패널별 모드 저장
+      savePanelMode(newKey,state.chatOnly);
+      // DOM 업데이트 (data-* 속성 교체)
+      ['data-panel-key','data-msgs','data-input','data-send','data-typing','data-toggle','data-mode-label'].forEach(attr=>{
         document.querySelectorAll(`[${attr}="${oldKey}"]`).forEach(el=>el.setAttribute(attr,newKey));
       });
       // onclick 핸들러 재바인딩
       const panel=document.querySelector(`[data-panel-key="${newKey}"]`);
       if(panel){
-        panel.querySelector('.x').setAttribute('onclick',`closePanel('${newKey}')`);
+        panel.querySelectorAll('[onclick]').forEach(el=>{
+          const oc=el.getAttribute('onclick');
+          if(oc&&oc.includes(oldKey))el.setAttribute('onclick',oc.replaceAll(oldKey,newKey));
+        });
         const ta=panel.querySelector('textarea');
-        ta.setAttribute('onkeydown',`if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat('${newKey}')}`);
-        panel.querySelector('button').setAttribute('onclick',`sendChat('${newKey}')`);
+        if(ta)ta.setAttribute('onkeydown',`if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat('${newKey}')}`);
+        const cb=panel.querySelector('input[type=checkbox]');
+        if(cb)cb.setAttribute('onchange',`togglePanelMode('${newKey}',!this.checked)`);
       }
       savePanelList();
     }
@@ -282,11 +341,46 @@ function startPolling(key){
     if(ck.ok&&ck.done){
       clearInterval(state.polling);state.polling=null;state.pending=false;
       removeTyping(key);
-      addMsgUI(key,'assistant',ck.reply,new Date().toISOString(),'CLAUDE');
+      // 응답 메시지에도 모드 배지 (이번 응답이 어느 모드로 처리됐는지)
+      addMsgUI(key,'assistant',ck.reply,new Date().toISOString(),'CLAUDE',state._lastSentChatOnly);
       const btn=document.querySelector(`[data-send="${key}"]`);if(btn)btn.disabled=false;
       renderSidePanel();
     }
   },2000);
+}
+
+// 채팅 → 메모로 내보내기
+async function exportChatToMemo(key){
+  const state=panels.get(key);if(!state||!state.convId)return alert('아직 저장되지 않은 새 대화입니다');
+  const r=await api('GET',`/api/conv/messages?convId=${state.convId}`);
+  if(!r.ok||!r.messages||r.messages.length===0)return alert('대화 내용 없음');
+  // 포맷팅
+  const lines=[];
+  lines.push(`# 채팅 내역 — ${state.nodeName}`);
+  lines.push(`내보낸 시각: ${new Date().toISOString().substring(0,19).replace('T',' ')}`);
+  lines.push(`대화 ID: ${state.convId}`);
+  lines.push(`메시지 수: ${r.messages.length}`);
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  r.messages.forEach(m=>{
+    const time=m.ts?new Date(m.ts).toLocaleString('ko-KR'):'';
+    const mode=m.chat_only==1?'[💬 대화전용]':'[🔧 툴사용]';
+    const role=m.role==='user'?'**🙋 USER**':'**🤖 CLAUDE**';
+    lines.push(`${role} ${mode} *${time}*`);
+    lines.push('');
+    lines.push(m.content);
+    lines.push('');
+    lines.push('---');
+    lines.push('');
+  });
+  const content=lines.join('\n');
+  const today=new Date().toISOString().substring(0,10).replace(/-/g,'');
+  const defaultName=`${today}_${state.nodeName}_채팅`;
+  const name=prompt('메모 이름:',defaultName);
+  if(!name)return;
+  const sr=await api('POST','/api/memo/save',{name,content,is_temp:0});
+  if(sr.ok){alert(`✅ 메모로 저장됨\n이름: ${name}\nID: ${sr.id}`)}else{alert('저장 실패')}
 }
 
 // 우클릭 분기

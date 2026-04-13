@@ -406,6 +406,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <button onclick="newProject()" title="빈 캔버스에서 새로 시작" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새프로젝트</button>
   <button onclick="openInNewTab()" title="현재 프로젝트를 새 탭에서 열기 (또는 빈 새 탭)" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#c4b5fd">↗ 새 탭</button>
   <button onclick="document.getElementById('appearance-modal').classList.add('show')" title="배경/그리드 색상·간격 조절" style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#ebcb8b">🎨 외관</button>
+  <button onclick="openAttachments()" title="이 프로젝트에 메모/대화 첨부 — 프로젝트 패키지처럼 묶기" style="background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.3);color:#a3e635">📎 첨부</button>
   <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><button onclick="openTrash()" title="휴지통 (삭제된 항목 복원)" style="background:rgba(139,92,246,.15);border-color:rgba(139,92,246,.3);color:#b48ead">🗑️ 휴지통</button><div class="sep"></div>
   <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■ 정지</button><div class="sep"></div>
   <span class="lbl">작업폴더:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><button onclick="openFolderBrowser('wf-cwd')" title="폴더 탐색" style="font-size:11px;padding:3px 8px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:#b48ead;border-radius:3px;cursor:pointer;margin-left:4px">📁</button><div class="sep"></div>
@@ -514,6 +515,29 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     <button onclick="document.getElementById('fav-popup').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
   </div>
   <div id="fav-list" style="overflow-y:auto;max-height:calc(70vh - 50px);padding:8px"></div>
+</div>
+<!-- 프로젝트 첨부 모달 (메모/대화 패키지) -->
+<div id="attach-modal" class="fav-modal" style="min-width:520px">
+  <div class="fav-modal-hd">
+    <div class="crumb"><span style="color:#a3e635;font-weight:600">📎 프로젝트 첨부 패키지</span></div>
+    <span class="x" onclick="document.getElementById('attach-modal').classList.remove('show')">✕</span>
+  </div>
+  <div class="fav-modal-bd" id="attach-bd"></div>
+  <div class="fav-modal-tools">
+    <button onclick="attachAddMemo()">+ 메모 첨부</button>
+    <button onclick="attachAddConv()">+ 대화 첨부</button>
+    <span style="flex:1"></span>
+    <span style="font-size:.7em;color:var(--text-muted);align-self:center">프로젝트 불러올 때 같이 표시됩니다</span>
+  </div>
+</div>
+<!-- 메모 picker (첨부용 — 즐겨찾기 picker 재사용) -->
+<!-- 대화 picker -->
+<div id="conv-picker" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-height:70vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:10001;overflow:hidden">
+  <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-2)">
+    <span style="font-weight:600;font-size:.9em;flex:1">💬 첨부할 대화 선택</span>
+    <button onclick="document.getElementById('conv-picker').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
+  </div>
+  <div id="conv-picker-list" style="overflow-y:auto;max-height:calc(70vh - 60px);padding:6px"></div>
 </div>
 <!-- 외관 설정 모달 (배경/그리드) -->
 <div id="appearance-modal" class="fav-modal" style="min-width:380px">
@@ -821,6 +845,82 @@ function openInNewTab(){
   const url=workflowId?`${location.origin}/#wf=${workflowId}`:location.origin;
   window.open(url,'_blank');
 }
+
+// ═══ 프로젝트 첨부 패키지 ═══
+async function openAttachments(){
+  if(!workflowId){alert('먼저 프로젝트를 저장하세요\n(첨부는 저장된 프로젝트에만 가능)');return}
+  document.getElementById('attach-modal').classList.add('show');
+  await renderAttachments();
+}
+async function renderAttachments(){
+  const r=await api('GET',`/api/proj-attach/list?projectId=${workflowId}`);
+  const items=(r.ok&&r.attachments)||[];
+  const bd=document.getElementById('attach-bd');
+  if(items.length===0){
+    bd.innerHTML=`<div style="text-align:center;padding:30px 20px;color:var(--text-muted);font-size:.85em">
+      첨부된 항목 없음<br><span style="font-size:.9em">아래 [+ 메모/대화 첨부] 버튼으로 묶기</span><br>
+      <span style="font-size:.85em;color:#a3e635;margin-top:8px;display:block">💡 프로젝트 불러올 때 첨부물 모두 같이 표시됩니다</span>
+    </div>`;
+    return;
+  }
+  bd.innerHTML=items.map(it=>{
+    const icon=it.kind==='memo'?'📝':'💬';
+    const action=it.kind==='memo'?`onclick="openMemoEditor(${it.targetId})"`:`onclick="window.open('/chat.html','_blank')"`;
+    return `<div class="fav-row" ${action}>
+      <span class="ic">${icon}</span>
+      <span class="nm">${escapeHtml(it.title||'무제')}</span>
+      <span class="pv">${escapeHtml((it.preview||'').substring(0,60))}</span>
+      <div class="actions">
+        <button onclick="event.stopPropagation();attachRemove(${it.id})" title="첨부 해제">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function attachRemove(id){
+  await api('POST','/api/proj-attach/remove',{id});
+  renderAttachments();
+}
+async function attachAddMemo(){
+  const r=await api('GET','/api/memo/list');
+  _allMemosCache=(r.ok&&r.memos)||[];
+  document.getElementById('memo-picker-search').value='';
+  document.getElementById('memo-picker').style.display='block';
+  // 선택시 attachAddMemoPick으로 라우팅 — 모드 플래그
+  window._memoPickerMode='attach';
+  renderMemoPicker('');
+}
+async function attachAddConv(){
+  // 모든 노드의 대화 목록 모으기
+  const nodesList=loadNodes();
+  let allConvs=[];
+  for(const n of nodesList){
+    const r=await api('GET',`/api/conv/list?nodeId=${n.id}`);
+    if(r.ok&&r.conversations){
+      r.conversations.forEach(c=>allConvs.push({...c,nodeName:n.name||'노드'}));
+    }
+  }
+  const list=document.getElementById('conv-picker-list');
+  if(allConvs.length===0){
+    list.innerHTML='<div style="padding:30px;text-align:center;color:var(--text-muted)">대화 없음</div>';
+  }else{
+    list.innerHTML=allConvs.map(c=>`
+      <div onclick="attachAddConvPick('${c.id}')" style="display:flex;gap:8px;align-items:center;padding:7px 10px;cursor:pointer;border-radius:4px;font-size:.82em" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">
+        <span style="color:#7ecfff">💬</span>
+        <span style="flex:1;color:var(--text)">${escapeHtml(c.title||'대화')}</span>
+        <span style="font-size:.75em;color:var(--text-muted)">${escapeHtml(c.nodeName)} · ${c.msg_count||0}msg</span>
+      </div>`).join('');
+  }
+  document.getElementById('conv-picker').style.display='block';
+}
+async function attachAddConvPick(convId){
+  const r=await api('POST','/api/proj-attach/add',{projectId:workflowId,kind:'conversation',targetId:convId});
+  document.getElementById('conv-picker').style.display='none';
+  if(r.duplicate)alert('이미 첨부됨');
+  renderAttachments();
+}
+
+// favPickMemo 확장 — attach 모드면 첨부 라우팅
+const _origFavPickMemo=typeof favPickMemo==='function'?favPickMemo:null;
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
 const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};
@@ -2394,12 +2494,12 @@ function autoSave(){
   _saveTimer=setTimeout(()=>{
     const st=getState();
     api('POST','/api/state/save',st);
-    // 5분마다 한 번씩만 temp 백업 (변경이 있을 때만)
+    // 5분마다 temp 백업 — 단, 이름이 '무제'면 임시 저장 안 함 (잡음 방지)
     const now=Date.now();
-    if(now-_lastTempSave>5*60*1000&&st.nodes&&st.nodes.length>0){
+    if(now-_lastTempSave>5*60*1000&&st.nodes&&st.nodes.length>0&&wfName&&wfName.trim()){
       _lastTempSave=now;
-      api('POST','/api/temp/save',{...st,name:wfName||'무제'});
-      console.log('[TEMP] 자동 백업');
+      api('POST','/api/temp/save',{...st,name:wfName});
+      console.log('[TEMP] 자동 백업:',wfName);
     }
   },2000);
 }
@@ -2422,30 +2522,74 @@ function loadState(st){
 }
 
 // ═══ WORKFLOW SAVE/LOAD ═══
+function dateStamp(){const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
 async function saveWorkflow(){
+  let useFolderId=null;  // 자동 날짜 폴더에 배치할지
   if(workflowId&&wfName){
     // 기존 프로젝트 있음 → 덮어쓰기/새이름 선택
     const choice=confirm(`"${wfName}" 에 덮어쓰기 하시겠습니까?\n\n[확인] = 덮어쓰기\n[취소] = 새 이름으로 저장`);
     if(choice){
-      // 덮어쓰기
       const d=getState();d.id=workflowId;d.name=wfName;
-      const r=await api('POST','/api/project/save',d);if(r.ok)refreshWfList();return;
+      const r=await api('POST','/api/project/save',d);
+      if(r.ok){
+        refreshWfList();
+        if(typeof loadLandingLists==='function')loadLandingLists().catch(()=>{});
+        console.log('[SAVE] 덮어쓰기 OK:',wfName,workflowId);
+      }
+      return;
     } else {
-      // 새 이름
-      const name=prompt('새 프로젝트 이름:','');if(!name)return;
-      wfName=name;workflowId=null;
+      const def=`${dateStamp()}_`;
+      const name=prompt(`새 프로젝트 이름:\n(💡 디폴트로 오늘 날짜 접두사가 붙습니다. 지워도 됩니다)`,def);
+      if(!name||!name.trim())return;
+      wfName=name.trim();workflowId=null;
     }
   } else {
-    const name=prompt('프로젝트 이름:',wfName||'프로젝트');if(!name)return;wfName=name;
+    const def=`${dateStamp()}_${wfName||''}`.replace(/_$/,'')||`${dateStamp()}_프로젝트`;
+    const name=prompt(`프로젝트 이름:\n(💡 디폴트로 YYYYMMDD_ 접두사가 붙습니다. 지워도 됩니다)`,def);
+    if(!name||!name.trim())return;
+    wfName=name.trim();
   }
+  // 오늘 날짜 폴더 자동 생성/확보 (사용자가 매일 쌓이는 프로젝트를 자동 분류)
+  try{
+    const fr=await api('POST','/api/project/date-folder',{});
+    if(fr.ok&&fr.dateFolderId){useFolderId=fr.dateFolderId;console.log('[FOLDER] 날짜 폴더:',fr.dateFolderName)}
+  }catch(e){}
+
   const d=getState();d.id=workflowId||undefined;d.name=wfName;
-  const r=await api('POST','/api/project/save',d);if(r.ok){workflowId=r.id;refreshWfList()}
+  const r=await api('POST','/api/project/save',d);
+  if(r.ok&&r.id){
+    workflowId=r.id;
+    location.hash='wf='+workflowId;
+    // 자동 날짜 폴더로 이동
+    if(useFolderId){
+      try{await api('POST','/api/project/move',{id:workflowId,folderId:useFolderId})}catch(e){}
+    }
+    refreshWfList();
+    if(typeof loadLandingLists==='function')loadLandingLists().catch(()=>{});
+    console.log('[SAVE] 신규 OK:',wfName,workflowId,'folder:',useFolderId);
+    alert(`✅ 저장 완료\n이름: ${wfName}\n${useFolderId?'📅 오늘 날짜 폴더에 자동 분류됨':''}`);
+  }else{
+    alert('❌ 저장 실패\n'+(r.error||''));
+  }
 }
 async function loadWorkflow(id){
   if(!id)return;
   const r=await api('GET',`/api/project/load?id=${id}`);
   if(!r.ok||!r.project)return;
   loadState(r.project);
+  // 첨부물 있으면 알림
+  try{
+    const at=await api('GET',`/api/proj-attach/list?projectId=${id}`);
+    const cnt=(at.ok&&at.attachments&&at.attachments.length)||0;
+    if(cnt>0){
+      console.log('[LOAD] 첨부물',cnt,'개');
+      // 툴바 📎 버튼에 카운트 배지
+      setTimeout(()=>{
+        const btns=document.querySelectorAll('button[onclick="openAttachments()"]');
+        btns.forEach(b=>{if(!b.textContent.includes('('))b.textContent=`📎 첨부 (${cnt})`});
+      },100);
+    }
+  }catch(e){}
 }
 async function refreshWfList(){const r=await api('GET','/api/project/list');const s=document.getElementById('wf-sel');s.innerHTML='<option value="">불러오기</option>';if(r.ok)r.projects.forEach(w=>s.innerHTML+=`<option value="${w.id}">${w.name}</option>`)}
 function newProject(){
@@ -2799,35 +2943,85 @@ async function renameFolder(fid,currentName){
   await api('POST','/api/folder/save',{id:fid,name,icon:f?f.icon:'📁',color:f?f.color:''});
   loadFolders();
 }
+// 확장된 이모지 라이브러리 — 카테고리별
+const ICON_CATEGORIES={
+  '📁 폴더/문서':'📁 📂 📅 📆 📇 📈 📉 📊 📋 📌 📍 📎 📏 📐 📒 📓 📔 📕 📖 📗 📘 📙 📚 📛 📜 📝 📞 📠 📡 📰 📑 📒 📓 📔'.split(' '),
+  '⭐ 별/즐겨찾기':'⭐ 🌟 ✨ 💫 ⚡ 🔥 ❤️ 💛 💚 💙 💜 🖤 🤍 🤎 🧡'.split(' '),
+  '🔬 과학/연구':'🔬 🧪 🧬 🔭 🧲 ⚗️ 💉 🩺 🩻 🌡️ 🧫 🦠 ☢️ ☣️ ⚛️'.split(' '),
+  '💪 운동/스포츠':'💪 🏃 🚴 🏊 🏋️ 🤸 🧘 ⛹️ 🏌️ ⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🏸 🥊 🥋 ⛳ ⛸️ 🥌 🛷 🎿 ⛷️ 🏂'.split(' '),
+  '🎓 교육/학습':'🎓 🏫 📚 ✏️ ✒️ 🖋️ 🖊️ 🖌️ 🖍️ 📐 📏 🧮 🧠 💡 🎒'.split(' '),
+  '💻 기술/툴':'💻 🖥️ ⌨️ 🖱️ 💾 💿 📀 🔧 🔨 ⚙️ 🛠️ 🧰 🔌 🔋 📱 📲 ☎️ 📞 📟 📠 🌐 📡'.split(' '),
+  '🎯 목표/관리':'🎯 🏆 🏅 🥇 🥈 🥉 🚩 🎌 🏁 🏳️ 🏴 ✅ ❌ ⚠️ ❓ ❗ 💯 🔔 🔕 ⏰ ⏳ ⌛'.split(' '),
+  '🎨 색상/도형':'🔵 🟢 🟡 🔴 🟠 🟣 ⚫ ⚪ 🟤 🔶 🔷 🔸 🔹 ◼️ ◻️ ▪️ ▫️ 🟥 🟧 🟨 🟩 🟦 🟪 🟫 ⬛ ⬜'.split(' '),
+};
 function showIconColorPicker(defaults,callback){
-  const ICONS='📁 📂 ⭐ 💡 🔬 📊 🎯 🏆 📐 🧪 💪 🏃 ⚽ 🏋️ 🎓 📝 🔧 💻 🌐 ❤️ 🔵 🟢 🟡 🔴 ⚪ 📅'.split(' ');
   const COLORS=['#3B82F6','#EF4444','#F59E0B','#10B981','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#84CC16',''];
-  let selIcon=defaults.icon||'📁',selColor=defaults.color||'';
+  let selIcon=defaults.icon||'📁',selColor=defaults.color||'',customIcons=[];
   const pop=document.createElement('div');
-  pop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:340px;background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:1002;padding:14px;color:var(--text)';
+  pop.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:480px;max-height:85vh;overflow-y:auto;background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:1002;padding:14px;color:var(--text)';
+  async function loadCustom(){
+    try{const r=await api('GET','/api/icons/list');customIcons=(r.ok&&r.icons)||[]}catch(e){customIcons=[]}
+    render();
+  }
+  function isImg(s){return s&&(s.startsWith('data:')||s.startsWith('http')||s.startsWith('/'))}
+  function iconCell(ic,id){
+    const sel=ic===selIcon;
+    if(isImg(ic)){
+      return `<span style="cursor:pointer;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;border:2px solid ${sel?'var(--accent)':'transparent'};background:${sel?'var(--bg-3)':'transparent'};position:relative" data-ic="${ic}">
+        <img src="${ic}" style="max-width:24px;max-height:24px;object-fit:contain">
+        ${id?`<button onclick="event.stopPropagation();delCustomIcon(${id})" style="position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;border:none;width:14px;height:14px;border-radius:50%;font-size:9px;cursor:pointer;line-height:1">×</button>`:''}
+      </span>`;
+    }
+    return `<span style="cursor:pointer;font-size:20px;padding:4px 6px;border-radius:4px;border:2px solid ${sel?'var(--accent)':'transparent'};background:${sel?'var(--bg-3)':'transparent'}" data-ic="${ic}">${ic}</span>`;
+  }
   function render(){
+    let cats='';
+    Object.entries(ICON_CATEGORIES).forEach(([cat,icons])=>{
+      cats+=`<div style="font-size:.7em;color:var(--text-muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.5px">${cat}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${icons.map(ic=>iconCell(ic)).join('')}</div>`;
+    });
+    let custom='<div style="font-size:.7em;color:var(--text-muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:6px">🖼️ 커스텀 업로드 <button id="icp-upload" style="background:var(--accent);color:#000;border:none;padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px;font-weight:600">+ 업로드</button></div>';
+    custom+=`<div style="display:flex;flex-wrap:wrap;gap:4px;min-height:36px;padding:4px;background:var(--bg-2);border-radius:4px">${customIcons.length?customIcons.map(c=>iconCell(c.data,c.id)).join(''):'<span style="color:var(--text-muted);font-size:11px;padding:6px">PNG/SVG/JPG 파일을 업로드하면 여기에 추가됩니다</span>'}</div>`;
     pop.innerHTML=`
-      <div style="font-size:.85em;font-weight:600;margin-bottom:8px">아이콘 선택</div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">${ICONS.map(ic=>`<span style="cursor:pointer;font-size:20px;padding:4px 6px;border-radius:4px;border:2px solid ${ic===selIcon?'var(--accent)':'transparent'};background:${ic===selIcon?'var(--bg-3)':'transparent'}" data-ic="${ic}">${ic}</span>`).join('')}</div>
-      <div style="font-size:.85em;font-weight:600;margin-bottom:8px">색상 선택</div>
+      <div style="font-size:.9em;font-weight:600;margin-bottom:8px">🎨 아이콘 + 색상 선택</div>
+      ${cats}
+      ${custom}
+      <div style="font-size:.7em;color:var(--text-muted);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.5px">색상</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">${COLORS.map(c=>{
         const bg=c||'var(--bg-3)';const label=c?'':'없음';
         return `<div style="width:28px;height:28px;background:${bg};border:2px solid ${c===selColor?'#fff':'var(--border)'};border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text-muted)" data-cl="${c}">${label}</div>`;
       }).join('')}</div>
-      <div style="display:flex;gap:6px;justify-content:flex-end">
+      <div style="display:flex;gap:6px;justify-content:flex-end;position:sticky;bottom:-14px;background:var(--bg-1);padding:6px 0;margin:0 -14px -14px;padding:6px 14px;border-top:1px solid var(--border)">
         <button id="icp-cancel" style="background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:5px 14px;border-radius:4px;cursor:pointer;font-size:.82em">취소</button>
         <button id="icp-ok" style="background:var(--accent);color:#000;border:none;padding:5px 14px;border-radius:4px;cursor:pointer;font-size:.82em;font-weight:600">확인</button>
-      </div>`;
+      </div>
+      <input type="file" id="icp-file" accept="image/*" style="display:none">`;
     pop.querySelectorAll('[data-ic]').forEach(el=>el.addEventListener('click',()=>{selIcon=el.dataset.ic;render()}));
     pop.querySelectorAll('[data-cl]').forEach(el=>el.addEventListener('click',()=>{selColor=el.dataset.cl;render()}));
     pop.querySelector('#icp-cancel').addEventListener('click',()=>{pop.remove();if(pop._backdrop)pop._backdrop.remove()});
     pop.querySelector('#icp-ok').addEventListener('click',()=>{pop.remove();if(pop._backdrop)pop._backdrop.remove();callback({icon:selIcon,color:selColor})});
+    pop.querySelector('#icp-upload').addEventListener('click',()=>pop.querySelector('#icp-file').click());
+    pop.querySelector('#icp-file').addEventListener('change',async ev=>{
+      const f=ev.target.files[0];if(!f)return;
+      if(f.size>5*1024*1024)return alert('5MB 이하 파일만');
+      const reader=new FileReader();
+      reader.onload=async e=>{
+        const r=await api('POST','/api/icon/save',{name:f.name,data:e.target.result,kind:'image'});
+        if(r.ok){await loadCustom()}else{alert('업로드 실패: '+(r.error||''))}
+      };
+      reader.readAsDataURL(f);
+    });
   }
+  window.delCustomIcon=async function(id){
+    if(!confirm('이 커스텀 아이콘을 삭제할까요?'))return;
+    await api('POST','/api/icon/delete',{id});
+    loadCustom();
+  };
   const backdrop=document.createElement('div');
-  backdrop.style.cssText='position:fixed;inset:0;z-index:1001;background:transparent';
+  backdrop.style.cssText='position:fixed;inset:0;z-index:1001;background:rgba(0,0,0,.4)';
   backdrop.onclick=()=>{backdrop.remove();pop.remove()};
   pop._backdrop=backdrop;
-  render();
+  render();loadCustom();
   document.body.appendChild(backdrop);
   document.body.appendChild(pop);
 }
@@ -2888,25 +3082,39 @@ async function loadLandingLists(){
         <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
       </div>`;
-    let projHtml='<div class="pf-bar"><button onclick="newProjectFolder()">📂 새 폴더</button></div>';
-    for(const f of projFolders){
+    let projHtml='<div class="pf-bar"><button onclick="newProjectFolder()">📂 새 폴더</button><button onclick="newProjectFolder(true)" style="margin-left:6px" title="하위 폴더 만들때는 폴더의 + 버튼 사용">📅 오늘 날짜 폴더 자동 생성</button></div>';
+    // 계층 트리 빌드 (parent_id 기반)
+    const folderById={};projFolders.forEach(f=>{folderById[f.id]={...f,children:[]}});
+    const topFolders=[];
+    projFolders.forEach(f=>{
+      if(f.parent_id&&folderById[f.parent_id])folderById[f.parent_id].children.push(folderById[f.id]);
+      else topFolders.push(folderById[f.id]);
+    });
+    function renderFolder(f,depth){
       const folderProjects=pj.projects.filter(p=>p.folder_id==f.id);
       const eName=(f.name||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-      projHtml+=`<div class="pf-group" data-pfid="${f.id}">
+      const childCount=f.children.length;
+      const totalCount=folderProjects.length+childCount;
+      let html=`<div class="pf-group" data-pfid="${f.id}" style="margin-left:${depth*16}px">
         <div class="pf-header" data-drop-pfid="${f.id}" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:5px':''}">
           <span class="pf-arrow">▼</span>
-          <span>${f.icon||'📂'} ${escapeHtml(f.name)}</span>
+          <span>${renderIcon(f.icon||'📂',18)} ${escapeHtml(f.name)}</span>
           <span style="flex:1"></span>
-          <span style="font-size:9px;color:var(--text-dim)">${folderProjects.length}</span>
+          <span style="font-size:9px;color:var(--text-dim)" title="프로젝트${folderProjects.length}+하위폴더${childCount}">${totalCount}</span>
+          <button class="pf-btn" onclick="event.stopPropagation();newSubProjectFolder(${f.id})" title="하위 폴더 추가">➕</button>
           <button class="pf-btn" onclick="event.stopPropagation();renameProjectFolder(${f.id},'${eName}')" title="이름 변경">✏️</button>
           <button class="pf-btn" onclick="event.stopPropagation();editProjectFolderColor(${f.id})" title="아이콘/색상">🎨</button>
           <button class="pf-btn" onclick="event.stopPropagation();deleteProjectFolder(${f.id})" title="삭제" style="color:var(--red)">🗑</button>
         </div>
         <div class="pf-list" data-drop-pfid="${f.id}">
-          ${folderProjects.map(p=>projectItemHtml(p)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">프로젝트 없음</div>'}
-        </div>
-      </div>`;
+          ${folderProjects.map(p=>projectItemHtml(p)).join('')||(childCount===0?'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">비어있음</div>':'')}
+        </div>`;
+      // 하위 폴더 재귀
+      f.children.forEach(c=>{html+=renderFolder(c,depth+1)});
+      html+='</div>';
+      return html;
     }
+    topFolders.forEach(f=>{projHtml+=renderFolder(f,0)});
     const uncategorized=pj.projects.filter(p=>!p.folder_id);
     projHtml+=`<div class="pf-group" data-pfid="null">
       <div class="pf-header" data-drop-pfid="null" onclick="this.parentElement.classList.toggle('collapsed')">
@@ -3195,10 +3403,22 @@ async function emptyTrash(){
 }
 
 // ═══ PROJECT FOLDERS ═══
-async function newProjectFolder(){
+async function newProjectFolder(autoDate){
+  if(autoDate){
+    // 오늘 날짜 폴더 자동 생성 (연도 > YYYYMMDD 계층)
+    const r=await api('POST','/api/project/date-folder',{});
+    if(r.ok){alert(`✅ ${r.dateFolderName} 폴더 생성됨 (연도 ${new Date().getFullYear()} 폴더 아래)`);loadLandingLists()}
+    return;
+  }
   const name=prompt('새 프로젝트 폴더 이름:');
   if(!name)return;
   await api('POST','/api/project-folder/save',{name,icon:'📂',color:''});
+  loadLandingLists();
+}
+async function newSubProjectFolder(parentId){
+  const name=prompt('하위 폴더 이름:');
+  if(!name)return;
+  await api('POST','/api/project-folder/save',{name,icon:'📂',color:'',parentId});
   loadLandingLists();
 }
 async function renameProjectFolder(id,currentName){
@@ -3333,13 +3553,21 @@ async function loadFavNav(){
   let html='';
   folders.forEach(f=>{
     const color=f.color||'rgba(245,158,11,.3)';
-    html+=`<span class="fav-folder-chip" style="border-color:${color}" onclick="openFavFolder(${f.id},'${escH(f.name)}')" oncontextmenu="event.preventDefault();favRenameFolder(${f.id},'${escH(f.name)}')" title="${escH(f.name)} (우클릭=이름변경)">${f.icon||'⭐'} ${escH(f.name)}</span>`;
+    html+=`<span class="fav-folder-chip" style="border-color:${color}" onclick="openFavFolder(${f.id},'${escH(f.name)}')" oncontextmenu="event.preventDefault();favRenameFolder(${f.id},'${escH(f.name)}')" title="${escH(f.name)} (우클릭=이름변경)">${renderIcon(f.icon||'⭐',14)} ${escH(f.name)}</span>`;
   });
   html+=`<span class="fav-add-btn" onclick="favNewTopFolder()" title="새 즐겨찾기 폴더">+ 새 폴더</span>`;
   el.innerHTML=html;
 }
 
 function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;')}
+// 아이콘 렌더 — 이모지면 그대로, data:/http/path면 img 태그
+function renderIcon(ic,size){
+  if(!ic)return '📁';
+  if(typeof ic==='string'&&(ic.startsWith('data:')||ic.startsWith('http')||ic.startsWith('/'))){
+    return `<img src="${ic}" style="width:${size||16}px;height:${size||16}px;object-fit:contain;vertical-align:middle">`;
+  }
+  return ic;
+}
 
 async function favNewTopFolder(){
   const name=prompt('새 즐겨찾기 폴더 이름:');
@@ -3495,6 +3723,16 @@ function renderMemoPicker(filter){
 }
 
 async function favPickMemo(memoId){
+  // 첨부 모드 분기 (attachAddMemo가 트리거함)
+  if(window._memoPickerMode==='attach'){
+    window._memoPickerMode=null;
+    document.getElementById('memo-picker').style.display='none';
+    if(!workflowId)return alert('프로젝트 먼저 저장하세요');
+    const r=await api('POST','/api/proj-attach/add',{projectId:workflowId,kind:'memo',targetId:memoId});
+    if(r.duplicate)alert('이미 첨부됨');
+    renderAttachments();
+    return;
+  }
   if(!favCurrentFolderId)return;
   const r=await api('POST','/api/fav/item/add',{folderId:favCurrentFolderId,memoId});
   document.getElementById('memo-picker').style.display='none';
