@@ -96,14 +96,19 @@ DB_DATA_HOST=/volume1/FlowDesk/db
 
 1. **Container Manager 설치** (DSM 패키지 센터에서)
 2. **SSH 활성화** (제어판 → 단말기 및 SNMP → SSH 체크)
-3. **폴더 구조 생성** (File Station 또는 SSH로):
+3. **폴더 생성 + 권한 설정** — STEP 2에서 앱 업로드 후 SSH로 1회 실행:
+   ```bash
+   sudo bash /volume1/docker/gils-flowdesk/setup-synology.sh
    ```
-   /volume1/docker/gils-flowdesk/   ← 앱 파일 배치할 곳
-   /volume1/FlowDesk/db/            ← DB 저장소
-   /volume1/FlowDesk/workspace/     ← 작업 폴더
-   /volume1/FlowDesk/creds/         ← Claude 인증
-   /volume1/FlowDesk/uploads/       ← 업로드 파일
+   이 스크립트가 다음을 자동 생성/권한 설정:
    ```
+   /volume1/FlowDesk/db/            ← DB 저장소 (postgres 소유, 자동)
+   /volume1/FlowDesk/workspace/     ← 작업 폴더 (uid 1000)
+   /volume1/FlowDesk/creds/         ← Claude 인증 (uid 1000)
+   /volume1/FlowDesk/uploads/       ← 업로드 파일 (uid 1000)
+   ```
+
+   ⚠️ **권한이 중요한 이유**: 컨테이너 내부에서는 보안상 root가 아닌 `flowdesk` (uid 1000) 사용자로 동작합니다. Claude CLI가 root에서는 `--dangerously-skip-permissions` 거부하기 때문. 그래서 bind mount된 시놀로지 폴더도 uid 1000 소유여야 컨테이너가 쓸 수 있습니다.
 
 ### STEP 2 — 앱 파일 업로드
 
