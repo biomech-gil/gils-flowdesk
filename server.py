@@ -923,8 +923,17 @@ def get_claude_env_for_account(account_id=None):
     """특정 계정의 env 반환.
     - 전체 OAuth (refreshToken 있음): credentials.json 파일 사용
     - setup-token (refreshToken 없음): CLAUDE_CODE_OAUTH_TOKEN env var만 사용 (파일 없는 빈 dir)
+    - account_id 없으면 active=1 계정으로 폴백
     """
     env = get_claude_env()
+    # account_id 없으면 활성 계정으로 폴백
+    if not account_id:
+        try:
+            active = db_exec("SELECT id FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
+            if active and active.get("id"):
+                account_id = active["id"]
+        except Exception:
+            pass
     if not account_id:
         return env
     try:
