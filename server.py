@@ -337,6 +337,22 @@ def init_db():
                 priority INTEGER DEFAULT 0,
                 created TEXT NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS fav_folders (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                parent_id INTEGER,
+                sort_order INTEGER DEFAULT 0,
+                color TEXT DEFAULT '',
+                icon TEXT DEFAULT '⭐',
+                created TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS fav_items (
+                id SERIAL PRIMARY KEY,
+                folder_id INTEGER NOT NULL,
+                memo_id INTEGER NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
         ]
         for ddl in pg_tables:
             cur.execute(ddl)
@@ -479,6 +495,22 @@ def init_db():
             credentials TEXT NOT NULL,
             active INTEGER DEFAULT 0,
             priority INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS fav_folders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            parent_id INTEGER,
+            sort_order INTEGER DEFAULT 0,
+            color TEXT DEFAULT '',
+            icon TEXT DEFAULT '⭐',
+            created TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS fav_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            folder_id INTEGER NOT NULL,
+            memo_id INTEGER NOT NULL,
+            sort_order INTEGER DEFAULT 0,
             created TEXT NOT NULL
         );
         """)
@@ -1011,6 +1043,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/conv/messages": self._json(self._conv_messages(params))
         elif p == "/api/scratchpad/load": self._json(self._scratchpad_load())
         elif p == "/api/memo/pinned": self._json(self._memo_pinned())
+        elif p == "/api/fav/folders": self._json(self._fav_folders(params))
+        elif p == "/api/fav/items": self._json(self._fav_items(params))
         elif p == "/api/state/load": self._json(self._state_load())
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
@@ -1078,6 +1112,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/folder/delete": self._folder_delete,
             "/api/scratchpad/save": self._scratchpad_save,
             "/api/memo/pin": self._memo_pin,
+            "/api/fav/folder/save": self._fav_folder_save,
+            "/api/fav/folder/delete": self._fav_folder_delete,
+            "/api/fav/item/add": self._fav_item_add,
+            "/api/fav/item/remove": self._fav_item_remove,
             "/api/project/star": self._project_star,
             "/api/project/move": self._project_move,
             "/api/project-folder/save": self._project_folder_save,
@@ -1813,6 +1851,88 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         pinned = 1 if body.get("pinned", True) else 0
         if mid:
             db_exec("UPDATE memos SET pinned=? WHERE id=?", (pinned, mid))
+        return {"ok": True}
+
+    # ── 즐겨찾기 폴더 (메모와 별개 카테고리, 같은 메모가 여러 폴더에 들어갈 수 있음) ──
+
+    def _fav_folders(self, params):
+        parent_id = params.get("parentId", [""])[0]
+        if parent_id and parent_id != "null":
+            rows = db_exec("SELECT id, name, parent_id, color, icon, sort_order FROM fav_folders WHERE parent_id=? ORDER BY sort_order, id", (int(parent_id),), fetch=True)
+        else:
+            rows = db_exec("SELECT id, name, parent_id, color, icon, sort_order FROM fav_folders WHERE parent_id IS NULL ORDER BY sort_order, id", fetch=True)
+        return {"ok": True, "folders": rows}
+
+    def _fav_folder_save(self, body):
+        fid = body.get("id")
+        now = datetime.now().isoformat()
+        if fid:
+            updates = []
+            params = []
+            if "name" in body:
+                updates.append("name=?"); params.append(body.get("name") or "새 폴더")
+            if "color" in body:
+                updates.append("color=?"); params.append(body.get("color") or "")
+            if "icon" in body:
+                updates.append("icon=?"); params.append(body.get("icon") or "⭐")
+            if "parentId" in body:
+                pid = body.get("parentId")
+                updates.append("parent_id=?"); params.append(pid if pid else None)
+            if "sortOrder" in body:
+                updates.append("sort_order=?"); params.append(int(body.get("sortOrder", 0)))
+            if updates:
+                params.append(fid)
+                db_exec(f"UPDATE fav_folders SET {', '.join(updates)} WHERE id=?", tuple(params))
+            return {"ok": True, "id": fid}
+        else:
+            name = body.get("name", "새 폴더")
+            color = body.get("color", "")
+            icon = body.get("icon", "⭐")
+            parent_id = body.get("parentId")
+            if parent_id in ("", 0, None): parent_id = None
+            new_id = db_exec("INSERT INTO fav_folders (name, parent_id, color, icon, created) VALUES (?,?,?,?,?)", (name, parent_id, color, icon, now))
+            return {"ok": True, "id": new_id}
+
+    def _fav_folder_delete(self, body):
+        fid = body.get("id")
+        if not fid: return {"ok": False, "error": "id required"}
+        # 하위 폴더는 부모 NULL로 (최상단으로 이동), 항목은 삭제
+        db_exec("UPDATE fav_folders SET parent_id=NULL WHERE parent_id=?", (fid,))
+        db_exec("DELETE FROM fav_items WHERE folder_id=?", (fid,))
+        db_exec("DELETE FROM fav_folders WHERE id=?", (fid,))
+        return {"ok": True}
+
+    def _fav_items(self, params):
+        fid = params.get("folderId", [""])[0]
+        if not fid: return {"ok": True, "items": []}
+        # join memos
+        rows = db_exec("""
+            SELECT i.id, i.memo_id, i.sort_order,
+                   m.name as memo_name, substr(m.content,1,80) as preview, m.pinned
+            FROM fav_items i LEFT JOIN memos m ON m.id=i.memo_id
+            WHERE i.folder_id=? ORDER BY i.sort_order, i.id
+        """, (int(fid),), fetch=True)
+        return {"ok": True, "items": rows}
+
+    def _fav_item_add(self, body):
+        fid = body.get("folderId")
+        mid = body.get("memoId")
+        if not fid or not mid: return {"ok": False, "error": "folderId and memoId required"}
+        # 중복 방지
+        existing = db_exec("SELECT id FROM fav_items WHERE folder_id=? AND memo_id=?", (int(fid), int(mid)), fetchone=True)
+        if existing: return {"ok": True, "id": existing["id"], "duplicate": True}
+        new_id = db_exec("INSERT INTO fav_items (folder_id, memo_id, created) VALUES (?,?,?)",
+                         (int(fid), int(mid), datetime.now().isoformat()))
+        return {"ok": True, "id": new_id}
+
+    def _fav_item_remove(self, body):
+        iid = body.get("id")
+        fid = body.get("folderId")
+        mid = body.get("memoId")
+        if iid:
+            db_exec("DELETE FROM fav_items WHERE id=?", (int(iid),))
+        elif fid and mid:
+            db_exec("DELETE FROM fav_items WHERE folder_id=? AND memo_id=?", (int(fid), int(mid)))
         return {"ok": True}
 
     def _state_save(self, body):

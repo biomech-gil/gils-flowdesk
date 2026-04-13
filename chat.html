@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>tmux 채팅</title>
+<title>FlowDesk 채팅</title>
 <style>
 :root{--bg-0:#0d0d14;--bg-1:#13131f;--bg-2:#1a1a2e;--bg-3:#222236;--bg-4:#2a2a3e;--border:#333355;--text:#e0e0e0;--text-dim:#888899;--text-muted:#666677;--accent:#4CAF50;--blue:#2196F3;--red:#F44336;--user-bg:#1e3a5f;--radius:8px;--mono:'Consolas','D2Coding',monospace}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -11,11 +11,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .nav{display:flex;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0}
 .nav a{color:var(--text-dim);text-decoration:none;padding:10px 20px;font-size:.85em;border-bottom:2px solid transparent;transition:.15s}
 .nav a:hover{color:var(--text);background:var(--bg-3)}.nav a.active{color:var(--accent);border-bottom-color:var(--accent)}
-.tb{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0}
+.tb{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg-1);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
 .tb input{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:.82em}
 .tb button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.82em}.tb button:hover{background:var(--bg-4)}
 .tb .lbl{font-size:.75em;color:var(--text-muted)}.tb .sep{width:1px;height:16px;background:var(--border)}
-.chat-area{flex:1;display:flex;overflow:hidden}
+.chat-area{flex:1;display:flex;overflow:hidden;min-height:0}
 /* 좌측: 노드 + 분기 목록 */
 .side{width:220px;border-right:1px solid var(--border);background:var(--bg-1);overflow-y:auto;flex-shrink:0;display:flex;flex-direction:column}
 .side-hd{padding:8px 10px;font-size:.75em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--bg-2)}
@@ -26,10 +26,15 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .nl-badge{font-size:.65em;padding:1px 5px;border-radius:6px;background:var(--bg-4);color:var(--text-muted)}
 .conv-item{display:flex;align-items:center;gap:6px;padding:6px 10px 6px 20px;cursor:pointer;border-bottom:1px solid rgba(51,51,85,.2);font-size:.75em;color:var(--text-dim);transition:.1s}
 .conv-item:hover{background:var(--bg-3);color:var(--text)}.conv-item.active{background:var(--bg-3);color:var(--accent)}
-/* 우측 채팅 */
-.chat-panel{flex:1;display:flex;flex-direction:column;background:var(--bg-0)}
-.chat-header{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.82em;font-weight:600;display:flex;align-items:center;gap:8px}
-.chat-messages{flex:1;overflow-y:auto;padding:14px}
+/* 멀티 채팅 영역 — 가로 스크롤 */
+.chat-multi{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;gap:1px;background:var(--border);min-width:0}
+.chat-panel{flex:0 0 calc(25vw - 60px);min-width:280px;display:flex;flex-direction:column;background:var(--bg-0);min-height:0}
+.chat-panel.empty{flex:1;align-items:center;justify-content:center;color:var(--text-muted);font-size:.82em}
+.chat-header{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.82em;font-weight:600;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.chat-header .ttl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-header .x{cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px;font-size:14px}
+.chat-header .x:hover{background:var(--red);color:#fff}
+.chat-messages{flex:1;overflow-y:auto;padding:14px;min-height:0}
 .msg{margin-bottom:12px;max-width:85%}
 .msg.user{margin-left:auto}.msg.assistant{margin-right:auto}
 .msg-label{font-size:.6em;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase}.msg.user .msg-label{text-align:right}
@@ -40,34 +45,56 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .msg-typing{color:var(--blue);font-style:italic;font-size:.8em;padding:8px 0;animation:tp 1.5s infinite}
 @keyframes tp{0%,100%{opacity:1}50%{opacity:.4}}
 .msg-sep{text-align:center;color:var(--text-muted);font-size:.7em;padding:6px 0;border-top:1px dashed var(--border);margin:6px 0}
-.chat-input-bar{display:flex;gap:8px;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg-1)}
+.chat-input-bar{display:flex;gap:8px;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg-1);flex-shrink:0}
 .chat-input-bar textarea{flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:8px 12px;border-radius:var(--radius);font-size:.82em;font-family:var(--mono);resize:none;min-height:38px;max-height:120px;outline:none;line-height:1.4}
 .chat-input-bar textarea:focus{border-color:var(--accent)}
 .chat-input-bar button{background:var(--accent);color:#000;border:none;padding:8px 18px;border-radius:var(--radius);cursor:pointer;font-weight:600;font-size:.82em;align-self:flex-end}
 .chat-input-bar button:hover{background:#66BB6A}.chat-input-bar button:disabled{opacity:.4;cursor:not-allowed}
-.empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.82em}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg-0)}::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:2px}
+.empty-msg{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.82em;padding:20px;text-align:center}
+.pending-badge{display:inline-block;font-size:9px;padding:1px 5px;background:var(--blue);color:#fff;border-radius:4px;margin-left:4px;animation:tp 1.5s infinite}
+::-webkit-scrollbar{width:6px;height:8px}::-webkit-scrollbar-track{background:var(--bg-0)}::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--bg-4)}
 </style>
 </head>
 <body>
 <nav class="nav"><a href="/">캔버스</a><a href="/chat.html" class="active">채팅</a><a href="/index.html">컨트롤러</a></nav>
-<div class="tb"><span class="lbl">CWD:</span><input type="text" id="chat-cwd" placeholder="작업 디렉토리" style="width:200px"><div class="sep"></div><label style="font-size:.75em;color:var(--text-dim);display:flex;align-items:center;gap:3px"><input type="checkbox" id="chat-only" checked> 대화전용</label></div>
+<div class="tb">
+  <span class="lbl">CWD:</span>
+  <input type="text" id="chat-cwd" placeholder="작업 디렉토리" style="width:200px">
+  <div class="sep"></div>
+  <label style="font-size:.75em;color:var(--text-dim);display:flex;align-items:center;gap:3px"><input type="checkbox" id="chat-only" checked> 대화전용</label>
+  <div class="sep"></div>
+  <button onclick="closeAllPanels()" title="모든 채팅 닫기">🗑 모두닫기</button>
+  <span style="font-size:.7em;color:var(--text-muted);margin-left:auto">패널: <span id="panel-count">0</span></span>
+</div>
 <div class="chat-area">
   <div class="side" id="side-panel"></div>
-  <div class="chat-panel" id="chat-panel"><div class="empty">← 노드/분기 선택</div></div>
+  <div class="chat-multi" id="chat-multi"><div class="chat-panel empty"><div class="empty-msg">← 좌측에서 노드 또는 분기를 선택하면 채팅 패널이 열립니다.<br><br>여러 채팅을 동시에 진행할 수 있어요 (가로 스크롤).</div></div></div>
 </div>
 <div id="chat-ctx" style="position:fixed;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.5);z-index:1000;min-width:160px;padding:4px 0;display:none">
   <div style="padding:7px 14px;font-size:12px;cursor:pointer;transition:.1s" onmouseover="this.style.background='var(--bg-4)'" onmouseout="this.style.background=''" onclick="chatFork()">🔀 대화 분기 생성</div>
 </div>
 <script>
-const API=location.origin,LS_KEY='tmux_canvas_state';
+const API=location.origin,LS_KEY='tmux_canvas_state',LS_PANELS='chat_open_panels';
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
 const TYPES={agent:{icon:'🤖',color:'#3B82F6'},memo:{icon:'📝',color:'#F59E0B'},input:{icon:'📎',color:'#06B6D4'},trigger:{icon:'⚡',color:'#EF4444'}};
-let activeConvId=null,activeNodeId=null,activeNodeName=null,polling=null;
+
+// 패널 상태: panels[convId] = {convId, nodeId, nodeName, polling, pending, lastMsgId}
+const panels=new Map();
 
 function loadNodes(){try{const s=JSON.parse(localStorage.getItem(LS_KEY));return(s&&s.nodes)||[]}catch(e){return[]}}
+
+// 열린 패널 정보 저장 (새로고침/이동 후 복원용)
+function savePanelList(){
+  const arr=[];
+  panels.forEach(p=>arr.push({convId:p.convId,nodeId:p.nodeId,nodeName:p.nodeName}));
+  try{localStorage.setItem(LS_PANELS,JSON.stringify(arr))}catch(e){}
+}
+function loadPanelList(){
+  try{return JSON.parse(localStorage.getItem(LS_PANELS))||[]}catch(e){return[]}
+}
 
 async function renderSidePanel(){
   const panel=document.getElementById('side-panel');
@@ -75,83 +102,190 @@ async function renderSidePanel(){
   let html='<div class="side-hd">노드</div>';
   for(const n of nodesList){
     const t=TYPES[n.type]||TYPES.agent;
-    html+=`<div class="nl-item" onclick="selectNode('${n.id}','${n.name}','${n.type}')" oncontextmenu="event.preventDefault();showChatCtx(event,'${n.id}','${n.name}')"><div class="nl-dot" style="background:${t.color}"></div><span class="nl-name">${t.icon} ${n.name}</span></div>`;
-    // 해당 노드의 대화 분기 목록
+    html+=`<div class="nl-item" onclick="openChat(null,'${n.id}','${escH(n.name)}','${n.type}')" oncontextmenu="event.preventDefault();showChatCtx(event,'${n.id}','${escH(n.name)}')"><div class="nl-dot" style="background:${t.color}"></div><span class="nl-name">${t.icon} ${escH(n.name)}</span></div>`;
     const r=await api('GET',`/api/conv/list?nodeId=${n.id}`);
     if(r.ok&&r.conversations&&r.conversations.length>0){
       for(const c of r.conversations){
-        html+=`<div class="conv-item${activeConvId===c.id?' active':''}" onclick="openConv('${c.id}','${n.id}','${escH(n.name)}')">↳ ${escH(c.title)} <span class="nl-badge">${c.msg_count}</span></div>`;
+        const isOpen=panels.has(c.id);
+        html+=`<div class="conv-item${isOpen?' active':''}" onclick="openChat('${c.id}','${n.id}','${escH(n.name)}')">↳ ${escH(c.title)} <span class="nl-badge">${c.msg_count}</span></div>`;
       }
     }
   }
   panel.innerHTML=html;
+  document.getElementById('panel-count').textContent=panels.size;
 }
 
-function selectNode(nodeId,nodeName,nodeType){
-  // 새 대화 시작 (분기 없이)
-  activeNodeId=nodeId;activeNodeName=nodeName;activeConvId=null;
-  openChatUI(nodeName,nodeType);
-  // 캔버스의 워크플로우 히스토리 보여주기
-  const nodes=loadNodes();const nd=nodes.find(n=>n.id===nodeId);
-  if(nd&&nd.history&&nd.history.length>0){
-    const msgs=document.getElementById('chat-msgs');
-    const sep=document.createElement('div');sep.className='msg-sep';sep.textContent='── 캔버스 워크플로우 기록 ──';msgs.appendChild(sep);
-    nd.history.forEach(h=>{
-      if(h.input)addMsgUI('user',h.input,h.timestamp,'WORKFLOW INPUT');
-      if(h.output)addMsgUI('assistant',h.output,'','OUTPUT');
-    });
+// 채팅 패널 열기 (이미 열려있으면 스크롤만)
+async function openChat(convId,nodeId,nodeName,nodeType){
+  // 새 채팅 (convId=null)인 경우: 임시 ID로 생성, 첫 메시지 전송시 서버가 진짜 ID 발급
+  const isNew=!convId;
+  const key=convId||`new_${nodeId}_${Date.now()}`;
+  if(panels.has(key)){
+    // 이미 열림 → 스크롤만
+    const el=document.querySelector(`[data-panel-key="${key}"]`);
+    if(el)el.scrollIntoView({behavior:'smooth',inline:'center'});
+    return;
   }
-}
+  // 빈 패널 제거
+  const empty=document.querySelector('.chat-panel.empty');if(empty)empty.remove();
 
-async function openConv(convId,nodeId,nodeName){
-  activeConvId=convId;activeNodeId=nodeId;activeNodeName=nodeName;
-  openChatUI(nodeName);
-  const r=await api('GET',`/api/conv/messages?convId=${convId}`);
-  if(r.ok&&r.messages){
-    r.messages.forEach(m=>addMsgUI(m.role,m.content,m.ts,m.role==='user'?'YOU':'CLAUDE'));
+  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew};
+  panels.set(key,state);
+
+  const multi=document.getElementById('chat-multi');
+  const panel=document.createElement('div');
+  panel.className='chat-panel';
+  panel.dataset.panelKey=key;
+  const t=TYPES[nodeType]||TYPES.agent;
+  panel.innerHTML=`
+    <div class="chat-header">
+      <span style="font-size:1.1em">${t.icon}</span>
+      <span class="ttl">${escH(nodeName)}${isNew?' <span style="color:var(--text-muted);font-size:.85em">(새 대화)</span>':''}</span>
+      <span class="x" onclick="closePanel('${key}')" title="닫기">✕</span>
+    </div>
+    <div class="chat-messages" data-msgs="${key}"></div>
+    <div class="chat-input-bar">
+      <textarea data-input="${key}" placeholder="메시지... (Enter=전송, Shift+Enter=줄바꿈)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat('${key}')}"></textarea>
+      <button data-send="${key}" onclick="sendChat('${key}')">전송</button>
+    </div>`;
+  multi.appendChild(panel);
+
+  // 메시지 로드 + 폴링 재개 판단
+  if(convId){
+    await reloadMessages(key);
+    await maybeResumePolling(key);
   }
+  panel.scrollIntoView({behavior:'smooth',inline:'center'});
+  savePanelList();
   renderSidePanel();
 }
 
-function openChatUI(name,type){
-  const ti=TYPES[type]||TYPES.agent;
-  document.getElementById('chat-panel').innerHTML=`
-    <div class="chat-header"><span style="font-size:1.1em">${ti.icon}</span>${escH(name)}</div>
-    <div class="chat-messages" id="chat-msgs"></div>
-    <div class="chat-input-bar">
-      <textarea id="chat-input" placeholder="메시지... (Enter=전송, Shift/Ctrl+Enter=줄바꿈)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat()}"></textarea>
-      <button id="chat-send" onclick="sendChat()">전송</button>
-    </div>`;
+// DB에서 메시지 다시 로드 (응답 도착 확인 포함)
+async function reloadMessages(key){
+  const state=panels.get(key);if(!state||!state.convId)return;
+  const r=await api('GET',`/api/conv/messages?convId=${state.convId}`);
+  const el=document.querySelector(`[data-msgs="${key}"]`);
+  if(!el)return;
+  el.innerHTML='';
+  if(r.ok&&r.messages){
+    r.messages.forEach((m,i)=>{
+      addMsgUI(key,m.role,m.content,m.ts,m.role==='user'?'YOU':'CLAUDE');
+      state.lastMsgId=m.id;
+    });
+    state.lastRole=r.messages.length?r.messages[r.messages.length-1].role:null;
+  }
 }
 
-function addMsgUI(role,content,ts,label){
-  const el=document.getElementById('chat-msgs');if(!el)return;
+// 마지막 메시지가 user면 응답 대기중이라 판단 → 폴링 재개
+async function maybeResumePolling(key){
+  const state=panels.get(key);if(!state)return;
+  if(state.lastRole==='user'){
+    console.log('[RESUME]',key,'폴링 재개');
+    showTyping(key);
+    startPolling(key);
+  }
+}
+
+function closePanel(key){
+  const state=panels.get(key);if(!state)return;
+  if(state.polling){clearInterval(state.polling);state.polling=null}
+  panels.delete(key);
+  const el=document.querySelector(`[data-panel-key="${key}"]`);if(el)el.remove();
+  // 다 닫혔으면 빈 안내
+  if(panels.size===0){
+    document.getElementById('chat-multi').innerHTML='<div class="chat-panel empty"><div class="empty-msg">← 좌측에서 노드 또는 분기를 선택하면 채팅 패널이 열립니다.<br><br>여러 채팅을 동시에 진행할 수 있어요 (가로 스크롤).</div></div>';
+  }
+  savePanelList();
+  renderSidePanel();
+}
+
+function closeAllPanels(){
+  if(!confirm(`열린 채팅 패널 ${panels.size}개 모두 닫을까요?\n(서버의 응답 생성은 백그라운드에서 계속됩니다)`))return;
+  [...panels.keys()].forEach(closePanel);
+}
+
+function addMsgUI(key,role,content,ts,label){
+  const el=document.querySelector(`[data-msgs="${key}"]`);if(!el)return;
   const d=document.createElement('div');d.className='msg '+role;
   const time=ts?new Date(ts).toLocaleTimeString('ko-KR'):'';
   d.innerHTML=`<div class="msg-label">${label||role.toUpperCase()}</div><div class="msg-bubble">${escH(content)}</div><div class="msg-time">${time}</div>`;
   el.appendChild(d);el.scrollTop=el.scrollHeight;
 }
 
-async function sendChat(){
-  const input=document.getElementById('chat-input'),btn=document.getElementById('chat-send');
-  const msg=input.value.trim();if(!msg)return;input.value='';btn.disabled=true;
-  addMsgUI('user',msg,new Date().toISOString(),'YOU');
-  // 타이핑
-  const el=document.getElementById('chat-msgs');
-  const td=document.createElement('div');td.className='msg-typing';td.id='typing';td.textContent='응답 생성 중...';el.appendChild(td);el.scrollTop=el.scrollHeight;
+function showTyping(key){
+  const el=document.querySelector(`[data-msgs="${key}"]`);if(!el)return;
+  removeTyping(key);
+  const td=document.createElement('div');td.className='msg-typing';td.dataset.typing=key;td.textContent='응답 생성 중... (다른 화면 가도 백그라운드에서 계속됨)';
+  el.appendChild(td);el.scrollTop=el.scrollHeight;
+}
+function removeTyping(key){
+  const t=document.querySelector(`[data-typing="${key}"]`);if(t)t.remove();
+}
+
+async function sendChat(key){
+  const state=panels.get(key);if(!state)return;
+  const input=document.querySelector(`[data-input="${key}"]`);
+  const btn=document.querySelector(`[data-send="${key}"]`);
+  const msg=input.value.trim();if(!msg)return;
+  input.value='';btn.disabled=true;state.pending=true;
+  addMsgUI(key,'user',msg,new Date().toISOString(),'YOU');
+  showTyping(key);
 
   const cwd=document.getElementById('chat-cwd').value.trim()||undefined;
   const chatOnly=document.getElementById('chat-only').checked;
-  const r=await api('POST','/api/chat',{convId:activeConvId||'',nodeId:activeNodeId,nodeName:activeNodeName,message:msg,cwd,chatOnly});
-  if(r.ok&&r.convId){activeConvId=r.convId;renderSidePanel()}
+  const r=await api('POST','/api/chat',{convId:state.convId||'',nodeId:state.nodeId,nodeName:state.nodeName,message:msg,cwd,chatOnly});
 
-  if(polling)clearInterval(polling);
-  polling=setInterval(async()=>{
-    const ck=await api('GET',`/api/chat-check?convId=${activeConvId}`);
-    if(ck.ok&&ck.done){clearInterval(polling);polling=null;
-      const ti=document.getElementById('typing');if(ti)ti.remove();
-      addMsgUI('assistant',ck.reply,new Date().toISOString(),'CLAUDE');
-      btn.disabled=false;renderSidePanel()}
+  if(r.ok&&r.convId){
+    // 새 대화면 진짜 convId로 키 교체
+    if(state.isNew||!state.convId){
+      const oldKey=state.key;
+      const newKey=r.convId;
+      state.convId=r.convId;state.key=newKey;state.isNew=false;
+      panels.delete(oldKey);panels.set(newKey,state);
+      // DOM 업데이트
+      ['data-panel-key','data-msgs','data-input','data-send','data-typing'].forEach(attr=>{
+        document.querySelectorAll(`[${attr}="${oldKey}"]`).forEach(el=>el.setAttribute(attr,newKey));
+      });
+      // onclick 핸들러 재바인딩
+      const panel=document.querySelector(`[data-panel-key="${newKey}"]`);
+      if(panel){
+        panel.querySelector('.x').setAttribute('onclick',`closePanel('${newKey}')`);
+        const ta=panel.querySelector('textarea');
+        ta.setAttribute('onkeydown',`if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat('${newKey}')}`);
+        panel.querySelector('button').setAttribute('onclick',`sendChat('${newKey}')`);
+      }
+      savePanelList();
+    }
+    startPolling(state.key);
+  }else{
+    removeTyping(key);
+    btn.disabled=false;state.pending=false;
+    addMsgUI(key,'assistant','(전송 실패: '+(r.error||'unknown')+')','','ERROR');
+  }
+  renderSidePanel();
+}
+
+// 폴링 시작 — 다른 패널과 독립
+function startPolling(key){
+  const state=panels.get(key);if(!state||!state.convId)return;
+  if(state.polling)clearInterval(state.polling);
+  let tries=0;
+  state.polling=setInterval(async()=>{
+    tries++;
+    if(tries>200){clearInterval(state.polling);state.polling=null;state.pending=false;
+      removeTyping(key);
+      const btn=document.querySelector(`[data-send="${key}"]`);if(btn)btn.disabled=false;
+      addMsgUI(key,'assistant','(타임아웃 — 서버 응답 없음. 잠시 후 패널 다시 열면 결과 확인 가능)','','SYSTEM');
+      return;
+    }
+    const ck=await api('GET',`/api/chat-check?convId=${state.convId}`);
+    if(ck.ok&&ck.done){
+      clearInterval(state.polling);state.polling=null;state.pending=false;
+      removeTyping(key);
+      addMsgUI(key,'assistant',ck.reply,new Date().toISOString(),'CLAUDE');
+      const btn=document.querySelector(`[data-send="${key}"]`);if(btn)btn.disabled=false;
+      renderSidePanel();
+    }
   },2000);
 }
 
@@ -167,27 +301,40 @@ document.addEventListener('click',()=>document.getElementById('chat-ctx').style.
 async function chatFork(){
   document.getElementById('chat-ctx').style.display='none';
   if(!ctxNodeId)return;
-  // 해당 노드의 최신 실행에서 분기
   const r=await api('GET',`/api/exec/list?nodeId=${ctxNodeId}`);
   const execs=(r.ok&&r.executions)||[];
   const res=await api('POST','/api/chat/fork',{execId:execs[0]?execs[0].id:'',nodeId:ctxNodeId,nodeName:ctxNodeName});
   if(res.ok){
     await renderSidePanel();
-    openConv(res.convId,ctxNodeId,ctxNodeName);
+    openChat(res.convId,ctxNodeId,ctxNodeName);
   }
 }
 
-// 초기화: 캔버스에서 열려고 한 대화가 있는지 확인
+// 페이지 떠나기 전 — 폴링 정리는 안 함 (서버는 알아서 저장)
+window.addEventListener('beforeunload',()=>{
+  savePanelList();
+});
+
+// 초기화
 (async()=>{
   await renderSidePanel();
+  // 1) 캔버스에서 보낸 pending open_conv 처리
   try{
     const pending=JSON.parse(localStorage.getItem('open_conv'));
     if(pending&&pending.convId){
       localStorage.removeItem('open_conv');
-      openConv(pending.convId,pending.nodeId,pending.nodeName);
+      await openChat(pending.convId,pending.nodeId,pending.nodeName);
     }
   }catch(e){}
+  // 2) 이전에 열려있던 패널들 복원 (응답 대기 중이었으면 폴링 재개)
+  const saved=loadPanelList();
+  for(const p of saved){
+    if(!panels.has(p.convId)){
+      await openChat(p.convId,p.nodeId,p.nodeName);
+    }
+  }
 })();
+
 // 주기적 노드 목록 갱신
 setInterval(()=>renderSidePanel(),10000);
 </script>

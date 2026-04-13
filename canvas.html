@@ -183,7 +183,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .ce.image img{width:100%;height:100%;display:block;pointer-events:none;border-radius:4px}
 .ce.has-node-mode{outline:2px solid var(--accent);outline-offset:1px}
 .ce .ce-port{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid var(--accent);background:var(--bg-1);cursor:crosshair;z-index:20;display:none}
-.ce.has-node-mode .ce-port{display:block}
+.ce.has-node-mode .ce-port,.ce.image .ce-port{display:block}
 .ce .ce-port-l{left:-9px;top:50%;margin-top:-7px}
 .ce .ce-port-r{right:-9px;top:50%;margin-top:-7px}
 .ce .ce-port:hover{background:var(--accent);transform:scale(1.4)}
@@ -328,6 +328,38 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .pinned-memos{display:flex;align-items:center;gap:5px;margin-left:auto;padding:0 10px}
 .pinned-chip{display:inline-block;padding:3px 10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:12px;font-size:.7em;color:#ebcb8b;cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:.2s}
 .pinned-chip:hover{color:#F59E0B;background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);box-shadow:0 0 6px rgba(245,158,11,.2);transform:translateY(-1px)}
+/* 즐겨찾기 폴더 nav (gold/amber 테마 — 캔버스/채팅과 시각적 구분) */
+.fav-nav{display:flex;align-items:center;gap:4px;margin-left:20px;padding:0 12px;border-left:2px solid rgba(245,158,11,.3);background:linear-gradient(to right,rgba(245,158,11,.04),transparent);overflow-x:auto;max-width:60vw;flex:1;scrollbar-width:thin}
+.fav-nav::-webkit-scrollbar{height:4px}
+.fav-nav::-webkit-scrollbar-thumb{background:rgba(245,158,11,.3);border-radius:2px}
+.fav-folder-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:14px;font-size:.75em;color:#ebcb8b;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0}
+.fav-folder-chip:hover{background:rgba(245,158,11,.25);color:#fff;transform:translateY(-1px)}
+.fav-folder-chip .add-mini{font-size:.85em;opacity:.6}
+.fav-add-btn{padding:3px 8px;background:rgba(245,158,11,.08);border:1px dashed rgba(245,158,11,.4);border-radius:14px;color:#ebcb8b;cursor:pointer;font-size:.75em;flex-shrink:0}
+.fav-add-btn:hover{background:rgba(245,158,11,.2)}
+/* 즐겨찾기 모달 */
+.fav-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-1);border:2px solid rgba(245,158,11,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:10000;min-width:480px;max-width:80vw;max-height:80vh;display:none;flex-direction:column}
+.fav-modal.show{display:flex}
+.fav-modal-hd{padding:12px 16px;border-bottom:1px solid var(--border);background:linear-gradient(to right,rgba(245,158,11,.15),rgba(245,158,11,.05));display:flex;align-items:center;gap:8px}
+.fav-modal-hd .crumb{flex:1;font-size:.9em;color:#ebcb8b;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.fav-modal-hd .crumb a{color:#ebcb8b;cursor:pointer;text-decoration:underline}
+.fav-modal-hd .crumb a:hover{color:#fff}
+.fav-modal-hd .x{cursor:pointer;color:var(--text-muted);padding:4px 8px;border-radius:4px;font-size:14px}
+.fav-modal-hd .x:hover{background:var(--red);color:#fff}
+.fav-modal-bd{padding:12px 16px;overflow-y:auto;max-height:60vh}
+.fav-modal-tools{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg-2);display:flex;gap:6px}
+.fav-modal-tools button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.78em}
+.fav-modal-tools button:hover{background:var(--bg-4)}
+.fav-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;border:1px solid transparent}
+.fav-row:hover{background:var(--bg-3);border-color:var(--border)}
+.fav-row .ic{font-size:1.1em}
+.fav-row .nm{flex:1;font-size:.85em;color:var(--text)}
+.fav-row .pv{font-size:.7em;color:var(--text-muted)}
+.fav-row .actions{display:flex;gap:4px;opacity:.5}
+.fav-row:hover .actions{opacity:1}
+.fav-row .actions button{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:2px}
+.fav-row .actions button:hover{background:var(--bg-4);color:var(--text)}
+.fav-row.folder .nm{color:#ebcb8b;font-weight:500}
 /* RESOLVED PREVIEW */
 .resolved-preview{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;font-family:var(--mono);font-size:11px;min-height:60px;line-height:1.4;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .resolved-preview .rv-var{color:var(--cyan);background:rgba(6,182,212,.08)}
@@ -355,7 +387,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     </div>
   </div>
 </div>
-<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="pinned-memos" id="pinned-memos"></div><button onclick="openFileManager()" title="작업 폴더 파일 탐색" style="margin-left:auto;background:none;border:1px solid rgba(245,158,11,.3);color:#ebcb8b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">📁 파일</button><button onclick="openSettings()" title="시스템 설정" style="background:none;border:1px solid rgba(139,92,246,.3);color:#b48ead;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">⚙️ 설정</button><button onclick="doLogout()" title="로그아웃" style="background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;flex-shrink:0">🔒 로그아웃</button></nav>
+<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><div class="fav-nav" id="fav-nav"></div><button onclick="openFileManager()" title="작업 폴더 파일 탐색" style="margin-left:8px;background:none;border:1px solid rgba(245,158,11,.3);color:#ebcb8b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">📁 파일</button><button onclick="openSettings()" title="시스템 설정" style="background:none;border:1px solid rgba(139,92,246,.3);color:#b48ead;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">⚙️ 설정</button><button onclick="doLogout()" title="로그아웃" style="background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;flex-shrink:0">🔒 로그아웃</button></nav>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 생성">📝 메모생성</button>
   <button class="fld" onclick="toggleFolderPanel()" title="메모 폴더 관리">📁 메모폴더</button>
@@ -479,6 +511,29 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     <button onclick="document.getElementById('fav-popup').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
   </div>
   <div id="fav-list" style="overflow-y:auto;max-height:calc(70vh - 50px);padding:8px"></div>
+</div>
+<!-- 즐겨찾기 폴더 모달 (드릴다운 네비게이션) -->
+<div id="fav-modal" class="fav-modal">
+  <div class="fav-modal-hd">
+    <div class="crumb" id="fav-crumb"></div>
+    <span class="x" onclick="closeFavModal()">✕</span>
+  </div>
+  <div class="fav-modal-bd" id="fav-modal-bd"></div>
+  <div class="fav-modal-tools">
+    <button onclick="favNewSubfolder()">+ 하위폴더</button>
+    <button onclick="favAddMemo()">+ 메모 추가</button>
+    <button onclick="favRenameCurrent()" id="fav-rename-btn">✏ 폴더명 수정</button>
+    <button onclick="favDeleteCurrent()" id="fav-delete-btn" style="color:#bf616a;border-color:rgba(244,67,54,.3)">🗑 폴더 삭제</button>
+  </div>
+</div>
+<!-- 메모 선택 picker (즐겨찾기에 추가용) -->
+<div id="memo-picker" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:480px;max-height:70vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:10001;overflow:hidden">
+  <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-2)">
+    <span style="font-weight:600;font-size:.9em;flex:1">📝 추가할 메모 선택</span>
+    <input id="memo-picker-search" placeholder="검색..." oninput="renderMemoPicker(this.value)" style="background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 8px;border-radius:4px;font-size:.8em;width:160px">
+    <button onclick="document.getElementById('memo-picker').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px;margin-left:8px">×</button>
+  </div>
+  <div id="memo-picker-list" style="overflow-y:auto;max-height:calc(70vh - 60px);padding:6px"></div>
 </div>
 <div id="ctx"></div>
 <input type="file" id="ce-img-input" accept="image/*,.svg" style="display:none">
@@ -1031,7 +1086,7 @@ function buildDom(n){
     }
     else if(a==='mode'){n.chatOnly=!n.chatOnly;btn.textContent=n.chatOnly?'💬':'🔧';btn.title=n.chatOnly?'대화전용 (클릭→CLI)':'CLI모드 (클릭→대화전용)';if(selectedNode===n)document.getElementById('sb-chatonly').checked=n.chatOnly;autoSave()}
     else if(a==='delete'){
-      if(confirm(`"${n.name}" 노드를 삭제할까요?`))delNode(n.id);
+      delNode(n.id);  // confirm 제거 — Ctrl+Z 로 되돌리기 가능
     }
   }));
   // 이름 span: 드래그 (헤더처럼 동작)
@@ -1088,7 +1143,7 @@ function toggleMultiSel(n){const idx=multiSel.indexOf(n);if(idx>=0){multiSel.spl
 function togCollapse(n){n.collapsed=!n.collapsed;n.el.classList.toggle('collapsed',n.collapsed);const btn=n.el.querySelector('[data-act="tog"]');if(btn)btn.textContent=n.collapsed?'►':'▼';setTimeout(drawConns,20);autoSave()}
 function deleteSelectedNode(){
   if(!selectedNode)return;
-  if(!confirm(`"${selectedNode.name}" 노드를 삭제할까요?`))return;
+  // confirm 제거 — Ctrl+Z 로 되돌리기 가능
   delNode(selectedNode.id);
 }
 function delNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i].el.remove();nodes.splice(i,1);conns=conns.filter(c=>c.sid!==id&&c.tid!==id);drawConns();if(selectedNode&&selectedNode.id===id){selectedNode=null;closeSb()}autoSave()}
@@ -3163,10 +3218,188 @@ function updateResolvedPreview(){
 
 // ═══ PINNED MEMOS ═══
 async function loadPinnedMemos(){
-  const r=await api('GET','/api/memo/pinned');
-  const el=document.getElementById('pinned-memos');
-  if(!r.ok||!el)return;
-  el.innerHTML=(r.memos||[]).map(m=>`<span class="pinned-chip" onclick="openMemoEditor(${m.id})" title="${escapeHtml(m.preview||m.name||'')}">${escapeHtml(m.name||'무제')}</span>`).join('');
+  // 즐겨찾기 nav (최상단 폴더들) 렌더링
+  await loadFavNav();
+}
+
+// ═══ 즐겨찾기 폴더 시스템 ═══
+let favCurrentFolderId=null,favCrumbStack=[],_allMemosCache=[];
+
+async function loadFavNav(){
+  const r=await api('GET','/api/fav/folders');
+  const el=document.getElementById('fav-nav');
+  if(!el)return;
+  const folders=(r.ok&&r.folders)||[];
+  let html='';
+  folders.forEach(f=>{
+    const color=f.color||'rgba(245,158,11,.3)';
+    html+=`<span class="fav-folder-chip" style="border-color:${color}" onclick="openFavFolder(${f.id},'${escH(f.name)}')" oncontextmenu="event.preventDefault();favRenameFolder(${f.id},'${escH(f.name)}')" title="${escH(f.name)} (우클릭=이름변경)">${f.icon||'⭐'} ${escH(f.name)}</span>`;
+  });
+  html+=`<span class="fav-add-btn" onclick="favNewTopFolder()" title="새 즐겨찾기 폴더">+ 새 폴더</span>`;
+  el.innerHTML=html;
+}
+
+function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;')}
+
+async function favNewTopFolder(){
+  const name=prompt('새 즐겨찾기 폴더 이름:');
+  if(!name)return;
+  await api('POST','/api/fav/folder/save',{name,parentId:null});
+  loadFavNav();
+}
+
+async function favRenameFolder(id,oldName){
+  const name=prompt('폴더 이름 변경:',oldName);
+  if(!name||name===oldName)return;
+  await api('POST','/api/fav/folder/save',{id,name});
+  loadFavNav();
+  if(favCurrentFolderId===id){
+    // crumb 갱신
+    const top=favCrumbStack[favCrumbStack.length-1];if(top)top.name=name;
+    renderFavModal();
+  }
+}
+
+async function openFavFolder(id,name){
+  favCurrentFolderId=id;
+  // crumb 스택 관리: 이미 있으면 거기까지 자르기, 아니면 push
+  const idx=favCrumbStack.findIndex(c=>c.id===id);
+  if(idx>=0)favCrumbStack=favCrumbStack.slice(0,idx+1);
+  else favCrumbStack.push({id,name});
+  document.getElementById('fav-modal').classList.add('show');
+  renderFavModal();
+}
+
+function closeFavModal(){
+  document.getElementById('fav-modal').classList.remove('show');
+  favCurrentFolderId=null;favCrumbStack=[];
+}
+
+async function renderFavModal(){
+  const fid=favCurrentFolderId;if(!fid)return;
+  // 빵부스러기
+  const crumb=document.getElementById('fav-crumb');
+  let cb=`<a onclick="closeFavModal()">⭐ 즐겨찾기</a>`;
+  favCrumbStack.forEach((c,i)=>{
+    cb+=` › `;
+    if(i<favCrumbStack.length-1){cb+=`<a onclick="openFavFolder(${c.id},'${escH(c.name)}')">${escH(c.name)}</a>`;}
+    else{cb+=`<span style="color:#fff;font-weight:600">${escH(c.name)}</span>`;}
+  });
+  crumb.innerHTML=cb;
+
+  // 하위 폴더 + 항목 동시 로드
+  const [foldersR,itemsR]=await Promise.all([
+    api('GET',`/api/fav/folders?parentId=${fid}`),
+    api('GET',`/api/fav/items?folderId=${fid}`)
+  ]);
+  const folders=(foldersR.ok&&foldersR.folders)||[];
+  const items=(itemsR.ok&&itemsR.items)||[];
+
+  const bd=document.getElementById('fav-modal-bd');
+  let html='';
+  if(folders.length===0&&items.length===0){
+    html='<div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:.85em">비어있음<br><span style="font-size:.9em">아래 [+ 하위폴더] 또는 [+ 메모 추가] 버튼으로 채우세요</span></div>';
+  } else {
+    if(folders.length){
+      html+='<div style="font-size:.7em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:4px 4px 6px">📁 하위 폴더</div>';
+      folders.forEach(f=>{
+        html+=`<div class="fav-row folder" onclick="openFavFolder(${f.id},'${escH(f.name)}')">
+          <span class="ic">${f.icon||'📁'}</span>
+          <span class="nm">${escH(f.name)}</span>
+          <div class="actions">
+            <button onclick="event.stopPropagation();favRenameFolder(${f.id},'${escH(f.name)}')" title="이름 변경">✏</button>
+            <button onclick="event.stopPropagation();favDeleteFolder(${f.id})" title="폴더 삭제">🗑</button>
+          </div>
+        </div>`;
+      });
+    }
+    if(items.length){
+      html+='<div style="font-size:.7em;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 4px 6px">📝 메모</div>';
+      items.forEach(it=>{
+        html+=`<div class="fav-row" onclick="openMemoEditor(${it.memo_id})">
+          <span class="ic">📝</span>
+          <span class="nm">${escH(it.memo_name||'무제')}</span>
+          <span class="pv">${escH((it.preview||'').substring(0,40))}</span>
+          <div class="actions">
+            <button onclick="event.stopPropagation();favRemoveItem(${it.id})" title="이 폴더에서 제거">✕</button>
+          </div>
+        </div>`;
+      });
+    }
+  }
+  bd.innerHTML=html;
+}
+
+async function favNewSubfolder(){
+  if(!favCurrentFolderId)return;
+  const name=prompt('새 하위 폴더 이름:');
+  if(!name)return;
+  await api('POST','/api/fav/folder/save',{name,parentId:favCurrentFolderId});
+  renderFavModal();
+}
+
+async function favRenameCurrent(){
+  if(!favCurrentFolderId)return;
+  const top=favCrumbStack[favCrumbStack.length-1];
+  await favRenameFolder(favCurrentFolderId,top?.name||'');
+}
+
+async function favDeleteCurrent(){
+  if(!favCurrentFolderId)return;
+  const top=favCrumbStack[favCrumbStack.length-1];
+  if(!confirm(`"${top?.name}" 폴더를 삭제할까요?\n(하위 폴더는 최상단으로 이동, 메모 링크는 제거됩니다. 메모 자체는 안 지워짐)`))return;
+  await api('POST','/api/fav/folder/delete',{id:favCurrentFolderId});
+  // 한 단계 위로
+  favCrumbStack.pop();
+  if(favCrumbStack.length){
+    const parent=favCrumbStack[favCrumbStack.length-1];
+    favCurrentFolderId=parent.id;
+    renderFavModal();
+  } else {
+    closeFavModal();
+  }
+  loadFavNav();
+}
+
+async function favDeleteFolder(id){
+  if(!confirm('이 폴더를 삭제할까요? (하위 폴더는 최상단으로 이동, 메모 링크는 제거)'))return;
+  await api('POST','/api/fav/folder/delete',{id});
+  renderFavModal();loadFavNav();
+}
+
+async function favRemoveItem(itemId){
+  await api('POST','/api/fav/item/remove',{id:itemId});
+  renderFavModal();
+}
+
+async function favAddMemo(){
+  if(!favCurrentFolderId)return;
+  // 전체 메모 로드
+  const r=await api('GET','/api/memo/list');
+  _allMemosCache=(r.ok&&r.memos)||[];
+  document.getElementById('memo-picker-search').value='';
+  document.getElementById('memo-picker').style.display='block';
+  renderMemoPicker('');
+}
+
+function renderMemoPicker(filter){
+  const list=document.getElementById('memo-picker-list');
+  const q=(filter||'').toLowerCase();
+  const filtered=_allMemosCache.filter(m=>!q||(m.name||'').toLowerCase().includes(q)||(m.preview||'').toLowerCase().includes(q));
+  if(filtered.length===0){list.innerHTML='<div style="padding:30px;text-align:center;color:var(--text-muted)">메모 없음</div>';return}
+  list.innerHTML=filtered.slice(0,200).map(m=>`
+    <div onclick="favPickMemo(${m.id})" style="display:flex;gap:8px;align-items:center;padding:7px 10px;cursor:pointer;border-radius:4px;font-size:.82em" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">
+      <span style="flex:1;color:var(--text)">${escH(m.name||'무제')}</span>
+      <span style="font-size:.75em;color:var(--text-muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH((m.preview||'').substring(0,60))}</span>
+    </div>`).join('');
+}
+
+async function favPickMemo(memoId){
+  if(!favCurrentFolderId)return;
+  const r=await api('POST','/api/fav/item/add',{folderId:favCurrentFolderId,memoId});
+  document.getElementById('memo-picker').style.display='none';
+  if(r.duplicate)alert('이미 이 폴더에 있는 메모입니다');
+  renderFavModal();
 }
 async function toggleMemoPin(id,pinned){
   await api('POST','/api/memo/pin',{id,pinned});
