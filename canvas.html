@@ -3583,8 +3583,13 @@ async function startClaudeWebLogin(){
         <button onclick="window.open(document.getElementById('claude-login-url').textContent, '_blank')" style="margin-top:6px;padding:5px 12px;background:#3B82F6;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px">🌐 새 탭에서 열기</button>
       </div>
       <div id="claude-login-code-section" style="display:none">
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">② Anthropic에서 승인 후 받은 코드를 붙여넣으세요:</div>
-        <input type="text" id="claude-login-code" placeholder="승인 코드" style="width:100%;padding:8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);margin-bottom:6px">
+        <div style="font-size:11px;color:#ebcb8b;margin-bottom:6px;background:rgba(245,158,11,.1);padding:8px;border-radius:4px;border:1px solid rgba(245,158,11,.3)">
+          <b>⚠️ 중요 — 어떤 코드를 넣는가?</b><br>
+          ✅ <b>Anthropic 승인 직후 나오는 짧은 코드</b> (예: <code>abc123...#xyz...</code>, # 포함)<br>
+          ❌ <b>NOT</b> <code>sk-ant-oat01-...</code> (이건 토큰. 여기 넣으면 안 됨!)
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">② 위 URL로 승인 후 <b>Anthropic이 주는 authorization code</b> (#포함):</div>
+        <input type="text" id="claude-login-code" placeholder="예: abc123...#xyz456..." style="width:100%;padding:8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);margin-bottom:6px">
         <input type="text" id="claude-login-name" placeholder="계정 이름 (선택)" style="width:100%;padding:8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;margin-bottom:6px">
         <button onclick="submitClaudeCode()" style="padding:6px 14px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">승인 완료</button>
       </div>
