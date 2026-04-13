@@ -390,6 +390,8 @@ def init_db():
             ("conversations", "account_id", "ALTER TABLE conversations ADD COLUMN account_id INTEGER"),
             ("project_folders", "parent_id", "ALTER TABLE project_folders ADD COLUMN parent_id INTEGER"),
             ("messages", "chat_only", "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1"),
+            ("claude_accounts", "rate_limited_until", "ALTER TABLE claude_accounts ADD COLUMN rate_limited_until TEXT"),
+            ("claude_accounts", "rate_limit_reason", "ALTER TABLE claude_accounts ADD COLUMN rate_limit_reason TEXT"),
         ]
         for tbl, col, alter_sql in alter_checks:
             cur.execute("""
@@ -558,6 +560,8 @@ def init_db():
             "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0",
             "ALTER TABLE project_folders ADD COLUMN parent_id INTEGER",
             "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1",
+            "ALTER TABLE claude_accounts ADD COLUMN rate_limited_until TEXT",
+            "ALTER TABLE claude_accounts ADD COLUMN rate_limit_reason TEXT",
         ]:
             try:
                 db.execute(stmt)
@@ -987,6 +991,125 @@ def get_claude_env():
     env["PATH"] = nvm_bin + ":" + env.get("PATH", "")
     return env
 
+# ─── Rate-limit 감지 + 자동 폴백 ────────────────────────────────────────
+import re as _re_rl
+RATE_LIMIT_PATTERNS = [
+    # (정규식, 라벨, 쿨다운 시간(시간))
+    (r"weekly\s+(usage\s+)?limit", "주간 한도", 24*7),
+    (r"daily\s+(usage\s+)?limit", "일일 한도", 24),
+    (r"5[\s-]?hour(?:ly)?\s+(usage\s+)?limit", "5시간 한도", 5),
+    (r"hourly\s+(usage\s+)?limit", "1시간 한도", 1),
+    (r"usage\s+limit\s+reached", "사용 한도", 5),
+    (r"rate\s+limit\s+exceeded", "Rate limit", 1),
+    (r"too\s+many\s+requests", "Too many requests", 1),
+    (r"quota\s+exceeded", "할당량 초과", 24),
+    (r"reached\s+your\s+(usage|message|conversation)\s+limit", "메시지 한도", 5),
+]
+def detect_rate_limit(text):
+    """claude CLI 출력(stdout+stderr)을 검사해 rate limit 발견 시 (라벨, 쿨다운시간) 반환. 없으면 None."""
+    if not text: return None
+    low = text.lower()
+    for pat, label, hours in RATE_LIMIT_PATTERNS:
+        if _re_rl.search(pat, low):
+            # "resets at HH:MM" 또는 "try again in N hours" 패턴이 있으면 그 시간 사용 시도
+            m = _re_rl.search(r"try\s+again\s+in\s+(\d+)\s+hour", low)
+            if m: hours = int(m.group(1))
+            return (label, hours)
+    return None
+
+def mark_rate_limited(account_id, label, cooldown_hours):
+    """계정에 cooldown 마킹"""
+    if not account_id: return
+    until = (datetime.now() + timedelta(hours=cooldown_hours)).isoformat()
+    try:
+        db_exec("UPDATE claude_accounts SET rate_limited_until=?, rate_limit_reason=? WHERE id=?",
+                (until, label, int(account_id)))
+        log(f"[RATE-LIMIT] 계정 {account_id} → {label} ({cooldown_hours}h cooldown until {until[:19]})")
+    except Exception as e:
+        log(f"[RATE-LIMIT] mark failed: {e}")
+
+def is_account_available(account_id):
+    """rate_limited_until 이 미래면 사용 불가"""
+    if not account_id: return True
+    try:
+        row = db_exec("SELECT rate_limited_until FROM claude_accounts WHERE id=?", (int(account_id),), fetchone=True)
+        if not row or not row.get("rate_limited_until"): return True
+        until_str = row["rate_limited_until"]
+        until = datetime.fromisoformat(until_str)
+        if datetime.now() >= until:
+            # 만료됨 → 자동 해제
+            db_exec("UPDATE claude_accounts SET rate_limited_until=NULL, rate_limit_reason=NULL WHERE id=?", (int(account_id),))
+            return True
+        return False
+    except Exception as e:
+        log(f"[RATE-LIMIT] check failed: {e}")
+        return True
+
+def pick_available_account(exclude_ids=None):
+    """rotation_mode 따라 사용 가능한 계정 1개 골라서 반환. 없으면 None."""
+    exclude_ids = set(exclude_ids or [])
+    try:
+        mode_row = db_exec("SELECT value FROM system_settings WHERE key='claude_rotation_mode'", fetchone=True)
+        mode = mode_row["value"] if mode_row and mode_row.get("value") else "round-robin"
+        accounts = db_exec("SELECT id FROM claude_accounts ORDER BY priority ASC, id ASC", fetch=True) or []
+        if not accounts: return None
+        # manual 모드면 active만 시도
+        if mode == "manual":
+            active = db_exec("SELECT id FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
+            if active and active["id"] not in exclude_ids and is_account_available(active["id"]):
+                return active["id"]
+            return None
+        # round-robin / sequential: 사용 가능한 첫 계정
+        for a in accounts:
+            if a["id"] in exclude_ids: continue
+            if is_account_available(a["id"]):
+                return a["id"]
+        return None
+    except Exception as e:
+        log(f"[RATE-LIMIT] pick failed: {e}")
+        return None
+
+
+def run_claude_safe(cmd_builder_fn, account_id, run_cwd=None, timeout=600, max_fallback=3):
+    """Claude CLI 호출 + rate-limit 자동 폴백.
+    cmd_builder_fn() → (cmd, final_prompt). 한도 감지되면 다른 계정으로 재시도.
+    Returns (stdout, used_account_id, fallback_log)"""
+    tried = set()
+    last_err = None
+    cur_id = account_id
+    for attempt in range(max_fallback + 1):
+        if not cur_id or cur_id in tried:
+            cur_id = pick_available_account(exclude_ids=tried)
+            if not cur_id:
+                return ("", None, f"❌ 사용 가능한 계정 없음 ({last_err or '전부 한도 초과'})")
+        tried.add(cur_id)
+        env = get_claude_env_for_account(cur_id)
+        try:
+            cmd, final_prompt = cmd_builder_fn()
+        except Exception as e:
+            return ("", cur_id, f"cmd build failed: {e}")
+        log(f"[CLAUDE] attempt={attempt+1} account={cur_id}")
+        try:
+            result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True,
+                                    timeout=timeout, env=env, cwd=run_cwd)
+            combined = (result.stdout or "") + "\n" + (result.stderr or "")
+            rl = detect_rate_limit(combined)
+            if rl:
+                label, hours = rl
+                mark_rate_limited(cur_id, label, hours)
+                last_err = f"계정 {cur_id} → {label} ({hours}h)"
+                log(f"[CLAUDE] rate-limited: {last_err} → 다른 계정 폴백")
+                cur_id = None
+                continue
+            return (result.stdout.strip(), cur_id, f"✓ 계정 {cur_id}" + (f" (이전 {len(tried)-1}개 한도 초과로 폴백)" if len(tried)>1 else ""))
+        except subprocess.TimeoutExpired:
+            return ("", cur_id, "timeout")
+        except Exception as e:
+            log(f"[CLAUDE] error: {e}")
+            return ("", cur_id, str(e))
+    return ("", cur_id, f"max retry ({last_err})")
+
+
 def get_claude_env_for_account(account_id=None):
     """특정 계정의 env 반환.
     - 전체 OAuth (refreshToken 있음): credentials.json 파일 사용
@@ -1185,6 +1308,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/accounts/test": self._claude_account_test,
             "/api/claude/accounts/next": self._claude_next_account,
             "/api/claude/accounts/next-preview": self._claude_next_preview,
+            "/api/claude/accounts/unlock": self._claude_account_unlock,
             "/api/claude/accounts/reorder": self._claude_accounts_reorder,
             "/api/claude/login/start": self._claude_login_start,
             "/api/claude/login/submit": self._claude_login_submit,
@@ -1241,7 +1365,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         def run():
             try:
-                env = get_claude_env_for_account(account_id)
+                # env는 run_claude_safe 가 계정마다 새로 만듦 (폴백 시)
                 run_cwd = None
                 if cwd and os.path.isdir(cwd):
                     run_cwd = cwd
@@ -1263,21 +1387,25 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     except Exception as e:
                         log(f"EXEC [{exec_id}] auto-cwd failed: {e}")
                         run_cwd = None
-                cmd, final_prompt = build_claude_cmd(prompt, {
-                    "chatOnly": chat_only,
-                    "systemPrompt": body.get("systemPrompt", ""),
-                    "jsonSchema": body.get("jsonSchema", ""),
-                    "maxTurns": body.get("maxTurns", 0),
-                    "images": body.get("images", []),
-                })
-                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=600, env=env, cwd=run_cwd)
-                output = result.stdout.strip()
-                if result.returncode != 0:
-                    log(f"EXEC [{exec_id}] returncode={result.returncode} stderr={result.stderr[:200]}")
-                log(f"EXEC [{exec_id}] done! {len(output)}자")
+                def _build():
+                    return build_claude_cmd(prompt, {
+                        "chatOnly": chat_only,
+                        "systemPrompt": body.get("systemPrompt", ""),
+                        "jsonSchema": body.get("jsonSchema", ""),
+                        "maxTurns": body.get("maxTurns", 0),
+                        "images": body.get("images", []),
+                    })
+                output, used_acc, fb_msg = run_claude_safe(_build, account_id, run_cwd=run_cwd, timeout=600)
+                if used_acc and used_acc != account_id:
+                    log(f"EXEC [{exec_id}] 계정 폴백: {account_id} → {used_acc}")
+                    # node에 새 계정 영구 배정 (다음에도 같은 계정 쓰게)
+                    # node_id는 frontend가 관리하므로 여기서 DB 업뎃 안 함, 응답에만 표시
+                if not output:
+                    log(f"EXEC [{exec_id}] FAILED: {fb_msg}")
+                    output = f"(❌ 실행 실패: {fb_msg})"
+                log(f"EXEC [{exec_id}] done! {len(output)}자 [{fb_msg}]")
                 with open(out_file, "w", encoding="utf-8") as f: f.write(output)
                 with open(done_file, "w") as f: f.write("done")
-                # DB 업데이트
                 db_exec("UPDATE executions SET output=?, status='complete', finished=? WHERE id=?",
                         (output, datetime.now().isoformat(), exec_id))
             except Exception as e:
@@ -1354,16 +1482,22 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         def run():
             try:
-                env = get_claude_env_for_account(account_id)
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
-                cmd, final_prompt = build_claude_cmd(full_prompt, {
-                    "chatOnly": chat_only,
-                    "systemPrompt": body.get("systemPrompt", ""),
-                    "images": body.get("images", []),
-                })
-                result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True, timeout=600, env=env, cwd=run_cwd)
-                reply = result.stdout.strip()
-                log(f"CHAT [{conv_id}] reply={len(reply)}자")
+                def _build():
+                    return build_claude_cmd(full_prompt, {
+                        "chatOnly": chat_only,
+                        "systemPrompt": body.get("systemPrompt", ""),
+                        "images": body.get("images", []),
+                    })
+                reply, used_acc, fb_msg = run_claude_safe(_build, account_id, run_cwd=run_cwd, timeout=600)
+                if used_acc and used_acc != account_id:
+                    log(f"CHAT [{conv_id}] 계정 폴백 {account_id} → {used_acc}")
+                    # 대화에 새 계정 영구 배정 (다음 메시지부터 같은 계정 사용)
+                    try: db_exec("UPDATE conversations SET account_id=? WHERE id=?", (used_acc, conv_id))
+                    except: pass
+                if not reply:
+                    reply = f"(❌ 응답 실패: {fb_msg})"
+                log(f"CHAT [{conv_id}] reply={len(reply)}자 [{fb_msg}]")
                 db_exec("INSERT INTO messages (conv_id, role, content, ts, chat_only) VALUES (?,?,?,?,?)",
                         (conv_id, "assistant", reply, datetime.now().isoformat(), 1 if chat_only else 0))
                 with open(done_file, "w") as f: f.write(reply)
@@ -2288,12 +2422,31 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _claude_accounts_list(self):
         try:
             rows = db_exec(
-                "SELECT id, name, active, priority, created FROM claude_accounts ORDER BY priority ASC, created DESC",
+                "SELECT id, name, active, priority, created, rate_limited_until, rate_limit_reason FROM claude_accounts ORDER BY priority ASC, created DESC",
                 fetch=True
             ) or []
+            # 만료된 cooldown 자동 정리
+            now = datetime.now()
+            for r in rows:
+                until = r.get("rate_limited_until")
+                if until:
+                    try:
+                        u = datetime.fromisoformat(until)
+                        if now >= u:
+                            db_exec("UPDATE claude_accounts SET rate_limited_until=NULL, rate_limit_reason=NULL WHERE id=?", (r["id"],))
+                            r["rate_limited_until"] = None
+                            r["rate_limit_reason"] = None
+                    except: pass
             return {"ok": True, "accounts": rows}
         except Exception as e:
             return {"ok": False, "error": str(e), "accounts": []}
+
+    def _claude_account_unlock(self, body):
+        """수동으로 rate-limit cooldown 해제"""
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        db_exec("UPDATE claude_accounts SET rate_limited_until=NULL, rate_limit_reason=NULL WHERE id=?", (int(aid),))
+        return {"ok": True}
 
     def _claude_account_save(self, body):
         aid = body.get("id")
@@ -2436,7 +2589,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             elif mode == "sequential":
                 return {"ok": True, "accountId": accounts[0]["id"], "mode": mode}
 
-            else:  # round-robin
+            else:  # round-robin — rate-limited 계정 자동 스킵
                 last_row = db_exec("SELECT value FROM system_settings WHERE key='claude_last_used_id'", fetchone=True)
                 last_id = 0
                 try:
@@ -2450,7 +2603,16 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     next_idx = (idx + 1) % len(ids)
                 except ValueError:
                     next_idx = 0
-                next_id = ids[next_idx]
+                # 한 바퀴 돌면서 사용 가능한 첫 계정 찾기
+                next_id = None
+                for _ in range(len(ids)):
+                    cand = ids[next_idx]
+                    if is_account_available(cand):
+                        next_id = cand
+                        break
+                    next_idx = (next_idx + 1) % len(ids)
+                if next_id is None:
+                    return {"ok": False, "error": "모든 계정이 한도 초과 상태"}
                 now = datetime.now().isoformat()
                 existing = db_exec("SELECT key FROM system_settings WHERE key='claude_last_used_id'", fetchone=True)
                 if existing:
@@ -2462,29 +2624,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": False, "error": str(e)}
 
     def _claude_next_preview(self, body):
-        """다음에 사용될 계정만 반환 (counter 증가 안 함, UI 표시용)"""
+        """다음에 사용될 계정만 반환 (counter 증가 안 함, UI 표시용 — rate-limited 스킵)"""
         try:
-            mode_row = db_exec("SELECT value FROM system_settings WHERE key='claude_rotation_mode'", fetchone=True)
-            mode = mode_row["value"] if mode_row and mode_row.get("value") else "round-robin"
-            accounts = db_exec("SELECT id FROM claude_accounts ORDER BY priority ASC, id ASC", fetch=True) or []
-            if not accounts: return {"ok": False}
-            if mode == "manual":
-                active = db_exec("SELECT id FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
-                return {"ok": True, "accountId": active["id"] if active else accounts[0]["id"], "mode": mode}
-            elif mode == "sequential":
-                return {"ok": True, "accountId": accounts[0]["id"], "mode": mode}
-            else:
-                last_row = db_exec("SELECT value FROM system_settings WHERE key='claude_last_used_id'", fetchone=True)
-                last_id = 0
-                try:
-                    if last_row and last_row.get("value"): last_id = int(last_row["value"])
-                except: pass
-                ids = [a["id"] for a in accounts]
-                try:
-                    idx = ids.index(last_id); next_idx = (idx + 1) % len(ids)
-                except ValueError:
-                    next_idx = 0
-                return {"ok": True, "accountId": ids[next_idx], "mode": mode}
+            nid = pick_available_account()
+            return {"ok": True, "accountId": nid} if nid else {"ok": False, "error": "사용 가능한 계정 없음"}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

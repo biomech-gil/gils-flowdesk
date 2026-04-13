@@ -4284,20 +4284,41 @@ async function loadClaudeAccounts(){
   }
   el.innerHTML = accounts.map((a, i) => {
     const isNext = a.id === nextId;
-    const highlight = isManual ? a.active : isNext;
+    const isLimited = a.rate_limited_until && new Date(a.rate_limited_until) > new Date();
+    const highlight = isManual ? a.active : (isNext && !isLimited);
+    // 한도초과 표시
+    let limitedBadge = '';
+    if(isLimited){
+      const until = new Date(a.rate_limited_until);
+      const remainMs = until - new Date();
+      const remainH = Math.floor(remainMs/3600000);
+      const remainM = Math.floor((remainMs%3600000)/60000);
+      const timeStr = remainH > 0 ? `${remainH}h ${remainM}m` : `${remainM}m`;
+      limitedBadge = `<span style="font-size:9px;padding:2px 6px;background:rgba(244,67,54,.2);color:#ff8a80;border:1px solid rgba(244,67,54,.4);border-radius:3px;margin-right:4px" title="${a.rate_limit_reason||''} 자동 해제: ${until.toLocaleString('ko-KR')}">⏰ ${a.rate_limit_reason||'한도초과'} (${timeStr})</span>`;
+    }
+    const bg = isLimited ? 'rgba(244,67,54,.08)' : (highlight?'rgba(76,175,80,.15)':'var(--bg-0)');
+    const border = isLimited ? 'rgba(244,67,54,.3)' : (highlight?'rgba(76,175,80,.4)':'var(--border)');
+    const opacity = isLimited ? '0.7' : '1';
     return `
-    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${highlight?'rgba(76,175,80,.15)':'var(--bg-0)'};border:1px solid ${highlight?'rgba(76,175,80,.4)':'var(--border)'};border-radius:4px;margin-bottom:4px">
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${bg};border:1px solid ${border};border-radius:4px;margin-bottom:4px;opacity:${opacity}">
       <div style="display:flex;flex-direction:column;gap:1px">
         <button onclick="moveAccount(${a.id},-1)" style="font-size:8px;padding:0 4px;background:var(--bg-3);border:1px solid var(--border);cursor:pointer;color:var(--text)">▲</button>
         <button onclick="moveAccount(${a.id},1)" style="font-size:8px;padding:0 4px;background:var(--bg-3);border:1px solid var(--border);cursor:pointer;color:var(--text)">▼</button>
       </div>
-      <span style="color:${highlight?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'★':'○'} ${i+1}. ${escapeHtml(a.name)}${isNext?' <span style="color:#a3e635;font-size:10px">(다음 차례)</span>':''}</span>
+      <span style="color:${highlight?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'★':'○'} ${i+1}. ${escapeHtml(a.name)}${isNext&&!isLimited?' <span style="color:#a3e635;font-size:10px">(다음 차례)</span>':''}</span>
+      ${limitedBadge}
       <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
+      ${isLimited?`<button onclick="unlockAccount(${a.id})" title="수동으로 한도초과 해제 (실제 한도가 풀린 게 확인되면)" style="font-size:10px;padding:2px 6px;background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.3);border-radius:3px;cursor:pointer">🔓 해제</button>`:''}
       ${a.active?'':`<button onclick="activateClaudeAccount(${a.id})" title="${isManual?'이 계정으로 활성화':'수동 모드일 때만 의미 있음'}" style="font-size:10px;padding:2px 6px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;cursor:pointer">${isManual?'활성화':'★ 마크만'}</button>`}
       <button onclick="testClaudeAccount(${a.id})" title="이 계정으로 인증 테스트" style="font-size:10px;padding:2px 6px;background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:3px;cursor:pointer">🧪 테스트</button>
       <button onclick="deleteClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
     </div>`;
   }).join('');
+}
+async function unlockAccount(id){
+  if(!confirm('이 계정의 한도초과 표시를 해제할까요?\n\n(실제 한도가 풀려있어야 합니다. 풀리지 않았으면 다음 시도에서 다시 한도초과로 마킹됩니다)'))return;
+  await api('POST','/api/claude/accounts/unlock',{id});
+  loadClaudeAccounts();
 }
 
 async function saveRotationMode(mode){
