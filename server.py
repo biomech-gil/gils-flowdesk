@@ -3245,7 +3245,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         # 추천 시작 경로들 (root일 때만)
         suggestions = []
         if path == "/":
-            for p in ["/workspace", "/app", "/mnt", "/home", "/volume1"]:
+            for p in ["/synology", "/workspace", "/app", "/mnt", "/home", "/volume1"]:
                 if os.path.isdir(p):
                     suggestions.append(p)
         return {"ok": True, "path": path, "items": items, "suggestions": suggestions}
