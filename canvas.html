@@ -3263,14 +3263,16 @@ document.addEventListener('keydown',function(e){
     if(ae&&ae.id==='sb-input'){e.preventDefault();openModal('input')}
     else if(ae&&ae.id==='sb-output'){e.preventDefault();openModal('output')}
   }
-  // Ctrl+N: 신규 메모 탭 생성 + 바로 열림
-  if(e.ctrlKey&&(e.key==='n'||e.key==='N')&&!e.shiftKey&&!e.altKey){
+  // Alt+N 또는 Ctrl+Shift+M: 신규 메모 탭 생성 + 바로 열림
+  // (Ctrl+N은 브라우저 신규 창 단축키라 가로챌 수 없음)
+  const isAltN=e.altKey&&(e.key==='n'||e.key==='N')&&!e.shiftKey&&!e.ctrlKey;
+  const isCtrlShiftM=e.ctrlKey&&e.shiftKey&&(e.key==='m'||e.key==='M')&&!e.altKey;
+  if(isAltN||isCtrlShiftM){
     const ae=document.activeElement;
-    // 입력 필드에 포커스가 있으면 브라우저 기본 동작 유지 (일부 브라우저는 이미 막힘)
+    // 입력 필드에 포커스가 있으면 동작하지 않음 (타이핑 방해 방지)
     if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
     e.preventDefault();
     if(typeof newMemo==='function')newMemo();
-    // 메모 내용 textarea에 즉시 포커스
     setTimeout(()=>{
       const ta=document.getElementById('me-content');
       if(ta)ta.focus();
