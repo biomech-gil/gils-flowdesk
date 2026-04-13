@@ -1045,7 +1045,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/memo/pinned": self._json(self._memo_pinned())
         elif p == "/api/fav/folders": self._json(self._fav_folders(params))
         elif p == "/api/fav/items": self._json(self._fav_items(params))
-        elif p == "/api/state/load": self._json(self._state_load())
+        elif p == "/api/state/load": self._json(self._state_load(params))
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
         elif p == "/api/trash/list": self._json(self._trash_list())
@@ -1431,12 +1431,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "project": json.loads(row["data"])}
 
     def _project_list(self):
-        rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects WHERE id NOT LIKE '\\_\\_current%' ESCAPE '\\' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
         return {"ok": True, "projects": rows}
 
     def _project_list_meta(self):
         """메타데이터만 (data 필드 제외, 가벼움) — 노드 수도 함께"""
-        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id FROM projects WHERE id!='__current__' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
+        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id FROM projects WHERE id NOT LIKE '\\_\\_current%' ESCAPE '\\' ORDER BY favorite DESC, modified DESC LIMIT 100", fetch=True)
         # 노드 수만 추가 추출
         for r in rows:
             try:
@@ -1936,20 +1936,36 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True}
 
     def _state_save(self, body):
-        """현재 캔버스 상태를 __current__ 프로젝트로 자동 저장"""
+        """자동 저장 — workflowId 있으면 해당 프로젝트 갱신, 없으면 탭별 임시 슬롯
+        (멀티 탭 분리: 각 탭이 sessionStorage tabId를 보내서 서로 안 섞임)"""
         now = datetime.now().isoformat()
         data = json.dumps(body, ensure_ascii=False)
-        existing = db_exec("SELECT id FROM projects WHERE id='__current__'", fetchone=True)
+        wf_id = body.get("workflowId")
+        tab_id = body.get("tabId", "default")
+        if wf_id:
+            existing = db_exec("SELECT id FROM projects WHERE id=?", (wf_id,), fetchone=True)
+            if existing:
+                db_exec("UPDATE projects SET data=?, modified=? WHERE id=?", (data, now, wf_id))
+                return {"ok": True, "savedTo": wf_id}
+        recovery_id = f"__current_{tab_id}__"
+        existing = db_exec("SELECT id FROM projects WHERE id=?", (recovery_id,), fetchone=True)
         if existing:
-            db_exec("UPDATE projects SET data=?, modified=? WHERE id='__current__'", (data, now))
+            db_exec("UPDATE projects SET data=?, modified=? WHERE id=?", (data, now, recovery_id))
         else:
             db_exec("INSERT INTO projects (id, name, data, created, modified) VALUES (?,?,?,?,?)",
-                    ("__current__", "__current__", data, now, now))
-        return {"ok": True}
+                    (recovery_id, "__current__", data, now, now))
+        return {"ok": True, "savedTo": recovery_id}
 
-    def _state_load(self):
-        """__current__ 프로젝트에서 상태 복원"""
-        row = db_exec("SELECT data FROM projects WHERE id='__current__'", fetchone=True)
+    def _state_load(self, params=None):
+        """탭별 복구 슬롯에서 상태 복원 (없으면 legacy __current__ fallback)"""
+        tab_id = "default"
+        if params:
+            v = params.get("tabId", ["default"])
+            tab_id = v[0] if v else "default"
+        recovery_id = f"__current_{tab_id}__"
+        row = db_exec("SELECT data FROM projects WHERE id=?", (recovery_id,), fetchone=True)
+        if not row:
+            row = db_exec("SELECT data FROM projects WHERE id='__current__'", fetchone=True)
         if row:
             return {"ok": True, "state": json.loads(row["data"])}
         return {"ok": True, "state": None}

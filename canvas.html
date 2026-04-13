@@ -31,7 +31,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .tb .lbl{font-size:.72em;color:var(--text-muted)}
 .main{display:flex;flex:1;overflow:hidden;position:relative}
 .cw{flex:1;overflow:hidden;position:relative;cursor:grab;
-  background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:40px 40px}
+  background-color:var(--canvas-bg,transparent);
+  background-image:linear-gradient(var(--grid-color,rgba(255,255,255,.03)) var(--grid-thickness,1px),transparent var(--grid-thickness,1px)),linear-gradient(90deg,var(--grid-color,rgba(255,255,255,.03)) var(--grid-thickness,1px),transparent var(--grid-thickness,1px));background-size:var(--grid-size,40px) var(--grid-size,40px)}
 .cw.grabbing{cursor:grabbing}.cw.connecting{cursor:crosshair}
 #canvas{position:absolute;top:0;left:0;transform-origin:0 0}
 #svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
@@ -403,6 +404,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 <div class="tb">
   <button onclick="showLanding()" title="저장된 프로젝트 목록에서 선택" style="background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.3);color:#7ecfff">📂 프로젝트열기</button>
   <button onclick="newProject()" title="빈 캔버스에서 새로 시작" style="background:rgba(6,182,212,.12);border-color:rgba(6,182,212,.3);color:#88c0d0">📄 새프로젝트</button>
+  <button onclick="openInNewTab()" title="현재 프로젝트를 새 탭에서 열기 (또는 빈 새 탭)" style="background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.3);color:#c4b5fd">↗ 새 탭</button>
+  <button onclick="document.getElementById('appearance-modal').classList.add('show')" title="배경/그리드 색상·간격 조절" style="background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#ebcb8b">🎨 외관</button>
   <button class="danger" onclick="resetSession()" title="모든 노드와 세션 초기화">↻ 리셋</button><button onclick="openTrash()" title="휴지통 (삭제된 항목 복원)" style="background:rgba(139,92,246,.15);border-color:rgba(139,92,246,.3);color:#b48ead">🗑️ 휴지통</button><div class="sep"></div>
   <button class="act" onclick="engine.startAll()">▶ 전체실행</button><button onclick="engine.stop()" style="background:rgba(244,67,54,.15);border-color:rgba(244,67,54,.3);color:#bf616a">■ 정지</button><div class="sep"></div>
   <span class="lbl">작업폴더:</span><input type="text" id="wf-cwd" placeholder="/home/user/project" style="width:140px"><button onclick="openFolderBrowser('wf-cwd')" title="폴더 탐색" style="font-size:11px;padding:3px 8px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:#b48ead;border-radius:3px;cursor:pointer;margin-left:4px">📁</button><div class="sep"></div>
@@ -511,6 +514,47 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     <button onclick="document.getElementById('fav-popup').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
   </div>
   <div id="fav-list" style="overflow-y:auto;max-height:calc(70vh - 50px);padding:8px"></div>
+</div>
+<!-- 외관 설정 모달 (배경/그리드) -->
+<div id="appearance-modal" class="fav-modal" style="min-width:380px">
+  <div class="fav-modal-hd">
+    <div class="crumb"><span style="color:#fff;font-weight:600">🎨 캔버스 외관</span></div>
+    <span class="x" onclick="document.getElementById('appearance-modal').classList.remove('show')">✕</span>
+  </div>
+  <div class="fav-modal-bd" style="display:flex;flex-direction:column;gap:14px">
+    <label style="display:flex;align-items:center;gap:10px;font-size:.85em">
+      <span style="width:90px">배경색</span>
+      <input type="color" id="ap-bg" onchange="updateAppearance()">
+      <span id="ap-bg-v" style="font-family:monospace;color:var(--text-muted);font-size:.85em"></span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;font-size:.85em">
+      <span style="width:90px">그리드 색상</span>
+      <input type="color" id="ap-grid-color" onchange="updateAppearance()">
+      <span id="ap-grid-color-v" style="font-family:monospace;color:var(--text-muted);font-size:.85em"></span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;font-size:.85em">
+      <span style="width:90px">그리드 알파</span>
+      <input type="range" id="ap-grid-alpha" min="0" max="1" step="0.01" oninput="updateAppearance()" style="flex:1">
+      <span id="ap-grid-alpha-v" style="width:40px;text-align:right;font-family:monospace;color:var(--text-muted);font-size:.85em"></span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;font-size:.85em">
+      <span style="width:90px">그리드 두께</span>
+      <input type="range" id="ap-grid-th" min="0" max="5" step="0.5" oninput="updateAppearance()" style="flex:1">
+      <span id="ap-grid-th-v" style="width:40px;text-align:right;font-family:monospace;color:var(--text-muted);font-size:.85em"></span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;font-size:.85em">
+      <span style="width:90px">그리드 간격</span>
+      <input type="range" id="ap-grid-size" min="10" max="200" step="5" oninput="updateAppearance()" style="flex:1">
+      <span id="ap-grid-size-v" style="width:50px;text-align:right;font-family:monospace;color:var(--text-muted);font-size:.85em"></span>
+    </label>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button onclick="resetAppearance()" style="background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:6px 14px;border-radius:4px;cursor:pointer;font-size:.82em">기본값</button>
+      <button onclick="document.getElementById('appearance-modal').classList.remove('show')" style="background:var(--accent);color:#000;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-size:.82em;font-weight:600">완료</button>
+    </div>
+    <div style="font-size:.75em;color:var(--text-muted);margin-top:4px;line-height:1.5">
+      💡 이 설정은 <b>현재 프로젝트에 저장</b>됩니다. 다른 프로젝트는 각자 외관 설정을 갖습니다.
+    </div>
+  </div>
 </div>
 <!-- 즐겨찾기 폴더 모달 (드릴다운 네비게이션) -->
 <div id="fav-modal" class="fav-modal">
@@ -727,7 +771,56 @@ function renderMd(text){try{
   const preserved=(text||'').replace(/\n\n/g,'\n\n&nbsp;\n\n');
   return marked.parse(preserved,{breaks:true})
 }catch(e){return text}}
-const API=location.origin,LS_KEY='tmux_canvas_state';
+const API=location.origin;
+// 멀티 탭 분리: 각 탭이 sessionStorage에 고유 tabId 저장 → autoSave 충돌 방지
+const TAB_ID=(()=>{let t=sessionStorage.getItem('flowdesk_tab_id');if(!t){t='tab_'+Date.now()+'_'+Math.random().toString(36).substr(2,6);sessionStorage.setItem('flowdesk_tab_id',t)}return t})();
+const LS_KEY='tmux_canvas_state_'+TAB_ID;
+console.log('[TAB]',TAB_ID);
+// 외관 설정 (프로젝트별 저장) — 기본값
+let appearance={bgColor:'#0a0a14',gridColor:'#ffffff',gridAlpha:0.05,gridThickness:1,gridSize:40};
+function hexToRgba(hex,a){
+  const m=(hex||'').replace('#','').match(/.{2}/g);if(!m||m.length<3)return `rgba(255,255,255,${a})`;
+  const [r,g,b]=m.map(x=>parseInt(x,16));return `rgba(${r},${g},${b},${a})`;
+}
+function applyAppearance(){
+  const cw=document.getElementById('cw');if(!cw)return;
+  const a=appearance;
+  cw.style.setProperty('--canvas-bg',a.bgColor);
+  cw.style.setProperty('--grid-color',hexToRgba(a.gridColor,a.gridAlpha));
+  cw.style.setProperty('--grid-thickness',a.gridThickness+'px');
+  cw.style.setProperty('--grid-size',a.gridSize+'px');
+  // 모달 열려있으면 입력값도 동기화
+  const bg=document.getElementById('ap-bg');if(bg){
+    bg.value=a.bgColor;document.getElementById('ap-bg-v').textContent=a.bgColor;
+    document.getElementById('ap-grid-color').value=a.gridColor;
+    document.getElementById('ap-grid-color-v').textContent=a.gridColor;
+    document.getElementById('ap-grid-alpha').value=a.gridAlpha;
+    document.getElementById('ap-grid-alpha-v').textContent=a.gridAlpha.toFixed(2);
+    document.getElementById('ap-grid-th').value=a.gridThickness;
+    document.getElementById('ap-grid-th-v').textContent=a.gridThickness+'px';
+    document.getElementById('ap-grid-size').value=a.gridSize;
+    document.getElementById('ap-grid-size-v').textContent=a.gridSize+'px';
+  }
+}
+function updateAppearance(){
+  appearance.bgColor=document.getElementById('ap-bg').value;
+  appearance.gridColor=document.getElementById('ap-grid-color').value;
+  appearance.gridAlpha=parseFloat(document.getElementById('ap-grid-alpha').value);
+  appearance.gridThickness=parseFloat(document.getElementById('ap-grid-th').value);
+  appearance.gridSize=parseInt(document.getElementById('ap-grid-size').value);
+  applyAppearance();
+  if(typeof autoSave==='function')autoSave();
+}
+function resetAppearance(){
+  appearance={bgColor:'#0a0a14',gridColor:'#ffffff',gridAlpha:0.05,gridThickness:1,gridSize:40};
+  applyAppearance();
+  if(typeof autoSave==='function')autoSave();
+}
+// 새 탭에서 열기 — 현재 프로젝트가 있으면 그 hash로, 없으면 빈 새 탭
+function openInNewTab(){
+  const url=workflowId?`${location.origin}/#wf=${workflowId}`:location.origin;
+  window.open(url,'_blank');
+}
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
 const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};
@@ -2265,7 +2358,7 @@ const engine={
 
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
-function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,
+function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,tabId:TAB_ID,appearance:{...appearance},
   nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,status:n.status==='running'?'idle':n.status,history:n.history})),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5})),
   canvasElements:canvasEls.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,w:c.w,h:c.h,color:c.color,label:c.label,content:c.content,fontSize:c.fontSize,src:c.src}))}}
@@ -2314,11 +2407,17 @@ function loadState(st){
   nodes.forEach(n=>n.el.remove());nodes=[];conns=[];ncnt=0;selectedNode=null;closeSb();
   canvasEls.forEach(c=>c.el.remove());canvasEls=[];selectedCe=null;
   cx=st.cx||0;cy=st.cy||0;zoom=st.zoom||1;document.getElementById('wf-cwd').value=st.cwd||'';wfName=st.wfName||'';workflowId=st.workflowId||null;
+  // 외관 설정 복원 (없으면 기본값)
+  if(st.appearance)appearance={...appearance,...st.appearance};
+  applyAppearance();
   (st.nodes||[]).forEach(nd=>mkNode(nd));
   conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5}));
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
   applyTx();drawConns();
   checkAllTokenLimits();
+  // URL 해시 갱신 (멀티 탭 — 새로고침 시 같은 프로젝트 복원)
+  if(workflowId)location.hash='wf='+workflowId;
+  else location.hash='';
   lastSavedState=JSON.stringify(getState());
 }
 
@@ -2784,6 +2883,7 @@ async function loadLandingLists(){
           <div class="nm">${escapeHtml(p.name||'무제')}</div>
           <div class="meta">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount} · 연결 ${p.connCount}</div>
         </div>
+        <button onclick="event.stopPropagation();window.open(location.origin+'/#wf=${p.id}','_blank')" title="새 탭에서 열기 (멀티 탭 작업)" style="background:none;border:none;color:#c4b5fd;cursor:pointer;font-size:12px;padding:2px">↗</button>
         <button onclick="event.stopPropagation();moveProjectFolder('${p.id}')" title="폴더 이동" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px">📂</button>
         <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
@@ -3805,11 +3905,18 @@ document.addEventListener('paste',async function(e){
 
 async function init(){
   const st=await api('GET','/api/status');if(st.panes)paneList=st.panes;
-  console.log('[INIT] 랜딩 모달 표시');
-  refreshWfList();applyTx();
+  console.log('[INIT] tabId='+TAB_ID);
+  refreshWfList();applyTx();applyAppearance();
   undoStack=[];redoStack=[];
   loadFolders();loadMemoTabs();loadPinnedMemos();
   setupJsonDragDrop();
+  // URL 해시로 deep-link (#wf=ID) → 해당 프로젝트 자동 로드, 랜딩 스킵
+  const m=location.hash.match(/wf=([^&]+)/);
+  if(m&&m[1]){
+    console.log('[INIT] hash deep-link →',m[1]);
+    await loadWorkflow(m[1]);
+    return;
+  }
   showLanding();
 }
 // ── Login / Auth ──
