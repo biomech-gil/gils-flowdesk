@@ -316,11 +316,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 #sel-box{position:absolute;border:1px solid var(--blue);background:rgba(33,150,243,.08);z-index:50;pointer-events:none;display:none}
 .snap-guide{position:absolute;background:var(--red);z-index:40;pointer-events:none;opacity:.5}
 .snap-guide-h{height:1px;left:0;right:0}.snap-guide-v{width:1px;top:0;bottom:0}
-/* TOKEN LIMIT WARNING */
-@keyframes tokenPulse{0%,100%{border-color:#F44336;box-shadow:0 0 8px rgba(244,67,54,.4)}50%{border-color:#ff6b6b;box-shadow:0 0 20px rgba(244,67,54,.8),0 0 40px rgba(244,67,54,.3)}}
-.nd.token-warn{animation:tokenPulse 1.5s ease-in-out infinite;border-width:3px}
-.nd.collapsed.token-warn{animation:tokenPulse 1.2s ease-in-out infinite;border-width:3px}
-.token-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#F44336;margin-left:4px;animation:pulse 1s infinite;flex-shrink:0}
+/* TOKEN LIMIT WARNING — 작고 정적인 태그 (펄스/글로우 제거) */
+.nd.token-warn{position:relative}
+.nd.token-warn::after{content:'⚠ 23K+';position:absolute;top:-7px;right:6px;font-size:9px;font-weight:600;padding:1px 6px;background:rgba(244,67,54,.15);color:#ff8a80;border:1px solid rgba(244,67,54,.35);border-radius:8px;pointer-events:none;letter-spacing:.3px;white-space:nowrap;z-index:5}
+.nd.collapsed.token-warn::after{top:-5px;right:4px;font-size:8.5px}
+.token-dot{display:none}
 /* SIDEBAR DIVIDER (resizable) */
 .sb-divider{height:6px;background:var(--bg-3);cursor:row-resize;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .15s}
 .sb-divider:hover{background:var(--accent)}
@@ -2395,12 +2395,10 @@ const engine={
     // 입력이 비어있어도 이미지가 있으면 실행 허용 (이미지 분석)
     if(!input.trim()&&mergedImages.length===0){this.setSt(nd,'error');return}
 
-    // 프롬프트 길이 경고 (23,000자 초과 시)
+    // 프롬프트 길이 — 강제 차단 안 함 (노드 ⚠ 태그로만 표시), 콘솔에만 기록
     const LIMIT=23000;
     if(input.length>LIMIT&&retryCount===0){
-      const overBy=input.length-LIMIT;
-      const proceed=confirm(`⚠️ [${nd.name}] 프롬프트가 ${input.length.toLocaleString()}자입니다.\n\n최대 권장: ${LIMIT.toLocaleString()}자 (${overBy.toLocaleString()}자 초과)\n\n긴 메모를 분할하거나, 중간에 요약 Agent를 넣어주세요.\n\n[확인] = 그래도 실행 (타임아웃 가능)\n[취소] = 중단`);
-      if(!proceed){this.setSt(nd,'idle');return}
+      console.log(`[${nd.name}] ⚠ 입력 ${input.length.toLocaleString()}자 (권장 ${LIMIT.toLocaleString()}자 초과 ${(input.length-LIMIT).toLocaleString()}) — 그대로 실행`);
     }
 
     this.setSt(nd,'running');
