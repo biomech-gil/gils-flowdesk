@@ -2125,16 +2125,22 @@ const engine={
     if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
     if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
 
-    // 다중 upstream 대기 (complete이거나 outputCapture가 있으면 OK)
+    // 다중 upstream 대기 (complete / outputCapture / 이미지엘 / nodeType없는 캔버스엘 = 즉시 ready)
     const upstream=this.upstream(nd.id);
-    const incomplete=upstream.filter(u=>u.status!=='complete'&&!(u.outputCapture&&u.outputCapture.trim()));
+    const isReady=u=>u.status==='complete'||(u.outputCapture&&u.outputCapture.trim())||(u.type==='image'&&u.src)||!u.nodeType&&!u.type?.match(/^(agent|memo|input|trigger)$/);
+    const incomplete=upstream.filter(u=>!isReady(u));
     if(incomplete.length>0&&retryCount===0){
-      console.log(`[${nd.name}] 상위 노드 미완료: ${incomplete.map(u=>u.name).join(', ')} → 대기`);
+      console.log(`[${nd.name}] 상위 노드 미완료: ${incomplete.map(u=>u.name||u.nodeName).join(', ')} → 대기`);
       return;
     }
 
+    // upstream 이미지 canvasEl의 src를 nd.images에 자동 병합 (중복 제거)
+    const upstreamImages=upstream.filter(u=>u.type==='image'&&u.src).map(u=>u.src);
+    const mergedImages=[...new Set([...(nd.images||[]),...upstreamImages])];
+
     const input=this.resolve(nd);
-    if(!input.trim()){this.setSt(nd,'error');return}
+    // 입력이 비어있어도 이미지가 있으면 실행 허용 (이미지 분석)
+    if(!input.trim()&&mergedImages.length===0){this.setSt(nd,'error');return}
 
     // 프롬프트 길이 경고 (23,000자 초과 시)
     const LIMIT=23000;
@@ -2150,7 +2156,7 @@ const engine={
 
     const cwd=document.getElementById('wf-cwd').value.trim()||undefined;
     const chatOnly=nd.chatOnly!==undefined?nd.chatOnly:true;
-    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input,inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:nd.images||[],projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null});
+    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null});
 
     if(!exec.ok){
       console.log(`[${nd.name}] API 실패`);
@@ -3521,11 +3527,37 @@ function setupJsonDragDrop(){
   });
 }
 
-// Ctrl+V 붙여넣기로 JSON 프로젝트 가져오기
-document.addEventListener('paste',function(e){
-  // textarea나 input에 포커스 있으면 무시 (일반 붙여넣기)
+// Ctrl+V 붙여넣기: 이미지(클립보드 그림) 또는 JSON 프로젝트 자동 감지
+document.addEventListener('paste',async function(e){
+  // textarea/input/contenteditable 포커스면 무시 (일반 붙여넣기 동작)
   const tag=document.activeElement?.tagName;
   if(tag==='TEXTAREA'||tag==='INPUT'||document.activeElement?.contentEditable==='true')return;
+
+  // 1) 클립보드에 이미지가 있으면 캔버스에 이미지엘 추가
+  const items=(e.clipboardData||window.clipboardData)?.items||[];
+  for(const it of items){
+    if(it.type&&it.type.startsWith('image/')){
+      e.preventDefault();
+      const blob=it.getAsFile();
+      if(!blob)continue;
+      const reader=new FileReader();
+      reader.onload=async ev=>{
+        const dataUrl=ev.target.result;
+        // 서버에 업로드 → 영속 경로 받기 (실패 시 dataURL 임시 사용)
+        const r=await api('POST','/api/upload',{filename:`paste_${Date.now()}.png`,data:dataUrl,purpose:'image'});
+        const src=(r&&r.ok&&r.path)?r.path:dataUrl;
+        // 화면 중앙 부근에 배치
+        const c=s2c(cw.clientWidth/2,cw.clientHeight/2);
+        mkCe({type:'image',src,x:c.x-150,y:c.y-100,w:300,h:200,nodeName:'붙여넣은이미지'});
+        autoSave();
+        console.log('[PASTE] 이미지 추가:',src);
+      };
+      reader.readAsDataURL(blob);
+      return;
+    }
+  }
+
+  // 2) 텍스트면 JSON 프로젝트인지 확인
   const text=(e.clipboardData||window.clipboardData).getData('text');
   if(!text||!text.trim().startsWith('{'))return;
   try{
