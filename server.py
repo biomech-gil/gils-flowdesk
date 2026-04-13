@@ -2055,6 +2055,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             _claude_login_output = []
 
             env = get_claude_env()
+            # 터미널 폭을 매우 크게 설정해서 URL이 줄바꿈되지 않도록
+            env["COLUMNS"] = "9999"
+            env["LINES"] = "50"
+            env["TERM"] = "dumb"
             # Try `claude setup-token` first (non-browser flow), fall back to `claude login`
             tried = []
             proc = None
@@ -2081,21 +2085,37 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
             def reader():
                 global _claude_login_url, _claude_login_output
+                ansi_re = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]')
                 try:
                     for line in _claude_login_proc.stdout:
-                        _claude_login_output.append(line)
-                        if not _claude_login_url:
-                            m = re.search(r'https?://[^\s]+', line)
-                            if m:
-                                _claude_login_url = m.group(0).rstrip(').,"\'')
-                        if len(_claude_login_output) > 200:
-                            _claude_login_output = _claude_login_output[-100:]
+                        # ANSI escape 제거
+                        clean = ansi_re.sub('', line)
+                        _claude_login_output.append(clean)
+                        if len(_claude_login_output) > 500:
+                            _claude_login_output = _claude_login_output[-200:]
+
+                        if _claude_login_url:
+                            continue
+
+                        # 최근 출력을 합쳐서 URL 추출 시도 (여러 줄에 걸친 URL 대응)
+                        tail = "".join(_claude_login_output[-30:])
+                        # 줄바꿈 사이 공백 제거 (URL은 공백 없음)
+                        joined = re.sub(r'\n+\s*', '', tail)
+                        m = re.search(r'https?://[^\s]+', joined)
+                        if m:
+                            candidate = m.group(0).rstrip(').,"\'')
+                            # OAuth URL이면 우선적으로 사용
+                            if 'oauth' in candidate.lower() or 'authorize' in candidate.lower() or 'claude.ai' in candidate or 'claude.com' in candidate:
+                                _claude_login_url = candidate
+                            elif not _claude_login_url and 'http' in candidate:
+                                # 다른 URL이라도 fallback으로 저장
+                                _claude_login_url = candidate
                 except Exception as e:
                     log(f"claude login reader error: {e}")
             threading.Thread(target=reader, daemon=True).start()
 
-            # Wait up to ~10 seconds for URL
-            for _ in range(50):
+            # Wait up to ~20 seconds for URL (브라우저 자동 열기 실패 후 URL 표시까지 시간 걸림)
+            for _ in range(100):
                 if _claude_login_url:
                     break
                 if _claude_login_proc.poll() is not None:
