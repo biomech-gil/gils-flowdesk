@@ -3499,8 +3499,8 @@ async function moveProjectFolder(projId){
 
 // ═══ @ 메모 인서트 picker ═══
 let atPickerEl=null,atPickerCtx=null,atMemoCache=null,atFolderCache=null,atFavFolderCache=null;
-let _atCacheTime=0;
-function invalidateAtCache(){atMemoCache=null;atFolderCache=null;atFavFolderCache=null;_atCacheTime=0}
+let _atCacheTime=0,atFavItemsByFolder={};
+function invalidateAtCache(){atMemoCache=null;atFolderCache=null;atFavFolderCache=null;atFavItemsByFolder={};_atCacheTime=0}
 async function loadAtMemoData(){
   // 캐시 30초 만료
   if(atMemoCache&&Date.now()-_atCacheTime<30000)return;
@@ -3512,6 +3512,28 @@ async function loadAtMemoData(){
   atMemoCache=(m.ok&&m.memos)||[];
   atFolderCache=(f.ok&&f.folders)||[];
   atFavFolderCache=(ff.ok&&ff.folders)||[];
+  // 각 메모 즐겨찾기 폴더의 항목 + 하위 폴더 재귀적으로 모으기
+  atFavItemsByFolder={};
+  async function gatherFavFolder(folderId){
+    const items=[];
+    // 항목
+    const ir=await api('GET',`/api/fav/items?folderId=${folderId}`);
+    if(ir.ok&&ir.items){
+      ir.items.filter(it=>it.kind==='memo').forEach(it=>items.push(parseInt(it.targetId)));
+    }
+    // 하위 폴더 재귀
+    const sr=await api('GET',`/api/fav/folders?parentId=${folderId}&kind=memo`);
+    if(sr.ok&&sr.folders){
+      for(const sf of sr.folders){
+        const sub=await gatherFavFolder(sf.id);
+        items.push(...sub);
+      }
+    }
+    return items;
+  }
+  for(const f of atFavFolderCache){
+    atFavItemsByFolder[f.id]=await gatherFavFolder(f.id);
+  }
   _atCacheTime=Date.now();
 }
 function handleAtTrigger(ta,nd){
@@ -3592,6 +3614,17 @@ function renderAtPicker(filter){
       html+='<div class="at-cat">📌 핀 고정</div>';
       pinned.slice(0,8).forEach(m=>html+=atItemHtml(m));
     }
+    // 메모 즐겨찾기 폴더 (상위 폴더만, 하위 메모는 재귀 수집됨)
+    const memoById={};atMemoCache.forEach(m=>{memoById[m.id]=m});
+    atFavFolderCache.forEach(ff=>{
+      const memoIds=atFavItemsByFolder[ff.id]||[];
+      // 검색어 필터 적용
+      const items=memoIds.map(id=>memoById[id]).filter(m=>m&&(!q||(m.name||'').toLowerCase().includes(q)||(m.preview||'').toLowerCase().includes(q)));
+      if(items.length===0)return;
+      const color=ff.color?`color:${ff.color}`:'color:#ebcb8b';
+      html+=`<div class="at-cat" style="${color}">⭐ ${renderIcon(ff.icon||'📁',12)} ${escH(ff.name)} <span style="color:var(--text-muted);font-weight:400">(즐겨찾기)</span></div>`;
+      items.slice(0,15).forEach(m=>html+=atItemHtml(m));
+    });
     // 메모폴더별
     atFolderCache.forEach(f=>{
       const items=byFolder[f.id]||[];
