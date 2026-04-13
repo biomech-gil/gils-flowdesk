@@ -18,7 +18,7 @@ RUN npm install -g @anthropic-ai/claude-code
 
 # App
 WORKDIR /app
-COPY server.py canvas.html chat.html start.sh setup.sh /app/
+COPY server.py canvas.html chat.html /app/
 COPY migrate_to_pg.py setup_pg.sql /app/
 
 # Volumes for persistent data
