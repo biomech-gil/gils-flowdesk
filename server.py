@@ -354,6 +354,7 @@ def init_db():
             ("memos", "pinned", "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0"),
             ("memos", "color", "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''"),
             ("memo_folders", "color", "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''"),
+            ("memo_folders", "parent_id", "ALTER TABLE memo_folders ADD COLUMN parent_id INTEGER"),
             ("claude_accounts", "priority", "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0"),
             ("conversations", "account_id", "ALTER TABLE conversations ADD COLUMN account_id INTEGER"),
         ]
@@ -489,6 +490,7 @@ def init_db():
             "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0",
             "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''",
             "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
+            "ALTER TABLE memo_folders ADD COLUMN parent_id INTEGER",
             "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0",
         ]:
             try:
@@ -1568,20 +1570,36 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True}
 
     def _folder_list(self):
-        rows = db_exec("SELECT f.id, f.name, f.icon, f.sort_order, f.color, f.created, (SELECT COUNT(*) FROM memos WHERE folder_id=f.id) as memo_count FROM memo_folders f ORDER BY sort_order, name", fetch=True)
+        rows = db_exec("SELECT f.id, f.name, f.icon, f.sort_order, f.color, f.parent_id, f.created, (SELECT COUNT(*) FROM memos WHERE folder_id=f.id) as memo_count FROM memo_folders f ORDER BY sort_order, name", fetch=True)
         return {"ok": True, "folders": rows}
 
     def _folder_save(self, body):
         fid = body.get("id")
-        name = body.get("name", "새 폴더")
-        icon = body.get("icon", "📁")
-        color = body.get("color", "")
         now = datetime.now().isoformat()
         if fid:
-            db_exec("UPDATE memo_folders SET name=?, icon=?, color=? WHERE id=?", (name, icon, color, fid))
+            # Partial update: only update fields explicitly provided in body.
+            updates = []
+            params = []
+            if "name" in body:
+                updates.append("name=?"); params.append(body.get("name") or "새 폴더")
+            if "icon" in body:
+                updates.append("icon=?"); params.append(body.get("icon") or "📁")
+            if "color" in body:
+                updates.append("color=?"); params.append(body.get("color") or "")
+            if "parentId" in body:
+                pid = body.get("parentId")
+                updates.append("parent_id=?"); params.append(pid if pid else None)
+            if updates:
+                params.append(fid)
+                db_exec(f"UPDATE memo_folders SET {', '.join(updates)} WHERE id=?", tuple(params))
             return {"ok": True, "id": fid}
         else:
-            new_id = db_exec("INSERT INTO memo_folders (name, icon, color, created) VALUES (?,?,?,?)", (name, icon, color, now))
+            name = body.get("name", "새 폴더")
+            icon = body.get("icon", "📁")
+            color = body.get("color", "")
+            parent_id = body.get("parentId")
+            if parent_id in ("", 0): parent_id = None
+            new_id = db_exec("INSERT INTO memo_folders (name, icon, color, parent_id, created) VALUES (?,?,?,?,?)", (name, icon, color, parent_id, now))
             return {"ok": True, "id": new_id}
 
     def _folder_delete(self, body):

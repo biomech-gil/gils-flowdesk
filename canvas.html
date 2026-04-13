@@ -214,9 +214,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 #memo-editor button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer}
 #memo-editor button:hover{background:var(--bg-4)}
 /* FOLDER PANEL */
-#folder-panel{position:fixed;top:80px;left:20px;width:320px;max-height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:91;display:none;flex-direction:column;overflow:hidden}
+#folder-panel{position:fixed;top:80px;left:20px;width:420px;max-height:calc(100vh - 120px);background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:91;display:none;flex-direction:column;overflow:hidden}
 #folder-panel.show{display:flex}
-#memo-hover-preview{position:fixed;top:80px;left:350px;width:400px;max-height:60vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:92;display:none;overflow-y:auto;padding:12px;font-family:var(--mono);font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word}
+#memo-hover-preview{position:fixed;top:80px;left:450px;width:600px;max-height:75vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:92;display:none;overflow-y:auto;padding:16px;font-family:var(--mono);font-size:20px;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word}
 #memo-hover-preview.show{display:block}
 .fp-hd{display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);font-weight:600;font-size:.85em;color:var(--accent)}
 .fp-hd button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 10px;border-radius:3px;cursor:pointer;font-size:.78em;margin-left:6px}
@@ -230,17 +230,22 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .fp-folder .cnt{font-size:.7em;color:var(--text-muted);background:var(--bg-4);padding:1px 6px;border-radius:8px}
 .fp-folder .del{background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;opacity:0;padding:0 4px}
 .fp-folder:hover .del{opacity:.7}
-.fp-memos{flex:0 0 50%;overflow-y:auto;padding:6px;border-top:1px solid var(--border);background:var(--bg-0)}
-.fp-memo{padding:6px 10px;font-size:.78em;color:var(--text-dim);cursor:pointer;border-radius:3px;display:flex;align-items:center;gap:4px}
-.fp-memo:hover{background:var(--bg-3);color:var(--text)}
-.fp-memo .pv{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fp-folder-group.collapsed .fp-memo-list{display:none}
-.fp-memo-list{padding-left:12px}
-.fp-memo-list .fp-memo{padding:4px 8px;font-size:11px;cursor:pointer;border-radius:3px}
-.fp-memo-list .fp-memo:hover{background:var(--bg-3)}
+.fp-memos{display:none}
+.fp-folder-group{margin-bottom:8px}
+.fp-memo{padding:6px 10px;font-size:.82em;color:var(--text);cursor:pointer;border-radius:4px;display:flex;align-items:center;gap:6px}
+.fp-memo:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.fp-memo span.nm-t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-folder-group.collapsed > .fp-memo-list{display:none}
+.fp-memo-list{padding:4px 0}
+.fp-memo-list .fp-memo{padding:6px 10px;font-size:.82em;cursor:pointer;border-radius:4px}
+.fp-memo-list .fp-memo:hover{background:rgba(255,255,255,.05)}
 .fp-memo[draggable]{cursor:grab}.fp-memo[draggable]:active{cursor:grabbing}
-.fp-folder-group .fp-folder .fb{font-size:9px;padding:0 2px;background:none;border:none;cursor:pointer;opacity:0;transition:.1s}
-.fp-folder-group .fp-folder:hover .fb{opacity:.7}
+.fp-folder[draggable]{cursor:grab}
+.fp-folder-group .fp-folder .fb{font-size:10px;padding:0 3px;background:none;border:none;cursor:pointer;opacity:0;transition:.1s;color:var(--text-muted)}
+.fp-folder-group .fp-folder:hover .fb{opacity:.8}
+.fp-folder-group .fp-folder .fb:hover{color:var(--text)}
+.fp-drop-target.fp-dropover{background:rgba(76,175,80,.15);outline:2px dashed var(--accent)}
+.fp-memo input[type="checkbox"],.fp-folder input[type="checkbox"]{accent-color:var(--accent)}
 /* LANDING MODAL */
 #landing{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);z-index:200;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px)}
 #landing.show{display:flex}
@@ -995,7 +1000,7 @@ function buildDom(n){
   const modeIcon=n.type==='agent'?(n.chatOnly?'💬':'🔧'):'';
   d.innerHTML=`
     <div class="coll-body"><span class="coll-icon">${ti.icon}</span><span class="coll-badge">${n.name}</span></div>
-    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${n.type==='agent'?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button></div><div class="nd-st ${n.status}"></div></div>
+    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${n.type==='agent'?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button><button data-act="delete" title="노드 삭제" style="color:#bf616a">🗑</button></div><div class="nd-st ${n.status}"></div></div>
     ${showBody?`<div class="nd-body"><div class="sec-lbl">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':'INPUT'}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`:''}
     <div class="port port-l" data-node="${n.id}" data-side="left"></div>
     <div class="port port-r" data-node="${n.id}" data-side="right"></div>
@@ -1022,6 +1027,9 @@ function buildDom(n){
       lbl.style.display='none';inp.style.display='';inp.focus();inp.select();
     }
     else if(a==='mode'){n.chatOnly=!n.chatOnly;btn.textContent=n.chatOnly?'💬':'🔧';btn.title=n.chatOnly?'대화전용 (클릭→CLI)':'CLI모드 (클릭→대화전용)';if(selectedNode===n)document.getElementById('sb-chatonly').checked=n.chatOnly;autoSave()}
+    else if(a==='delete'){
+      if(confirm(`"${n.name}" 노드를 삭제할까요?`))delNode(n.id);
+    }
   }));
   // 이름 span: 드래그 (헤더처럼 동작)
   const nmSpan=d.querySelector('[data-role="name"]');
@@ -2482,77 +2490,143 @@ async function renderFolderPanel(){
   const foldersDiv=document.getElementById('fp-folders');
   const mr=await api('GET','/api/memo/list');
   const allMemos=mr.ok?mr.memos:[];
-  const memoItem=(m)=>`<div class="fp-memo" draggable="true" data-memo-id="${m.id}" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')"><input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()" style="margin-right:4px">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')} <span style="color:var(--text-dim);font-size:8px;flex:1">${escapeHtml((m.preview||'').substring(0,30))}</span><button onclick="event.stopPropagation();downloadMemo(${m.id},'${escapeHtml(m.name||'memo').replace(/'/g,'&#39;')}')" title=".md 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0">⬇</button></div>`;
-  let html='';
-  for(const f of memoFolders){
+  // Build folder tree from flat list
+  const folderMap={};
+  memoFolders.forEach(f=>{ folderMap[f.id]={...f,children:[]}; });
+  const rootFolders=[];
+  memoFolders.forEach(f=>{
+    if(f.parent_id && folderMap[f.parent_id]){
+      folderMap[f.parent_id].children.push(folderMap[f.id]);
+    } else {
+      rootFolders.push(folderMap[f.id]);
+    }
+  });
+  const memoItem=(m)=>`<div class="fp-memo" draggable="true" data-drag-type="memo" data-drag-id="${m.id}" data-memo-id="${m.id}" onclick="openMemoTab(${m.id});document.getElementById('folder-panel').classList.remove('show')">
+    <input type="checkbox" class="memo-chk" data-id="${m.id}" onclick="event.stopPropagation()">
+    <span class="nm-t">${m.pinned?'📌 ':''}${escapeHtml(m.name||'무제')}</span>
+    <button onclick="event.stopPropagation();downloadMemo(${m.id},'${escapeHtml(m.name||'memo').replace(/'/g,'&#39;')}')" title=".md 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:11px;padding:0 3px;flex-shrink:0;opacity:.6">⬇</button>
+  </div>`;
+  function renderFolder(f,level){
     const folderMemos=allMemos.filter(m=>m.folder_id==f.id);
     const eName=(f.name||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    html+=`<div class="fp-folder-group" data-fid="${f.id}">
-      <div class="fp-folder fp-drop-target" data-drop-fid="${f.id}" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:7px':''}">
-        <span class="ic">${f.icon||'📁'}</span><span class="nm">${escapeHtml(f.name)}</span>
-        <span style="flex:1"></span>
+    return `<div class="fp-folder-group" data-fid="${f.id}" style="margin-left:${level*16}px">
+      <div class="fp-folder fp-drop-target" draggable="true" data-drag-type="folder" data-drag-id="${f.id}" data-drop-fid="${f.id}" onclick="this.parentElement.classList.toggle('collapsed')" style="${f.color?'border-left:3px solid '+f.color+';padding-left:7px':''}">
+        <span class="ic">${f.icon||'📁'}</span>
+        <span class="nm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.name)}</span>
         <span style="font-size:9px;color:var(--text-dim)">${folderMemos.length}</span>
+        <button class="fb" onclick="event.stopPropagation();newSubFolder(${f.id})" title="하위 폴더 추가">➕</button>
         <button class="fb" onclick="event.stopPropagation();renameFolder(${f.id},'${eName}')" title="이름 변경">✏️</button>
         <button class="fb" onclick="event.stopPropagation();editFolderColor(${f.id})" title="아이콘/색상">🎨</button>
         <button class="fb" onclick="event.stopPropagation();delFolder(${f.id})" title="삭제" style="color:var(--red)">🗑</button>
       </div>
       <div class="fp-memo-list fp-drop-target" data-drop-fid="${f.id}">
-        ${folderMemos.map(m=>memoItem(m)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">메모 없음</div>'}
+        ${folderMemos.map(m=>memoItem(m)).join('')}
+        ${f.children.map(c=>renderFolder(c,level+1)).join('')}
       </div>
     </div>`;
   }
+  let html=rootFolders.map(f=>renderFolder(f,0)).join('');
   const uncategorized=allMemos.filter(m=>!m.folder_id);
   html+=`<div class="fp-folder-group" data-fid="null">
     <div class="fp-folder fp-drop-target" data-drop-fid="null" onclick="this.parentElement.classList.toggle('collapsed')">
-      <span class="ic">📋</span><span class="nm">분류 없음</span>
-      <span style="flex:1"></span>
+      <span class="ic">📋</span>
+      <span class="nm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">분류 없음</span>
       <span style="font-size:9px;color:var(--text-dim)">${uncategorized.length}</span>
     </div>
     <div class="fp-memo-list fp-drop-target" data-drop-fid="null">
-      ${uncategorized.map(m=>memoItem(m)).join('')||'<div style="padding:4px 8px;font-size:10px;color:var(--text-muted)">메모 없음</div>'}
+      ${uncategorized.map(m=>memoItem(m)).join('')}
     </div>
   </div>`;
   if(!memoFolders.length&&!uncategorized.length) html='<div style="padding:10px;color:var(--text-muted);font-size:.75em;text-align:center">메모폴더 없음</div>';
   foldersDiv.innerHTML=html;
   document.getElementById('fp-memos').innerHTML='';
-  // 드래그앤드롭 설정
-  foldersDiv.querySelectorAll('.fp-memo[draggable]').forEach(el=>{
+  setupFolderPanelDnD(foldersDiv);
+  setupFolderHoverPreview(foldersDiv);
+}
+
+function setupFolderPanelDnD(foldersDiv){
+  foldersDiv.querySelectorAll('[draggable]').forEach(el=>{
     el.addEventListener('dragstart',e=>{
-      e.dataTransfer.setData('text/plain',el.dataset.memoId);
+      e.stopPropagation();
+      const type=el.dataset.dragType||'memo';
+      const id=el.dataset.dragId||el.dataset.memoId;
+      e.dataTransfer.setData('text/plain',JSON.stringify({type,id}));
       el.style.opacity='.4';
     });
     el.addEventListener('dragend',()=>{el.style.opacity='1'});
-    el.addEventListener('mouseenter', async function(){
-      clearTimeout(window._memoPreviewTimer);
-      const mid = this.dataset.memoId;
-      window._memoPreviewTimer = setTimeout(async ()=>{
-        const r = await api('GET', `/api/memo/get?id=${mid}`);
-        if(!r.ok) return;
-        const prev = document.getElementById('memo-hover-preview');
-        prev.textContent = r.memo.content || '(비어있음)';
-        const fp = document.getElementById('folder-panel');
-        const rect = fp.getBoundingClientRect();
-        prev.style.left = (rect.right + 8) + 'px';
-        prev.style.top = rect.top + 'px';
-        prev.classList.add('show');
-      }, 200);
+  });
+  // Build descendants map for folder cycle prevention
+  const descendants={};
+  function collectDesc(fid,acc){
+    memoFolders.forEach(f=>{
+      if(f.parent_id==fid){ acc.add(f.id); collectDesc(f.id,acc); }
     });
-    el.addEventListener('mouseleave', function(){
+  }
+  memoFolders.forEach(f=>{ const s=new Set(); collectDesc(f.id,s); descendants[f.id]=s; });
+  foldersDiv.querySelectorAll('.fp-drop-target').forEach(el=>{
+    el.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();el.classList.add('fp-dropover')});
+    el.addEventListener('dragleave',()=>{el.classList.remove('fp-dropover')});
+    el.addEventListener('drop',async e=>{
+      e.preventDefault();e.stopPropagation();
+      el.classList.remove('fp-dropover');
+      let payload;
+      try{ payload=JSON.parse(e.dataTransfer.getData('text/plain')); }catch(err){ return; }
+      if(!payload||!payload.type)return;
+      const rawFid=el.dataset.dropFid;
+      const targetFid=rawFid==='null'?null:parseInt(rawFid);
+      const dragId=parseInt(payload.id);
+      if(payload.type==='memo'){
+        await api('POST','/api/memo/save',{id:dragId,folderId:targetFid});
+        renderFolderPanel();
+      } else if(payload.type==='folder'){
+        if(dragId===targetFid) return; // drop on self
+        // Prevent dropping parent into its descendant
+        if(targetFid && descendants[dragId] && descendants[dragId].has(targetFid)){
+          alert('하위 폴더로 이동할 수 없습니다 (순환 참조).');
+          return;
+        }
+        await api('POST','/api/folder/save',{id:dragId,parentId:targetFid});
+        const fr=await api('GET','/api/folder/list');
+        memoFolders=fr.ok?fr.folders:[];
+        renderFolderPanel();
+      }
+    });
+  });
+}
+
+function setupFolderHoverPreview(foldersDiv){
+  foldersDiv.querySelectorAll('.fp-memo').forEach(el=>{
+    el.addEventListener('mouseenter',async function(){
+      clearTimeout(window._memoPreviewTimer);
+      const mid=this.dataset.memoId;
+      if(!mid)return;
+      window._memoPreviewTimer=setTimeout(async ()=>{
+        const r=await api('GET',`/api/memo/get?id=${mid}`);
+        if(!r.ok)return;
+        const prev=document.getElementById('memo-hover-preview');
+        prev.textContent=r.memo.content||'(비어있음)';
+        const fp=document.getElementById('folder-panel');
+        const rect=fp.getBoundingClientRect();
+        prev.style.left=(rect.right+10)+'px';
+        prev.style.top=rect.top+'px';
+        prev.classList.add('show');
+      },200);
+    });
+    el.addEventListener('mouseleave',function(){
       clearTimeout(window._memoPreviewTimer);
       document.getElementById('memo-hover-preview').classList.remove('show');
     });
   });
-  foldersDiv.querySelectorAll('.fp-drop-target').forEach(el=>{
-    el.addEventListener('dragover',e=>{e.preventDefault();el.style.background='rgba(76,175,80,.15)'});
-    el.addEventListener('dragleave',()=>{el.style.background=''});
-    el.addEventListener('drop',async e=>{
-      e.preventDefault();el.style.background='';
-      const memoId=e.dataTransfer.getData('text/plain');
-      const fid=el.dataset.dropFid;
-      if(!memoId)return;
-      await api('POST','/api/memo/save',{id:parseInt(memoId),folderId:fid==='null'?null:parseInt(fid)});
-      renderFolderPanel();
-    });
+}
+
+async function newSubFolder(parentId){
+  const name=prompt('하위 폴더 이름:','새 하위 폴더');
+  if(!name)return;
+  showIconColorPicker({icon:'📁',color:''},async({icon,color})=>{
+    await api('POST','/api/folder/save',{name,icon,color,parentId});
+    const fr=await api('GET','/api/folder/list');
+    memoFolders=fr.ok?fr.folders:[];
+    renderFolderPanel();
   });
 }
 async function renameFolder(fid,currentName){
@@ -2639,7 +2713,7 @@ async function loadLandingLists(){
   const pjList=document.getElementById('landing-projects');
   if(pj.ok&&pj.projects){
     const projectItemHtml=(p)=>`
-      <div class="landing-item" draggable="true" data-proj-id="${p.id}" onclick="selectLandingItem(this,'project','${p.id}')">
+      <div class="landing-item" draggable="true" data-proj-id="${p.id}" onclick="selectLandingItem(this,'project','${p.id}')" ondblclick="selectLandingItem(this,'project','${p.id}');setTimeout(confirmLanding,100)">
         <input type="checkbox" class="landing-chk" data-kind="project" data-id="${p.id}" onclick="event.stopPropagation()" style="margin-right:6px">
         <span class="star ${p.favorite?'fav':''}" onclick="event.stopPropagation();toggleStar('${p.id}',${!p.favorite})">${p.favorite?'★':'☆'}</span>
         <div class="info">
@@ -2722,7 +2796,7 @@ async function loadLandingLists(){
   const tpList=document.getElementById('landing-temps');
   if(tp.ok&&tp.temps){
     tpList.innerHTML=tp.temps.map(t=>`
-      <div class="landing-item" draggable="true" data-temp-id="${t.id}" data-temp-name="${escapeHtml(t.name||'무제')}" onclick="selectLandingItem(this,'temp','${t.id}')">
+      <div class="landing-item" draggable="true" data-temp-id="${t.id}" data-temp-name="${escapeHtml(t.name||'무제')}" onclick="selectLandingItem(this,'temp','${t.id}')" ondblclick="selectLandingItem(this,'temp','${t.id}');setTimeout(confirmLanding,100)">
         <input type="checkbox" class="landing-chk" data-kind="temp" data-id="${t.id}" onclick="event.stopPropagation()" style="margin-right:6px">
         <div class="info">
           <div class="nm">${escapeHtml(t.name||'무제')}</div>
