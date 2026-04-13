@@ -3309,7 +3309,10 @@ document.addEventListener('keydown',function(e){
     'KeyA':()=>toggleFolderPanel&&toggleFolderPanel(),           // 📂 메모폴더
     'KeyS':()=>{newMemo&&newMemo();focusMemoContent()},          // 📝 새 메모 탭
     'KeyD':()=>{openFileManager&&openFileManager();setTimeout(()=>{fmOpenTrash&&fmOpenTrash()},200)}, // 🗑 휴지통
-    'KeyF':()=>toggleFocusMode&&toggleFocusMode()                // 🔲 집중모드 (중복 편의)
+    'KeyF':()=>toggleFocusMode&&toggleFocusMode(),               // 🔲 집중모드 (중복 편의)
+    // 접기/펼치기 대체 (Alt+C/V 차단되는 브라우저 대비)
+    'KeyC':()=>collapseAll&&collapseAll(true),                   // 🔽 전체 접기
+    'KeyV':()=>collapseAll&&collapseAll(false)                   // 🔼 전체 펼치기
   };
 
   const table=shift?secondary:primary;
