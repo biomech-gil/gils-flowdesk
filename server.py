@@ -2113,9 +2113,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 import select as sel
                 ansi_re = re.compile(rb'\x1b\[[0-9;?]*[a-zA-Z]')
                 buf = b""
+                last_url_update = 0  # URL 발견 후 경과 시간
+                tentative_url = None
                 try:
                     while True:
-                        r, _, _ = sel.select([master], [], [], 0.5)
+                        r, _, _ = sel.select([master], [], [], 0.3)
                         if r:
                             try:
                                 chunk = os.read(master, 4096)
@@ -2126,16 +2128,31 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                             buf += chunk
                             clean = ansi_re.sub(b'', buf).decode('utf-8', errors='replace')
                             _claude_login_output = clean.split('\n')
+
                             if _claude_login_url:
                                 continue
-                            # URL 추출: 줄바꿈 + 공백 제거 후 매칭
+
+                            # URL 추출: 줄바꿈+공백 제거 후 매칭
                             joined = re.sub(r'\n+\s*', '', clean)
+                            best = None
                             for m in re.finditer(r'https?://[^\s]+', joined):
-                                candidate = m.group(0).rstrip(').,"\'')
-                                if 'oauth' in candidate.lower() or 'authorize' in candidate.lower():
-                                    _claude_login_url = candidate
-                                    break
+                                c = m.group(0).rstrip(').,"\'')
+                                if 'oauth' in c.lower() or 'authorize' in c.lower():
+                                    if not best or len(c) > len(best):
+                                        best = c
+                            if best:
+                                # 조건: 새 URL이 이전과 같고 (더 이상 길어지지 않음)
+                                #      그리고 최소 길이 200자 이상 (완전한 OAuth URL)
+                                #      그리고 state= 포함 (URL 끝부분 파라미터)
+                                if tentative_url == best and len(best) > 200 and 'state=' in best:
+                                    _claude_login_url = best
+                                else:
+                                    tentative_url = best
                         else:
+                            # 입력 없음: 잠깐 기다린 후 현재 tentative URL이 충분히 완성되었으면 commit
+                            if tentative_url and not _claude_login_url:
+                                if len(tentative_url) > 200 and 'state=' in tentative_url and 'redirect_uri' in tentative_url:
+                                    _claude_login_url = tentative_url
                             # 프로세스 체크
                             try:
                                 wpid, _ = os.waitpid(_claude_login_proc, os.WNOHANG)
@@ -2147,9 +2164,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     log(f"claude login PTY reader error: {e}")
             threading.Thread(target=reader, daemon=True).start()
 
-            # URL 대기 (최대 20초)
-            for _ in range(100):
-                if _claude_login_url:
+            # URL 대기 (최대 25초) — 완전한 URL 확보 후 반환
+            for _ in range(125):
+                if _claude_login_url and 'redirect_uri' in _claude_login_url and 'state=' in _claude_login_url:
                     break
                 time.sleep(0.2)
 
