@@ -868,10 +868,25 @@ def build_claude_cmd(prompt, opts=None):
 # ═══════════════════════════════════════
 # Claude login subprocess (web-based OAuth)
 # ═══════════════════════════════════════
-_claude_login_proc = None
+_claude_login_proc = None   # PID (int)
 _claude_login_url = None
 _claude_login_output = []
+_claude_login_master_fd = None
 _claude_login_lock = threading.Lock()
+
+def _is_claude_proc_alive():
+    global _claude_login_proc
+    if not _claude_login_proc:
+        return False
+    try:
+        wpid, _ = os.waitpid(_claude_login_proc, os.WNOHANG)
+        if wpid == 0:
+            return True
+        return False
+    except ChildProcessError:
+        return False
+    except Exception:
+        return False
 
 def get_claude_env():
     # nvm 또는 시스템 경로 자동 감지
@@ -2043,116 +2058,133 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     # ── Claude Web-based Login (OAuth via subprocess) ──
 
     def _claude_login_start(self, body):
-        global _claude_login_proc, _claude_login_url, _claude_login_output
+        global _claude_login_proc, _claude_login_url, _claude_login_output, _claude_login_master_fd
         with _claude_login_lock:
             # Kill existing process if any
-            if _claude_login_proc and _claude_login_proc.poll() is None:
-                try:
-                    _claude_login_proc.kill()
-                except Exception:
-                    pass
+            try:
+                if _claude_login_proc:
+                    try:
+                        os.kill(_claude_login_proc, 9)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             _claude_login_url = None
             _claude_login_output = []
+            _claude_login_master_fd = None
+
+            # PTY로 실행 - claude CLI가 터미널 크기를 자체 감지하므로
+            # COLUMNS 환경변수로는 안 되고 PTY의 winsize를 크게 설정해야 함
+            import pty, fcntl, termios, struct
+            try:
+                master, slave = pty.openpty()
+                # 터미널 크기를 9999 칸으로 설정 → URL이 줄바꿈되지 않음
+                ws = struct.pack('HHHH', 50, 9999, 0, 0)
+                fcntl.ioctl(slave, termios.TIOCSWINSZ, ws)
+            except Exception as e:
+                return {"ok": False, "error": f"PTY 생성 실패: {e}"}
 
             env = get_claude_env()
-            # 터미널 폭을 매우 크게 설정해서 URL이 줄바꿈되지 않도록
-            env["COLUMNS"] = "9999"
-            env["LINES"] = "50"
-            env["TERM"] = "dumb"
-            # Try `claude setup-token` first (non-browser flow), fall back to `claude login`
-            tried = []
-            proc = None
-            for cmd in (["claude", "setup-token"], ["claude", "login"]):
+            pid = os.fork()
+            if pid == 0:
+                # child process
+                os.setsid()
                 try:
-                    proc = subprocess.Popen(
-                        cmd,
-                        stdin=subprocess.PIPE,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                        env=env
-                    )
-                    tried.append(" ".join(cmd))
-                    break
-                except Exception as e:
-                    tried.append(f"{' '.join(cmd)} ({e})")
-                    proc = None
-                    continue
-            if not proc:
-                return {"ok": False, "error": f"subprocess start failed (tried: {tried})"}
-            _claude_login_proc = proc
+                    fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+                except Exception:
+                    pass
+                os.close(master)
+                os.dup2(slave, 0)
+                os.dup2(slave, 1)
+                os.dup2(slave, 2)
+                os.close(slave)
+                try:
+                    os.execvpe("claude", ["claude", "setup-token"], env)
+                except Exception:
+                    os._exit(1)
+            else:
+                # parent
+                os.close(slave)
+                _claude_login_proc = pid
+                _claude_login_master_fd = master
 
             def reader():
                 global _claude_login_url, _claude_login_output
-                ansi_re = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]')
+                import select as sel
+                ansi_re = re.compile(rb'\x1b\[[0-9;?]*[a-zA-Z]')
+                buf = b""
                 try:
-                    for line in _claude_login_proc.stdout:
-                        # ANSI escape 제거
-                        clean = ansi_re.sub('', line)
-                        _claude_login_output.append(clean)
-                        if len(_claude_login_output) > 500:
-                            _claude_login_output = _claude_login_output[-200:]
-
-                        if _claude_login_url:
-                            continue
-
-                        # 최근 출력을 합쳐서 URL 추출 시도 (여러 줄에 걸친 URL 대응)
-                        tail = "".join(_claude_login_output[-30:])
-                        # 줄바꿈 사이 공백 제거 (URL은 공백 없음)
-                        joined = re.sub(r'\n+\s*', '', tail)
-                        m = re.search(r'https?://[^\s]+', joined)
-                        if m:
-                            candidate = m.group(0).rstrip(').,"\'')
-                            # OAuth URL이면 우선적으로 사용
-                            if 'oauth' in candidate.lower() or 'authorize' in candidate.lower() or 'claude.ai' in candidate or 'claude.com' in candidate:
-                                _claude_login_url = candidate
-                            elif not _claude_login_url and 'http' in candidate:
-                                # 다른 URL이라도 fallback으로 저장
-                                _claude_login_url = candidate
+                    while True:
+                        r, _, _ = sel.select([master], [], [], 0.5)
+                        if r:
+                            try:
+                                chunk = os.read(master, 4096)
+                            except OSError:
+                                break
+                            if not chunk:
+                                break
+                            buf += chunk
+                            clean = ansi_re.sub(b'', buf).decode('utf-8', errors='replace')
+                            _claude_login_output = clean.split('\n')
+                            if _claude_login_url:
+                                continue
+                            # URL 추출: 줄바꿈 + 공백 제거 후 매칭
+                            joined = re.sub(r'\n+\s*', '', clean)
+                            for m in re.finditer(r'https?://[^\s]+', joined):
+                                candidate = m.group(0).rstrip(').,"\'')
+                                if 'oauth' in candidate.lower() or 'authorize' in candidate.lower():
+                                    _claude_login_url = candidate
+                                    break
+                        else:
+                            # 프로세스 체크
+                            try:
+                                wpid, _ = os.waitpid(_claude_login_proc, os.WNOHANG)
+                                if wpid != 0:
+                                    break
+                            except Exception:
+                                break
                 except Exception as e:
-                    log(f"claude login reader error: {e}")
+                    log(f"claude login PTY reader error: {e}")
             threading.Thread(target=reader, daemon=True).start()
 
-            # Wait up to ~20 seconds for URL (브라우저 자동 열기 실패 후 URL 표시까지 시간 걸림)
+            # URL 대기 (최대 20초)
             for _ in range(100):
                 if _claude_login_url:
-                    break
-                if _claude_login_proc.poll() is not None:
                     break
                 time.sleep(0.2)
 
             if _claude_login_url:
                 return {"ok": True, "url": _claude_login_url}
-            # Process may have exited without URL (e.g. TTY required)
-            exited = _claude_login_proc.poll() is not None
+            # 프로세스 상태 확인
+            exited = not _is_claude_proc_alive()
             return {
                 "ok": False,
-                "error": "URL 추출 실패 — claude CLI가 TTY를 요구할 수 있습니다. 파일 업로드/붙여넣기를 사용하세요.",
+                "error": "URL 추출 실패 — 파일 업로드/붙여넣기를 사용하세요.",
                 "exited": exited,
-                "output": "".join(_claude_login_output[-40:])
+                "output": "\n".join(_claude_login_output[-40:])
             }
 
     def _claude_login_submit(self, body):
-        global _claude_login_proc, _claude_login_output
+        global _claude_login_proc, _claude_login_output, _claude_login_master_fd
         code = (body.get("code", "") or "").strip()
         if not code:
             return {"ok": False, "error": "code required"}
-        if not _claude_login_proc or _claude_login_proc.poll() is not None:
+        if not _claude_login_proc or not _is_claude_proc_alive():
             return {"ok": False, "error": "로그인 세션이 없습니다 (프로세스 종료됨)"}
         try:
-            _claude_login_proc.stdin.write(code + "\n")
-            _claude_login_proc.stdin.flush()
+            os.write(_claude_login_master_fd, (code + "\n").encode())
         except Exception as e:
-            return {"ok": False, "error": f"stdin write 실패: {e}"}
+            return {"ok": False, "error": f"PTY write 실패: {e}"}
 
-        # Wait for completion up to 30 seconds
+        # 완료 대기 (최대 30초)
         for _ in range(150):
-            if _claude_login_proc.poll() is not None:
+            if not _is_claude_proc_alive():
                 break
             time.sleep(0.2)
 
-        if _claude_login_proc.poll() is None:
+        if _is_claude_proc_alive():
+            try: os.kill(_claude_login_proc, 9)
+            except Exception: pass
             return {"ok": False, "error": "로그인 처리 시간 초과"}
 
         creds_path = os.path.expanduser("~/.claude/.credentials.json")
@@ -2175,25 +2207,25 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {
                 "ok": False,
                 "error": "로그인 실패 (credentials 파일 없음)",
-                "output": "".join(_claude_login_output[-40:])
+                "output": "\n".join(_claude_login_output[-40:])
             }
 
     def _claude_login_status(self):
         if not _claude_login_proc:
             return {"ok": True, "running": False}
-        running = _claude_login_proc.poll() is None
+        running = _is_claude_proc_alive()
         return {
             "ok": True,
             "running": running,
             "url": _claude_login_url,
-            "output": "".join(_claude_login_output[-10:])
+            "output": "\n".join(_claude_login_output[-10:])
         }
 
     def _claude_login_cancel(self, body):
         global _claude_login_proc
-        if _claude_login_proc and _claude_login_proc.poll() is None:
+        if _claude_login_proc and _is_claude_proc_alive():
             try:
-                _claude_login_proc.kill()
+                os.kill(_claude_login_proc, 9)
             except Exception:
                 pass
         return {"ok": True}
