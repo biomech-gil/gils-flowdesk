@@ -645,6 +645,12 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
       <button onclick="fmRefresh()" title="새로고침" style="background:none;border:1px solid var(--border);color:var(--text);padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;margin-right:6px">↻</button>
       <button onclick="document.getElementById('fm-modal').style.display='none'" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
     </div>
+    <div style="display:flex;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-0)">
+      <button onclick="fmMkdir()" style="font-size:11px;padding:4px 10px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:3px;cursor:pointer">📁 새 폴더</button>
+      <button onclick="fmOpenTrash()" id="fm-trash-btn" style="font-size:11px;padding:4px 10px;background:rgba(139,92,246,.1);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:3px;cursor:pointer">🗑️ 휴지통</button>
+      <span style="flex:1"></span>
+      <span id="fm-info" style="font-size:10px;color:var(--text-dim);align-self:center"></span>
+    </div>
     <div id="fm-crumb" style="padding:8px 12px;background:var(--bg-2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;overflow-x:auto;white-space:nowrap"></div>
     <div id="fm-list" style="flex:1;overflow-y:auto;padding:4px"></div>
   </div>
@@ -3741,8 +3747,11 @@ async function fmBrowse(path){
     html+='<div style="padding:30px;text-align:center;color:var(--text-muted);font-size:12px">빈 폴더입니다.</div>';
   }
   folders.forEach(f=>{
-    html+=`<div class="fm-nav" data-path="${escapeHtml(f.path)}" style="padding:8px 14px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">
-      <span style="color:#ebcb8b">📁</span><span style="flex:1">${escapeHtml(f.name)}</span><span style="color:var(--text-dim);font-size:10px">폴더</span>
+    html+=`<div style="padding:8px 14px;font-size:13px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">
+      <span class="fm-nav" data-path="${escapeHtml(f.path)}" style="color:#ebcb8b;cursor:pointer">📁</span>
+      <span class="fm-nav" data-path="${escapeHtml(f.path)}" style="flex:1;cursor:pointer">${escapeHtml(f.name)}</span>
+      <span style="color:var(--text-dim);font-size:10px">폴더</span>
+      <button class="fm-del" data-path="${escapeHtml(f.path)}" data-name="${escapeHtml(f.name)}" title="휴지통으로 이동" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">🗑</button>
     </div>`;
   });
   files.forEach(f=>{
@@ -3757,6 +3766,7 @@ async function fmBrowse(path){
       <span style="color:var(--text-dim);font-size:10px;min-width:60px;text-align:right">${size}</span>
       <a href="${previewUrl}" target="_blank" style="font-size:10px;padding:3px 8px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;text-decoration:none">👁 보기</a>
       <a href="${downloadUrl}" style="font-size:10px;padding:3px 8px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:3px;text-decoration:none">⬇</a>
+      <button class="fm-del" data-path="${escapeHtml(f.path)}" data-name="${escapeHtml(f.name)}" title="휴지통으로 이동" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">🗑</button>
     </div>`;
   });
   const container=document.getElementById('fm-list');
@@ -3764,9 +3774,99 @@ async function fmBrowse(path){
   container.querySelectorAll('.fm-nav').forEach(el=>{
     el.addEventListener('click',e=>{e.stopPropagation();fmBrowse(el.dataset.path)});
   });
+  container.querySelectorAll('.fm-del').forEach(el=>{
+    el.addEventListener('click',e=>{e.stopPropagation();fmDelete(el.dataset.path,el.dataset.name)});
+  });
   document.getElementById('fm-crumb').querySelectorAll('.fm-nav').forEach(el=>{
     el.addEventListener('click',e=>{e.stopPropagation();fmBrowse(el.dataset.path)});
   });
+  // 휴지통 카운트 업데이트
+  fmUpdateTrashCount();
+}
+
+async function fmUpdateTrashCount(){
+  try{
+    const r=await api('POST','/api/fs/trash-list',{});
+    const btn=document.getElementById('fm-trash-btn');
+    if(btn && r && r.ok){
+      const n=(r.items||[]).length;
+      btn.textContent=n?`🗑️ 휴지통 (${n})`:'🗑️ 휴지통';
+    }
+  }catch(e){}
+}
+
+async function fmDelete(path,name){
+  if(!confirm(`"${name}"을(를) 휴지통으로 이동할까요?`))return;
+  const r=await api('POST','/api/fs/delete',{path});
+  if(r&&r.ok)fmRefresh();
+  else alert('삭제 실패: '+(r?r.error:'오류'));
+}
+
+async function fmMkdir(){
+  const name=prompt('새 폴더 이름:');
+  if(!name)return;
+  const r=await api('POST','/api/fs/mkdir',{path:fmCurrentPath,name});
+  if(r&&r.ok)fmRefresh();
+  else alert('생성 실패: '+(r?r.error:'오류'));
+}
+
+async function fmOpenTrash(){
+  const r=await api('POST','/api/fs/trash-list',{});
+  if(!r||!r.ok)return alert(r?r.error:'오류');
+  const items=r.items||[];
+  let html='';
+  html+=`<div style="padding:8px 14px;background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+    <span style="flex:1;font-weight:600">🗑️ 휴지통 (${items.length})</span>
+    ${items.length?`<button id="fm-trash-empty-btn" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">전체 비우기</button>`:''}
+    <button id="fm-trash-back-btn" style="font-size:10px;padding:3px 8px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer">← 파일로 돌아가기</button>
+  </div>`;
+  if(!items.length){
+    html+='<div style="padding:30px;text-align:center;color:var(--text-muted);font-size:12px">휴지통이 비어있습니다</div>';
+  } else {
+    items.forEach(it=>{
+      const icon=it.wasDir?'📁':'📄';
+      html+=`<div style="padding:8px 14px;font-size:12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.03)">
+        <span>${icon}</span>
+        <div style="flex:1;overflow:hidden">
+          <div style="color:var(--text);overflow:hidden;text-overflow:ellipsis">${escapeHtml(it.originalName||it.trashName)}</div>
+          <div style="color:var(--text-dim);font-size:9px">원위치: ${escapeHtml(it.originalPath||'(불명)')} · 삭제: ${escapeHtml((it.deletedAt||'').substring(0,16))}</div>
+        </div>
+        <button class="fm-trash-restore" data-name="${escapeHtml(it.trashName)}" style="font-size:10px;padding:3px 8px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:3px;cursor:pointer">↩ 복원</button>
+        <button class="fm-trash-perma" data-name="${escapeHtml(it.trashName)}" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">✕</button>
+      </div>`;
+    });
+  }
+  document.getElementById('fm-crumb').innerHTML='🗑️ 휴지통';
+  const container=document.getElementById('fm-list');
+  container.innerHTML=html;
+  const emptyBtn=document.getElementById('fm-trash-empty-btn');
+  if(emptyBtn)emptyBtn.addEventListener('click',fmEmptyTrash);
+  const backBtn=document.getElementById('fm-trash-back-btn');
+  if(backBtn)backBtn.addEventListener('click',()=>fmBrowse(fmCurrentPath));
+  container.querySelectorAll('.fm-trash-restore').forEach(el=>{
+    el.addEventListener('click',e=>{e.stopPropagation();fmTrashRestore(el.dataset.name)});
+  });
+  container.querySelectorAll('.fm-trash-perma').forEach(el=>{
+    el.addEventListener('click',e=>{e.stopPropagation();fmTrashPermaDelete(el.dataset.name)});
+  });
+}
+
+async function fmTrashRestore(trashName){
+  const r=await api('POST','/api/fs/trash-restore',{trashName});
+  if(r&&r.ok){fmOpenTrash();alert('복원 완료: '+(r.restoredTo||''));}
+  else alert('복원 실패: '+(r?r.error:'오류'));
+}
+async function fmTrashPermaDelete(trashName){
+  if(!confirm('영구 삭제합니다. 복원 불가능합니다.'))return;
+  const r=await api('POST','/api/fs/trash-delete',{trashName});
+  if(r&&r.ok)fmOpenTrash();
+  else alert('실패: '+(r?r.error:'오류'));
+}
+async function fmEmptyTrash(){
+  if(!confirm('휴지통 전체를 영구 삭제합니다. 복원 불가능합니다.'))return;
+  const r=await api('POST','/api/fs/trash-empty',{});
+  if(r&&r.ok)fmOpenTrash();
+  else alert('실패: '+(r?r.error:'오류'));
 }
 function fmFormatSize(b){
   if(b<1024)return b+'B';

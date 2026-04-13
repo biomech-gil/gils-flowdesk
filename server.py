@@ -1109,6 +1109,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/login/cancel": self._claude_login_cancel,
             "/api/fs/mkdir": self._fs_mkdir,
             "/api/fs/mkdir-system": self._fs_mkdir_system,
+            "/api/fs/delete": self._fs_delete,
+            "/api/fs/trash-list": self._fs_trash_list,
+            "/api/fs/trash-restore": self._fs_trash_restore,
+            "/api/fs/trash-delete": self._fs_trash_delete,
+            "/api/fs/trash-empty": self._fs_trash_empty,
         }
         handler = handlers.get(p)
         if handler:
@@ -2480,6 +2485,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             for name in sorted(os.listdir(target)):
                 if name.startswith("."):
                     continue
+                # .trash 폴더는 일반 브라우징에서 숨김 (루트에서만 발생 가능)
+                if name == ".trash":
+                    continue
                 full = os.path.join(target, name)
                 try:
                     is_dir = os.path.isdir(full)
@@ -2519,6 +2527,155 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         try:
             os.makedirs(target_abs, exist_ok=True)
             return {"ok": True, "path": os.path.relpath(target_abs, root_abs).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _fs_get_root(self):
+        row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
+        root = row["value"] if row and row.get("value") else os.path.expanduser("~")
+        return os.path.normpath(os.path.abspath(root))
+
+    def _fs_delete(self, body):
+        """파일/폴더를 휴지통으로 이동"""
+        import shutil
+        root = self._fs_get_root()
+        rel = body.get("path", "").strip()
+        if not rel: return {"ok": False, "error": "path required"}
+        target = os.path.normpath(os.path.abspath(os.path.join(root, rel.lstrip("/").lstrip("\\"))))
+        if not target.startswith(root):
+            return {"ok": False, "error": "접근 거부"}
+        if not os.path.exists(target):
+            return {"ok": False, "error": "파일/폴더 없음"}
+        # .trash 디렉토리 자체는 삭제 못함
+        trash_dir = os.path.join(root, ".trash")
+        if target == trash_dir or target.startswith(trash_dir + os.sep):
+            return {"ok": False, "error": "휴지통 내부 항목은 휴지통 삭제/복원 기능 사용"}
+
+        os.makedirs(trash_dir, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        basename = os.path.basename(target.rstrip(os.sep))
+        trash_name = f"{ts}_{basename}"
+        trash_path = os.path.join(trash_dir, trash_name)
+        # 중복 시 suffix
+        i = 1
+        while os.path.exists(trash_path):
+            trash_path = os.path.join(trash_dir, f"{ts}_{i}_{basename}")
+            i += 1
+        try:
+            shutil.move(target, trash_path)
+            # 메타 저장
+            meta = {
+                "original_path": rel.replace("\\", "/"),
+                "original_name": basename,
+                "deleted_at": datetime.now().isoformat(),
+                "was_dir": os.path.isdir(trash_path)
+            }
+            with open(trash_path + ".meta.json", "w", encoding="utf-8") as f:
+                json.dump(meta, f, ensure_ascii=False)
+            return {"ok": True, "trashPath": os.path.basename(trash_path)}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _fs_trash_list(self, body):
+        root = self._fs_get_root()
+        trash_dir = os.path.join(root, ".trash")
+        if not os.path.isdir(trash_dir):
+            return {"ok": True, "items": []}
+        items = []
+        for name in sorted(os.listdir(trash_dir), reverse=True):
+            if name.endswith(".meta.json"): continue
+            full = os.path.join(trash_dir, name)
+            meta_path = full + ".meta.json"
+            meta = {}
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                except: pass
+            try:
+                size = os.path.getsize(full) if os.path.isfile(full) else None
+            except: size = None
+            items.append({
+                "trashName": name,
+                "originalPath": meta.get("original_path", ""),
+                "originalName": meta.get("original_name", name),
+                "deletedAt": meta.get("deleted_at", ""),
+                "wasDir": os.path.isdir(full),
+                "size": size
+            })
+        return {"ok": True, "items": items}
+
+    def _fs_trash_restore(self, body):
+        import shutil
+        root = self._fs_get_root()
+        trash_dir = os.path.join(root, ".trash")
+        trash_name = body.get("trashName", "").strip()
+        if not trash_name or "/" in trash_name or "\\" in trash_name:
+            return {"ok": False, "error": "잘못된 이름"}
+        trash_path = os.path.join(trash_dir, trash_name)
+        if not os.path.exists(trash_path):
+            return {"ok": False, "error": "파일 없음"}
+        # 메타 읽기
+        meta_path = trash_path + ".meta.json"
+        original_path = ""
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            original_path = meta.get("original_path", "")
+        except: pass
+        if not original_path:
+            # 메타 없으면 루트에 복원
+            original_path = body.get("originalName") or trash_name
+        target = os.path.normpath(os.path.abspath(os.path.join(root, original_path.lstrip("/"))))
+        if not target.startswith(root):
+            return {"ok": False, "error": "경로 오류"}
+        # 대상 이미 존재 시 suffix
+        if os.path.exists(target):
+            base, ext = os.path.splitext(target)
+            i = 1
+            while os.path.exists(f"{base}_restored{i}{ext}"):
+                i += 1
+            target = f"{base}_restored{i}{ext}"
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.move(trash_path, target)
+            if os.path.exists(meta_path):
+                try: os.remove(meta_path)
+                except: pass
+            return {"ok": True, "restoredTo": os.path.relpath(target, root).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _fs_trash_delete(self, body):
+        import shutil
+        root = self._fs_get_root()
+        trash_dir = os.path.join(root, ".trash")
+        trash_name = body.get("trashName", "").strip()
+        if not trash_name or "/" in trash_name or "\\" in trash_name:
+            return {"ok": False, "error": "잘못된 이름"}
+        trash_path = os.path.join(trash_dir, trash_name)
+        try:
+            if os.path.isdir(trash_path):
+                shutil.rmtree(trash_path)
+            elif os.path.isfile(trash_path):
+                os.remove(trash_path)
+            meta_path = trash_path + ".meta.json"
+            if os.path.exists(meta_path):
+                os.remove(meta_path)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _fs_trash_empty(self, body):
+        import shutil
+        root = self._fs_get_root()
+        trash_dir = os.path.join(root, ".trash")
+        if not os.path.isdir(trash_dir):
+            return {"ok": True}
+        try:
+            shutil.rmtree(trash_dir)
+            os.makedirs(trash_dir, exist_ok=True)
+            return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
