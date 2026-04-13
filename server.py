@@ -2081,10 +2081,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 # 터미널 크기 9999칸 (URL 줄바꿈 방지)
                 ws = struct.pack('HHHH', 50, 9999, 0, 0)
                 fcntl.ioctl(slave, termios.TIOCSWINSZ, ws)
-                # ECHO 끄기 — 입력 문자가 화면에 다시 에코되는 것 방지
-                # (이것 때문에 우리가 보낸 코드가 출력에 섞이고 파싱이 꼬임)
+                # ECHO만 끄기 (ICANON 유지 — CLI가 line 모드 기대)
                 attrs = termios.tcgetattr(slave)
-                attrs[3] = attrs[3] & ~termios.ECHO & ~termios.ICANON  # lflags
+                attrs[3] = attrs[3] & ~termios.ECHO  # lflags: ECHO off
                 termios.tcsetattr(slave, termios.TCSANOW, attrs)
             except Exception as e:
                 return {"ok": False, "error": f"PTY 생성 실패: {e}"}
@@ -2199,8 +2198,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         old_mtime = os.path.getmtime(creds_path) if os.path.exists(creds_path) else 0
 
         try:
-            # PTY에 코드 작성 (LF만; \r는 echo 중복 유발)
-            os.write(_claude_login_master_fd, (code + "\n").encode())
+            # CR(\r)로 Enter 키 시뮬레이션 (PTY line 모드에서는 \r이 표준 Enter)
+            os.write(_claude_login_master_fd, (code + "\r").encode())
             log(f"CLAUDE_LOGIN submit code len={len(code)} first={code[:10]}... has_hash={'#' in code}")
         except Exception as e:
             return {"ok": False, "error": f"PTY write 실패: {e}"}
