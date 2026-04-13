@@ -84,8 +84,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .nd-hd{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);flex-shrink:0;cursor:grab;user-select:none;font-size:12px}
 .nd-hd:active{cursor:grabbing}
 .nd-icon{font-size:14px}
-.nd-name{flex:1;font-size:11px;font-weight:600;color:var(--text);background:transparent;border:none;outline:none;padding:1px 3px;border-radius:var(--radius-sm);min-width:30px}
-.nd-name:focus{background:var(--bg-3);color:var(--accent)}
+.nd-name{flex:1;font-size:11px;font-weight:600;color:var(--text);padding:1px 3px;border-radius:var(--radius-sm);min-width:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:grab;user-select:none}
+.nd-name:active{cursor:grabbing}
+.nd-name-edit{flex:1;font-size:11px;font-weight:600;color:var(--accent);background:var(--bg-3);border:1px solid var(--border);outline:none;padding:1px 3px;border-radius:var(--radius-sm);min-width:30px}
 .nd-ctrls{display:flex;gap:1px}
 .nd-ctrls button{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:10px;padding:2px 4px;border-radius:3px;transition:.15s}
 .nd-ctrls button:hover{color:var(--text);background:var(--bg-3)}
@@ -994,7 +995,7 @@ function buildDom(n){
   const modeIcon=n.type==='agent'?(n.chatOnly?'💬':'🔧'):'';
   d.innerHTML=`
     <div class="coll-body"><span class="coll-icon">${ti.icon}</span><span class="coll-badge">${n.name}</span></div>
-    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><input class="nd-name" value="${n.name}" spellcheck="false"><div class="nd-ctrls">${n.type==='agent'?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button></div><div class="nd-st ${n.status}"></div></div>
+    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${n.type==='agent'?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button></div><div class="nd-st ${n.status}"></div></div>
     ${showBody?`<div class="nd-body"><div class="sec-lbl">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':'INPUT'}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`:''}
     <div class="port port-l" data-node="${n.id}" data-side="left"></div>
     <div class="port port-r" data-node="${n.id}" data-side="right"></div>
@@ -1015,9 +1016,42 @@ function buildDom(n){
     else if(a==='tog')togCollapse(n);
     else if(a==='clone')cloneNodeMulti(n);
     else if(a==='bgimg')changeNodeBgImage(n);
+    else if(a==='rename'){
+      const lbl=d.querySelector('[data-role="name"]');
+      const inp=d.querySelector('.nd-name-edit');
+      lbl.style.display='none';inp.style.display='';inp.focus();inp.select();
+    }
     else if(a==='mode'){n.chatOnly=!n.chatOnly;btn.textContent=n.chatOnly?'💬':'🔧';btn.title=n.chatOnly?'대화전용 (클릭→CLI)':'CLI모드 (클릭→대화전용)';if(selectedNode===n)document.getElementById('sb-chatonly').checked=n.chatOnly;autoSave()}
   }));
-  const nm=d.querySelector('.nd-name');if(nm)nm.addEventListener('change',()=>{const old=n.name;n.name=nm.value.trim()||n.name;d.querySelector('.coll-badge').textContent=n.name;if(old!==n.name)nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${n.name}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});if(selectedNode===n){document.getElementById('sb-name').value=n.name;document.getElementById('sb-title').textContent=`${ti.icon} ${n.name}`}autoSave()});
+  // 이름 span: 드래그 (헤더처럼 동작)
+  const nmSpan=d.querySelector('[data-role="name"]');
+  if(nmSpan)nmSpan.addEventListener('mousedown',e=>{e.stopPropagation();startDrag(e)});
+  // 이름 input (edit 모드): Enter/blur로 저장
+  const nmInp=d.querySelector('.nd-name-edit');
+  function commitRename(){
+    const old=n.name;
+    const newName=nmInp.value.trim()||n.name;
+    n.name=newName;
+    nmSpan.textContent=newName;
+    nmSpan.style.display='';nmInp.style.display='none';
+    d.querySelector('.coll-badge').textContent=newName;
+    if(old!==newName){
+      nodes.forEach(nd=>{
+        if(nd.inputTemplate.includes(`{{${old}}}`)){
+          nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${newName}}}`);
+          const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate;
+        }
+      });
+    }
+    if(selectedNode===n){document.getElementById('sb-name').value=newName;document.getElementById('sb-title').textContent=`${ti.icon} ${newName}`}
+    autoSave();
+  }
+  if(nmInp){
+    nmInp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitRename()}if(e.key==='Escape'){nmInp.value=n.name;commitRename()}});
+    nmInp.addEventListener('blur',commitRename);
+    nmInp.addEventListener('mousedown',e=>e.stopPropagation());
+    nmInp.addEventListener('click',e=>e.stopPropagation());
+  }
   d.addEventListener('mousedown',e=>{if(!e.target.classList.contains('port')&&!e.target.classList.contains('nd-resize')&&e.target!==hd&&!hd.contains(e.target)&&e.target!==cb&&(!cb||!cb.contains(e.target))){if(e.ctrlKey)toggleMultiSel(n);else if(!multiSel.includes(n))selNode(n)}});
   const ta=d.querySelector('.nd-in textarea');if(ta)ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value;checkTokenLimit(n)});
   const dv=d.querySelector('.nd-div');if(dv&&ta)dv.addEventListener('mousedown',e=>{e.stopPropagation();isDiv=true;divNd=n;divSY=e.clientY;divSH=ta.offsetHeight});
@@ -1242,7 +1276,7 @@ async function cloneNodeMulti(n){
     }
     const nn=mkNode(opts);
     nn.name=n.name+'_'+(i+2); // _2, _3, _4...
-    nn.el.querySelector('.nd-name').value=nn.name;
+    nn.el.querySelector('[data-role="name"]').textContent=nn.name;
     nn.el.querySelector('.coll-badge').textContent=nn.name;
     // 연결 복제
     upstream.forEach(sid=>addConn(sid,nn.id));
@@ -1286,7 +1320,7 @@ async function pasteNode(){
   }
   const nn=mkNode(opts);
   nn.name=opts.name+'_복사';
-  nn.el.querySelector('.nd-name').value=nn.name;
+  nn.el.querySelector('[data-role="name"]').textContent=nn.name;
   nn.el.querySelector('.coll-badge').textContent=nn.name;
   selNode(nn);autoSave();
   console.log('[PASTE]',nn.name);
@@ -1425,7 +1459,7 @@ async function processPdfSplit(file){
           // 기존 노드 덮어쓰기
           nn=existingDownstream[i];
           nn.name=`Page${pg.page}`;
-          nn.el.querySelector('.nd-name').value=nn.name;
+          nn.el.querySelector('[data-role="name"]').textContent=nn.name;
           nn.el.querySelector('.coll-badge').textContent=nn.name;
           nn.inputTemplate=tplPrompt;
           const ta=nn.el.querySelector('.nd-in textarea');if(ta)ta.value=tplPrompt;
@@ -1437,7 +1471,7 @@ async function processPdfSplit(file){
           // 부족분 신규 생성
           nn=await addNode('agent',startX,startY+i*260);
           nn.name=`Page${pg.page}`;
-          nn.el.querySelector('.nd-name').value=nn.name;
+          nn.el.querySelector('[data-role="name"]').textContent=nn.name;
           nn.el.querySelector('.coll-badge').textContent=nn.name;
           nn.inputTemplate=tplPrompt;
           const ta=nn.el.querySelector('.nd-in textarea');if(ta)ta.value=tplPrompt;
@@ -1460,7 +1494,7 @@ async function processPdfSplit(file){
         const pg=r.pages[i];
         const nn=await addNode('agent',startX,startY+i*260);
         nn.name=`Page${pg.page}`;
-        nn.el.querySelector('.nd-name').value=nn.name;
+        nn.el.querySelector('[data-role="name"]').textContent=nn.name;
         nn.el.querySelector('.coll-badge').textContent=nn.name;
         nn.inputTemplate=tplPrompt;
         const ta=nn.el.querySelector('.nd-in textarea');if(ta)ta.value=tplPrompt;
@@ -1937,7 +1971,7 @@ function sbSetAccount(val){
   autoSave();
 }
 function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout(drawConns,10)}
-function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('.nd-name').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
+function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('[data-role="name"]').textContent=v;selectedNode.el.querySelector('.nd-name-edit').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
 function sbPane(v){if(selectedNode)selectedNode.paneIndex=v?parseInt(v):null;autoSave()}
 function sbInput(v){if(!selectedNode)return;selectedNode.inputTemplate=v;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=v;updateCharCount();checkTokenLimit(selectedNode);updateResolvedPreview()}
 function updateCharCount(){
@@ -3151,6 +3185,19 @@ document.addEventListener('keydown',function(e){
     const ae=document.activeElement;
     if(ae&&ae.id==='sb-input'){e.preventDefault();openModal('input')}
     else if(ae&&ae.id==='sb-output'){e.preventDefault();openModal('output')}
+  }
+  // Ctrl+N: 신규 메모 탭 생성 + 바로 열림
+  if(e.ctrlKey&&(e.key==='n'||e.key==='N')&&!e.shiftKey&&!e.altKey){
+    const ae=document.activeElement;
+    // 입력 필드에 포커스가 있으면 브라우저 기본 동작 유지 (일부 브라우저는 이미 막힘)
+    if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
+    e.preventDefault();
+    if(typeof newMemo==='function')newMemo();
+    // 메모 내용 textarea에 즉시 포커스
+    setTimeout(()=>{
+      const ta=document.getElementById('me-content');
+      if(ta)ta.focus();
+    },150);
   }
 });
 function clearInput(){
