@@ -561,7 +561,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
           <button onclick="document.getElementById('s-claude-file').click()" style="padding:6px 12px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600" title="가장 권장: claude login 후 파일 업로드">📂 .credentials.json 파일 (권장)</button>
           <button onclick="showClaudeTokenForm()" style="padding:6px 12px;background:rgba(245,158,11,.2);color:#ebcb8b;border:1px solid rgba(245,158,11,.3);border-radius:4px;cursor:pointer;font-size:12px">🔑 토큰만 붙여넣기</button>
           <button onclick="showClaudePasteForm()" style="padding:6px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📋 JSON 붙여넣기</button>
-          <button onclick="startClaudeWebLogin()" style="padding:6px 12px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:4px;cursor:pointer;font-size:12px" title="제한적 권한 (inference만)">🌐 웹으로 로그인 (제한적)</button>
+          <button onclick="startClaudeWebLogin()" style="padding:6px 12px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:4px;cursor:pointer;font-size:12px" title="전체 권한 6개 (profile, inference, sessions, mcp, api_key, file_upload)">🌐 웹으로 로그인 (전체 권한)</button>
           <input type="file" id="s-claude-file" accept=".json" style="display:none">
         </div>
 
