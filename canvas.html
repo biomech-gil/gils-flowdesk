@@ -3481,6 +3481,7 @@ async function loadClaudeAccounts(){
       <span style="color:${a.active?'#a3be8c':'var(--text)'};flex:1;font-size:12px">${a.active?'✓ ':'○ '}${i+1}. ${escapeHtml(a.name)}</span>
       <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
       ${a.active?'':`<button onclick="activateClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:3px;cursor:pointer">활성화</button>`}
+      <button onclick="testClaudeAccount(${a.id})" title="이 계정으로 인증 테스트" style="font-size:10px;padding:2px 6px;background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:3px;cursor:pointer">🧪 테스트</button>
       <button onclick="deleteClaudeAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
     </div>
   `).join('');
@@ -3505,6 +3506,21 @@ async function moveAccount(id, delta){
   loadClaudeAccounts();
 }
 
+async function testClaudeAccount(id){
+  const btn=event.target;
+  const origText=btn.textContent;
+  btn.textContent='⏳ 테스트 중...';
+  btn.disabled=true;
+  try{
+    const r=await api('POST','/api/claude/accounts/test',{id});
+    alert(r.msg||(r.authenticated?'✅ 성공':'❌ 실패'));
+  }catch(e){
+    alert('❌ 오류: '+e.message);
+  }finally{
+    btn.textContent=origText;
+    btn.disabled=false;
+  }
+}
 async function activateClaudeAccount(id){
   const r = await api('POST', '/api/claude/accounts/activate', {id});
   if(r && r.ok){

@@ -1089,6 +1089,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/accounts/save": self._claude_account_save,
             "/api/claude/accounts/delete": self._claude_account_delete,
             "/api/claude/accounts/activate": self._claude_account_activate,
+            "/api/claude/accounts/test": self._claude_account_test,
             "/api/claude/accounts/next": self._claude_next_account,
             "/api/claude/accounts/reorder": self._claude_accounts_reorder,
             "/api/claude/login/start": self._claude_login_start,
@@ -2070,6 +2071,41 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": True, "active": row["name"], "setup_token": is_setup_token}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _claude_account_test(self, body):
+        """계정으로 Claude 호출 테스트. 성공/실패 즉시 반환."""
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            env = get_claude_env_for_account(int(aid))
+            # 짧은 프롬프트로 빠르게 테스트
+            result = subprocess.run(
+                ["claude", "-p", "--dangerously-skip-permissions"],
+                input="Reply only with: OK",
+                capture_output=True, text=True, timeout=30, env=env
+            )
+            output = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            # 성공 판단: returncode 0 + 응답 있음 + "Not logged in" 아님
+            if result.returncode == 0 and output and "Not logged in" not in output and "Please run" not in output:
+                return {
+                    "ok": True,
+                    "authenticated": True,
+                    "response": output[:100],
+                    "msg": f"✅ 인증 성공! 응답: \"{output[:50]}\""
+                }
+            else:
+                err = output or stderr or "(응답 없음)"
+                return {
+                    "ok": True,
+                    "authenticated": False,
+                    "error": err[:300],
+                    "msg": f"❌ 인증 실패\n{err[:300]}"
+                }
+        except subprocess.TimeoutExpired:
+            return {"ok": True, "authenticated": False, "msg": "❌ 타임아웃 (30초) — 인증 문제 가능성"}
+        except Exception as e:
+            return {"ok": True, "authenticated": False, "msg": f"❌ 오류: {e}"}
 
     def _claude_next_account(self, body):
         """회전 전략에 따라 다음 account_id 반환."""
