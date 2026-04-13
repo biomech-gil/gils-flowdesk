@@ -761,15 +761,34 @@ def _get_account_dir(account_id):
     return base
 
 def _sync_account_to_dir(account_id, credentials):
-    """계정 credentials를 전용 디렉토리에 동기화."""
+    """계정 credentials를 전용 디렉토리에 동기화.
+    setup-token 토큰 (refreshToken 없음)은 파일 안 씀 (env var로만 사용)."""
     d = _get_account_dir(account_id)
     creds_path = os.path.join(d, ".credentials.json")
-    with open(creds_path, "w", encoding="utf-8") as f:
-        f.write(credentials)
+    # setup-token 여부 확인
+    is_setup_token = False
     try:
-        os.chmod(creds_path, 0o600)
+        parsed = json.loads(credentials)
+        oauth = parsed.get("claudeAiOauth", {})
+        if oauth.get("accessToken") and not oauth.get("refreshToken"):
+            is_setup_token = True
     except Exception:
         pass
+
+    if is_setup_token:
+        # 기존 credentials.json이 있으면 삭제 (setup-token이면 파일 쓰면 CLI가 혼동함)
+        try:
+            if os.path.exists(creds_path):
+                os.remove(creds_path)
+        except Exception:
+            pass
+    else:
+        with open(creds_path, "w", encoding="utf-8") as f:
+            f.write(credentials)
+        try:
+            os.chmod(creds_path, 0o600)
+        except Exception:
+            pass
     return d
 
 def _sync_all_accounts():
@@ -901,27 +920,45 @@ def get_claude_env():
     return env
 
 def get_claude_env_for_account(account_id=None):
-    """특정 계정의 env 반환. CLAUDE_CONFIG_DIR + CLAUDE_CODE_OAUTH_TOKEN 지원."""
+    """특정 계정의 env 반환.
+    - 전체 OAuth (refreshToken 있음): credentials.json 파일 사용
+    - setup-token (refreshToken 없음): CLAUDE_CODE_OAUTH_TOKEN env var만 사용 (파일 없는 빈 dir)
+    """
     env = get_claude_env()
-    if account_id:
+    if not account_id:
+        return env
+    try:
+        row = db_exec("SELECT credentials FROM claude_accounts WHERE id=?", (int(account_id),), fetchone=True)
+        if not row or not row.get("credentials"):
+            return env
         try:
+            data = json.loads(row["credentials"])
+        except Exception:
+            return env
+        oauth = data.get("claudeAiOauth", {})
+        token = oauth.get("accessToken", "")
+        refresh = oauth.get("refreshToken", "")
+        if token and not refresh:
+            # setup-token 토큰 → env var만 사용, credentials.json 없는 빈 dir
+            empty_dir = os.path.join(tempfile.gettempdir(), "flowdesk-envonly", str(account_id))
+            os.makedirs(empty_dir, exist_ok=True)
+            # 기존 credentials.json이 있으면 삭제 (과거 잘못 저장된 것 포함)
+            try:
+                stale = os.path.join(empty_dir, ".claude", ".credentials.json")
+                if os.path.exists(stale):
+                    os.remove(stale)
+            except Exception:
+                pass
+            env["CLAUDE_CODE_OAUTH_TOKEN"] = token
+            env["CLAUDE_CONFIG_DIR"] = empty_dir
+            env["HOME"] = empty_dir
+        else:
+            # 전체 OAuth → credentials.json 파일 기반
             account_dir = _get_account_dir(int(account_id))
-            creds_path = os.path.join(account_dir, ".credentials.json")
-            if os.path.exists(creds_path):
-                env["CLAUDE_CONFIG_DIR"] = account_dir
-                env["HOME"] = account_dir
-                # setup-token으로 생성된 장기 토큰이면 env var로도 설정
-                try:
-                    with open(creds_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    token = data.get("claudeAiOauth", {}).get("accessToken", "")
-                    # setup-token 토큰은 refreshToken이 비어있음 (식별 조건)
-                    if token and not data.get("claudeAiOauth", {}).get("refreshToken"):
-                        env["CLAUDE_CODE_OAUTH_TOKEN"] = token
-                except Exception:
-                    pass
-        except Exception as e:
-            log(f"Failed to set account env: {e}")
+            env["CLAUDE_CONFIG_DIR"] = account_dir
+            env["HOME"] = account_dir
+    except Exception as e:
+        log(f"Failed to set account env: {e}")
     return env
 
 # ═══════════════════════════════════════
