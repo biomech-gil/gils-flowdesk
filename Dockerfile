@@ -24,8 +24,9 @@ COPY --chown=flowdesk:flowdesk server.py canvas.html chat.html /app/
 COPY --chown=flowdesk:flowdesk migrate_to_pg.py setup_pg.sql /app/
 
 # 볼륨 마운트 포인트 (bind mount로 덮어써짐)
+# /app 자체도 chown 해야 server.py가 config.json 등 새 파일 생성 가능
 RUN mkdir -p /workspace /claude-creds /app/uploads \
-    && chown -R flowdesk:flowdesk /workspace /claude-creds /app/uploads \
+    && chown -R flowdesk:flowdesk /app /workspace /claude-creds \
     && ln -sf /claude-creds /home/flowdesk/.claude
 
 # 비-root 사용자로 전환
