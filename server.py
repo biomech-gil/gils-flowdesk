@@ -403,6 +403,11 @@ def init_db():
             """, (tbl, col))
             if not cur.fetchone():
                 cur.execute(alter_sql)
+        # NOT NULL 제거 — fav_items.memo_id를 nullable로 (project 항목 INSERT 가능하게)
+        try:
+            cur.execute("ALTER TABLE fav_items ALTER COLUMN memo_id DROP NOT NULL")
+        except Exception:
+            pass  # 이미 nullable이거나 컬럼 없음
         cur.close()
         db.close()
     else:
@@ -2228,11 +2233,27 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         existing = db_exec("SELECT id FROM fav_items WHERE folder_id=? AND kind=? AND target_id=?",
                            (int(fid), kind, target_id), fetchone=True)
         if existing: return {"ok": True, "id": existing["id"], "duplicate": True}
-        # memo면 호환성 위해 memo_id에도 채우기
-        memo_id = int(target_id) if kind == 'memo' and str(target_id).isdigit() else None
-        new_id = db_exec("INSERT INTO fav_items (folder_id, memo_id, target_id, kind, created) VALUES (?,?,?,?,?)",
-                         (int(fid), memo_id, target_id, kind, datetime.now().isoformat()))
-        return {"ok": True, "id": new_id}
+        # ⚠ memo_id가 NOT NULL 제약이라 0 placeholder 사용 (project/non-memo 항목)
+        # 실제 식별은 target_id+kind 사용
+        memo_id = int(target_id) if kind == 'memo' and str(target_id).isdigit() else 0
+        try:
+            new_id = db_exec("INSERT INTO fav_items (folder_id, memo_id, target_id, kind, created) VALUES (?,?,?,?,?)",
+                             (int(fid), memo_id, target_id, kind, datetime.now().isoformat()))
+            log(f"[FAV] item added: folder={fid} kind={kind} target={target_id} → id={new_id}")
+            return {"ok": True, "id": new_id}
+        except Exception as e:
+            log(f"[FAV] INSERT failed: {e}")
+            # NOT NULL 제약 시도 우회 — 컬럼이 nullable로 안 바뀐 케이스
+            try:
+                # NOT NULL을 nullable로 ALTER (PG)
+                if _is_pg():
+                    db_exec("ALTER TABLE fav_items ALTER COLUMN memo_id DROP NOT NULL")
+                # 재시도
+                new_id = db_exec("INSERT INTO fav_items (folder_id, memo_id, target_id, kind, created) VALUES (?,?,?,?,?)",
+                                 (int(fid), memo_id, target_id, kind, datetime.now().isoformat()))
+                return {"ok": True, "id": new_id}
+            except Exception as e2:
+                return {"ok": False, "error": f"INSERT failed: {e2}"}
 
     def _fav_item_remove(self, body):
         iid = body.get("id")

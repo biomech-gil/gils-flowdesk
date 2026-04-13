@@ -86,7 +86,12 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <div style="padding:7px 14px;font-size:12px;cursor:pointer;transition:.1s" onmouseover="this.style.background='var(--bg-4)'" onmouseout="this.style.background=''" onclick="chatFork()">🔀 대화 분기 생성</div>
 </div>
 <script>
-const API=location.origin,LS_KEY='tmux_canvas_state',LS_PANELS='chat_open_panels';
+const API=location.origin;
+// 캔버스와 같은 sessionStorage tabId 사용 → 같은 탭의 캔버스 상태 공유
+const TAB_ID=(()=>{let t=sessionStorage.getItem('flowdesk_tab_id');if(!t){t='tab_'+Date.now()+'_'+Math.random().toString(36).substr(2,6);sessionStorage.setItem('flowdesk_tab_id',t)}return t})();
+const LS_KEY='tmux_canvas_state_'+TAB_ID;
+const LS_KEY_LEGACY='tmux_canvas_state';  // 과거 호환
+const LS_PANELS='chat_open_panels_'+TAB_ID;  // 패널 목록도 탭별로 분리
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'}};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 function escH(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 
@@ -95,7 +100,12 @@ const TYPES={agent:{icon:'🤖',color:'#3B82F6'},memo:{icon:'📝',color:'#F59E0
 // 패널 상태: panels[convId] = {convId, nodeId, nodeName, polling, pending, lastMsgId}
 const panels=new Map();
 
-function loadNodes(){try{const s=JSON.parse(localStorage.getItem(LS_KEY));return(s&&s.nodes)||[]}catch(e){return[]}}
+function loadCanvasState(){
+  try{return JSON.parse(localStorage.getItem(LS_KEY))||JSON.parse(localStorage.getItem(LS_KEY_LEGACY)||'null')}
+  catch(e){return null}
+}
+function loadNodes(){const s=loadCanvasState();return(s&&s.nodes)||[]}
+function loadProjectInfo(){const s=loadCanvasState();return s?{id:s.workflowId,name:s.wfName}:{id:null,name:''}}
 
 // 열린 패널 정보 저장 (새로고침/이동 후 복원용)
 function savePanelList(){
@@ -135,7 +145,23 @@ function togglePanelMode(key,chatOnly){
 async function renderSidePanel(){
   const panel=document.getElementById('side-panel');
   const nodesList=loadNodes();
-  let html='<div class="side-hd">노드</div>';
+  const proj=loadProjectInfo();
+  // 프로젝트 헤더 — 현재 어느 프로젝트의 채팅인지 명시
+  let html='';
+  if(proj.id){
+    html+=`<div class="side-hd" style="background:rgba(76,175,80,.1);color:#a3e635;border-bottom-color:rgba(76,175,80,.3)" title="이 탭에 열린 프로젝트의 노드들만 표시">📂 ${escH(proj.name||'무제')}</div>`;
+  }else if(nodesList.length>0){
+    html+=`<div class="side-hd" style="background:rgba(168,85,247,.1);color:#c4b5fd;border-bottom-color:rgba(168,85,247,.3)" title="저장 안 된 빈 캔버스 — 노드만 표시">📄 빈 캔버스 (저장 안 됨)</div>`;
+  }else{
+    panel.innerHTML=`<div class="side-hd">노드</div>
+      <div style="padding:20px 12px;color:var(--text-muted);font-size:.78em;line-height:1.5;text-align:center">
+        ⚠ 캔버스가 비어있거나<br>이 탭에 프로젝트가 안 열렸습니다.<br><br>
+        <a href="/" style="color:#7ecfff;text-decoration:underline">캔버스로 가서 프로젝트 열기</a>
+      </div>`;
+    document.getElementById('panel-count').textContent=panels.size;
+    return;
+  }
+  html+='<div class="side-hd">노드 + 분기</div>';
   for(const n of nodesList){
     const t=TYPES[n.type]||TYPES.agent;
     html+=`<div class="nl-item" onclick="openChat(null,'${n.id}','${escH(n.name)}','${n.type}')" oncontextmenu="event.preventDefault();showChatCtx(event,'${n.id}','${escH(n.name)}')"><div class="nl-dot" style="background:${t.color}"></div><span class="nl-name">${t.icon} ${escH(n.name)}</span></div>`;
