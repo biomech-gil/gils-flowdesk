@@ -2035,19 +2035,39 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 return {"ok": False, "error": "not found"}
             db_exec("UPDATE claude_accounts SET active=0")
             db_exec("UPDATE claude_accounts SET active=1 WHERE id=?", (aid,))
+
+            # setup-token 여부 체크 (refreshToken 빈 값)
+            is_setup_token = False
+            try:
+                parsed = json.loads(row["credentials"])
+                oauth = parsed.get("claudeAiOauth", {})
+                if oauth.get("accessToken") and not oauth.get("refreshToken"):
+                    is_setup_token = True
+            except Exception:
+                pass
+
             claude_dir = os.path.expanduser("~/.claude")
             os.makedirs(claude_dir, exist_ok=True)
             creds_path = os.path.join(claude_dir, ".credentials.json")
-            with open(creds_path, "w", encoding="utf-8") as f:
-                f.write(row["credentials"])
-            try:
-                os.chmod(creds_path, 0o600)
-            except Exception:
-                pass
+
+            if is_setup_token:
+                # setup-token 계정은 global credentials.json 안 만듦 (CLI가 혼동)
+                # 오히려 기존 전체 OAuth 파일이 있다면 보존
+                log(f"Claude account activated (setup-token, env var only): {row['name']}")
+            else:
+                # 전체 OAuth 계정이면 global에 저장
+                with open(creds_path, "w", encoding="utf-8") as f:
+                    f.write(row["credentials"])
+            if not is_setup_token:
+                try:
+                    os.chmod(creds_path, 0o600)
+                except Exception:
+                    pass
             try: _sync_account_to_dir(row["id"], row["credentials"])
             except Exception as e: log(f"sync acct dir failed: {e}")
-            log(f"Claude account activated: {row['name']}")
-            return {"ok": True, "active": row["name"]}
+            if not is_setup_token:
+                log(f"Claude account activated: {row['name']}")
+            return {"ok": True, "active": row["name"], "setup_token": is_setup_token}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
