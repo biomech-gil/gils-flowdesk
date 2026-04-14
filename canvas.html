@@ -2193,6 +2193,29 @@ document.addEventListener('click',e=>{
 });
 
 // ═══ COPY ═══
+// 비동기 후에도 작동하는 클립보드 복사 (clipboard API는 user gesture 잃으면 fail)
+function copyToClipboard(text){
+  // 1차: navigator.clipboard
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    try{
+      navigator.clipboard.writeText(text).catch(()=>execCmdCopy(text));
+      return true;
+    }catch(e){}
+  }
+  return execCmdCopy(text);
+}
+function execCmdCopy(text){
+  // 2차: 오래된 execCommand (gesture 무관, 광범위 호환)
+  const ta=document.createElement('textarea');
+  ta.value=text;
+  ta.style.cssText='position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();ta.select();
+  let ok=false;
+  try{ok=document.execCommand('copy')}catch(e){}
+  document.body.removeChild(ta);
+  return ok;
+}
 async function copyText(type){
   if(!selectedNode)return;let text='';
   if(type==='input')text=selectedNode.inputTemplate;
@@ -2203,10 +2226,27 @@ async function copyText(type){
     nodes.forEach(n=>{const ph=`{{${n.name}}}`;if(text.includes(ph))text=text.replaceAll(ph,n.outputCapture||'')});
     text=await resolveMemoPlaceholders(text);
   }
-  navigator.clipboard.writeText(text).then(()=>{
-    const msg=type==='resolved'?'풀텍스트(치환됨)':'텍스트';
-    console.log(`[복사] ${msg} ${text.length}자`);
-  });
+  const ok=copyToClipboard(text);
+  const msg=type==='resolved'?'완성본(치환됨)':'텍스트';
+  if(ok){
+    console.log(`[복사✓] ${msg} ${text.length.toLocaleString()}자`);
+    // 작은 토스트
+    showCopyToast(`📋 ${msg} ${text.length.toLocaleString()}자 복사됨`);
+  }else{
+    console.error(`[복사❌] ${msg} 실패`);
+    alert('복사 실패. 브라우저가 클립보드 접근을 허용했는지 확인하세요.');
+  }
+}
+function showCopyToast(msg){
+  let t=document.getElementById('copy-toast');
+  if(!t){
+    t=document.createElement('div');t.id='copy-toast';
+    t.style.cssText='position:fixed;bottom:30px;right:30px;background:rgba(76,175,80,.95);color:#fff;padding:8px 16px;border-radius:6px;font-size:13px;z-index:99999;box-shadow:0 4px 12px rgba(0,0,0,.4);transition:opacity .3s;font-weight:600';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>{t.style.opacity='0'},2000);
 }
 
 // ═══ SIDEBAR ═══
