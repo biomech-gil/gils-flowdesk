@@ -5,7 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FlowDesk 채팅</title>
 <style>
-:root{--bg-0:#0d0d14;--bg-1:#13131f;--bg-2:#1a1a2e;--bg-3:#222236;--bg-4:#2a2a3e;--border:#333355;--text:#e0e0e0;--text-dim:#888899;--text-muted:#666677;--accent:#4CAF50;--blue:#2196F3;--red:#F44336;--user-bg:#1e3a5f;--radius:8px;--mono:'Consolas','D2Coding',monospace}
+:root{--bg-0:#0d0d14;--bg-1:#13131f;--bg-2:#1a1a2e;--bg-3:#222236;--bg-4:#2a2a3e;--border:#333355;--text:#e0e0e0;--text-dim:#888899;--text-muted:#666677;--accent:#4CAF50;--blue:#2196F3;--red:#F44336;--user-bg:#1e3a5f;--radius:8px;--mono:'Consolas','D2Coding',monospace;--nb-border:#000;--nb-border-w:2px;--nb-shadow:3px 3px 0 #000;--nb-radius:4px}
+/* 네오브루탈리즘 적용 */
+.tb button,.chat-input-bar button,.chat-header .tools button,.chat-header .x{border:var(--nb-border-w) solid var(--nb-border)!important;border-radius:var(--nb-radius)!important;box-shadow:var(--nb-shadow)!important;font-weight:700!important;transition:transform .08s,box-shadow .08s!important}
+.tb button:hover,.chat-input-bar button:hover,.chat-header .tools button:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 #000!important}
+.tb button:active,.chat-input-bar button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #000!important}
+.chat-panel{border:2px solid #000!important;border-radius:0!important}
+.chat-header{border-bottom:2px solid #000!important}
+.chat-input-bar{border-top:2px solid #000!important}
+input[type="text"],textarea{border:var(--nb-border-w) solid var(--nb-border)!important;border-radius:var(--nb-radius)!important;box-shadow:2px 2px 0 #000!important}
+input[type="text"]:focus,textarea:focus{box-shadow:3px 3px 0 var(--accent)!important;outline:none!important}
+.msg-bubble{border:2px solid #000!important;border-radius:6px!important;box-shadow:3px 3px 0 #000!important;font-weight:500}
+.nl-item.active{border-left:4px solid var(--accent)!important;background:rgba(76,175,80,.15)!important;font-weight:700}
+.conv-item.active{border-left:4px solid var(--accent)!important;font-weight:600}
+.nav a.active{border-bottom:3px solid var(--accent)!important}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 .nav{display:flex;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0}
@@ -73,10 +86,11 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <span class="lbl">CWD:</span>
   <input type="text" id="chat-cwd" placeholder="작업 디렉토리 (모든 패널 공통)" style="width:240px">
   <div class="sep"></div>
-  <span class="lbl" style="font-size:.7em;color:var(--text-muted)">💡 대화전용/툴사용은 각 패널에서 개별 설정</span>
-  <div class="sep"></div>
   <button onclick="closeAllPanels()" title="모든 채팅 닫기">🗑 모두닫기</button>
-  <span style="font-size:.7em;color:var(--text-muted);margin-left:auto">패널: <span id="panel-count">0</span></span>
+  <div class="sep"></div>
+  <span style="font-size:.7em;color:#ebcb8b;font-weight:600">💬 채팅 즐겨찾기:</span>
+  <div id="chat-fav-bar" style="display:flex;gap:4px;align-items:center;flex:1;overflow-x:auto"></div>
+  <span style="font-size:.7em;color:var(--text-muted)">패널: <span id="panel-count">0</span></span>
 </div>
 <div class="chat-area">
   <div class="side" id="side-panel"></div>
@@ -191,9 +205,9 @@ async function openChat(convId,nodeId,nodeName,nodeType){
   // 빈 패널 제거
   const empty=document.querySelector('.chat-panel.empty');if(empty)empty.remove();
 
-  // chatOnly 기본 = true (대화전용), localStorage에 패널별 저장된 값 우선
+  // chatOnly 기본 = false (툴사용 — 파일/웹/Bash 가능), localStorage에 패널별 저장된 값 우선
   const savedMode=loadPanelMode(convId);
-  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew,chatOnly:savedMode!==null?savedMode:true};
+  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew,chatOnly:savedMode!==null?savedMode:false};
   panels.set(key,state);
 
   const multi=document.getElementById('chat-multi');
@@ -210,6 +224,7 @@ async function openChat(convId,nodeId,nodeName,nodeType){
           <input type="checkbox" ${state.chatOnly?'':'checked'} onchange="togglePanelMode('${key}',!this.checked)" style="cursor:pointer">
           <span data-mode-label="${key}">${state.chatOnly?'💬 대화전용':'🔧 툴사용'}</span>
         </label>
+        <button onclick="addChatToFav('${key}')" title="이 대화를 즐겨찾기에 저장 (다시 열어 이어가기)">⭐ 즐겨찾기</button>
         <button onclick="exportChatToMemo('${key}')" title="이 대화 전체를 메모로 저장">📝→메모</button>
         <span class="x" onclick="closePanel('${key}')" title="닫기" style="cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px">✕</span>
       </div>
@@ -375,6 +390,89 @@ function startPolling(key){
   },2000);
 }
 
+// ═══ 채팅 즐겨찾기 (대화 분류 + 다시 열기) ═══
+async function loadChatFavBar(){
+  const r=await api('GET','/api/fav/folders?kind=conversation');
+  const el=document.getElementById('chat-fav-bar');
+  if(!el)return;
+  const folders=(r.ok&&r.folders)||[];
+  let html='';
+  folders.forEach(f=>{
+    const color=f.color||'rgba(245,158,11,.3)';
+    html+=`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(245,158,11,.12);border:1px solid ${color};border-radius:12px;font-size:.7em;color:#ebcb8b;cursor:pointer;white-space:nowrap" onclick="openChatFavFolder(${f.id},'${escH(f.name)}')" oncontextmenu="event.preventDefault();renameChatFavFolder(${f.id},'${escH(f.name)}')" title="우클릭=이름변경">${f.icon||'⭐'} ${escH(f.name)}</span>`;
+  });
+  html+=`<span style="padding:3px 8px;background:rgba(245,158,11,.06);border:1px dashed rgba(245,158,11,.4);border-radius:12px;color:#ebcb8b;cursor:pointer;font-size:.7em" onclick="newChatFavFolder()">+ 새 폴더</span>`;
+  el.innerHTML=html;
+}
+async function newChatFavFolder(){
+  const name=prompt('새 채팅 즐겨찾기 폴더 이름:');
+  if(!name)return;
+  await api('POST','/api/fav/folder/save',{name,kind:'conversation'});
+  loadChatFavBar();
+}
+async function renameChatFavFolder(id,oldName){
+  const name=prompt('폴더 이름 변경:',oldName);
+  if(!name||name===oldName)return;
+  await api('POST','/api/fav/folder/save',{id,name});
+  loadChatFavBar();
+}
+async function openChatFavFolder(folderId,folderName){
+  // 이 폴더의 대화 목록 모달
+  const r=await api('GET',`/api/fav/items?folderId=${folderId}`);
+  const items=(r.ok&&r.items)||[];
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-height:70vh;background:var(--bg-1);border:2px solid #ebcb8b;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:10001;display:flex;flex-direction:column';
+  modal.innerHTML=`
+    <div style="padding:12px 16px;background:linear-gradient(to right,rgba(245,158,11,.15),rgba(245,158,11,.05));border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+      <span style="flex:1;font-weight:600;color:#ebcb8b">⭐ ${escH(folderName)}</span>
+      <button onclick="deleteChatFavFolder(${folderId},this)" style="background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:11px">🗑 폴더 삭제</button>
+      <span style="cursor:pointer;color:var(--text-muted);padding:4px 8px" onclick="this.parentElement.parentElement.remove()">✕</span>
+    </div>
+    <div style="overflow-y:auto;padding:8px;max-height:60vh">
+      ${items.length===0?'<div style="text-align:center;padding:40px;color:var(--text-muted)">비어있음<br><span style="font-size:.85em">채팅 패널 헤더의 [⭐ 즐겨찾기] 버튼으로 추가</span></div>':items.map(it=>`
+        <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;margin:2px 0;border-radius:4px;cursor:pointer;border:1px solid var(--border)" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''" onclick="openChat('${it.targetId}','','${escH(it.nodeName||'노드')}');this.parentElement.parentElement.parentElement.remove()">
+          <span style="font-size:1.2em">💬</span>
+          <div style="flex:1;overflow:hidden">
+            <div style="font-weight:600;color:var(--text);font-size:.85em">${escH(it.title||'무제 대화')}</div>
+            <div style="color:var(--text-muted);font-size:.7em">${escH(it.preview||'')}</div>
+          </div>
+          <button onclick="event.stopPropagation();removeChatFav(${it.id},this)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px" title="즐겨찾기에서 제거">✕</button>
+        </div>
+      `).join('')}
+    </div>`;
+  document.body.appendChild(modal);
+}
+async function deleteChatFavFolder(folderId,btn){
+  if(!confirm('이 폴더를 삭제할까요?\n(폴더 안의 채팅 링크는 사라지지만 대화 자체는 유지됩니다)'))return;
+  await api('POST','/api/fav/folder/delete',{id:folderId});
+  if(btn&&btn.closest('div').parentElement.parentElement)btn.closest('div').parentElement.parentElement.remove();
+  loadChatFavBar();
+}
+async function removeChatFav(itemId,btn){
+  await api('POST','/api/fav/item/remove',{id:itemId});
+  if(btn)btn.closest('div').remove();
+}
+async function addChatToFav(panelKey){
+  const state=panels.get(panelKey);
+  if(!state||!state.convId)return alert('아직 저장되지 않은 새 대화입니다 (메시지 1개라도 보낸 후 다시 시도)');
+  // 폴더 선택 picker
+  const r=await api('GET','/api/fav/folders?kind=conversation');
+  const folders=(r.ok&&r.folders)||[];
+  let options='';
+  folders.forEach(f=>{options+=`<div onclick="pickChatFavFolder(${f.id},'${state.convId}',this)" style="padding:7px 12px;cursor:pointer;border-radius:3px;font-size:.85em" onmouseover="this.style.background='var(--bg-3)'" onmouseout="this.style.background=''">${f.icon||'⭐'} ${escH(f.name)}</div>`});
+  if(folders.length===0)options='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:.85em">폴더가 없습니다.<br>먼저 위쪽 [+ 새 폴더]로 만드세요</div>';
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:340px;background:var(--bg-1);border:2px solid #ebcb8b;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:10002';
+  modal.innerHTML=`<div style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:#ebcb8b;display:flex;align-items:center;gap:8px"><span style="flex:1">⭐ 채팅을 어느 폴더에 저장?</span><span style="cursor:pointer;color:var(--text-muted)" onclick="this.parentElement.parentElement.remove()">✕</span></div><div style="padding:6px;max-height:300px;overflow-y:auto">${options}</div>`;
+  document.body.appendChild(modal);
+}
+async function pickChatFavFolder(folderId,convId,el){
+  const r=await api('POST','/api/fav/item/add',{folderId,kind:'conversation',targetId:convId});
+  if(el&&el.closest('div').parentElement.parentElement)el.closest('div').parentElement.parentElement.remove();
+  if(r.duplicate)alert('이미 그 폴더에 있는 대화입니다');
+  else alert('✅ 즐겨찾기에 저장됨');
+}
+
 // 채팅 → 메모로 내보내기
 async function exportChatToMemo(key){
   const state=panels.get(key);if(!state||!state.convId)return alert('아직 저장되지 않은 새 대화입니다');
@@ -438,6 +536,7 @@ window.addEventListener('beforeunload',()=>{
 // 초기화
 (async()=>{
   await renderSidePanel();
+  loadChatFavBar();
   // 1) 캔버스에서 보낸 pending open_conv 처리
   try{
     const pending=JSON.parse(localStorage.getItem('open_conv'));

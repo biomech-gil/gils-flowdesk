@@ -1865,28 +1865,57 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "memo": row}
 
     def _memo_save(self, body):
+        """⚠ CRITICAL: 부분 업데이트 — body에 명시된 필드만 갱신.
+        과거: name/content가 body에 없으면 ""로 덮어써서 데이터 소실됨 (드래그 이동 시).
+        지금: body에 있는 필드만 UPDATE."""
         mid = body.get("id")
-        name = body.get("name", "")
-        content = body.get("content", "")
-        folder_id = body.get("folderId")
-        is_temp = 1 if body.get("isTemp", True) else 0
         now = datetime.now().isoformat()
-        # Auto-create date folder for non-temp memos without a folder
-        if not folder_id and not is_temp:
-            today = datetime.now().strftime("%Y-%m-%d")
-            existing = db_exec("SELECT id FROM memo_folders WHERE name=?", (today,), fetchone=True)
-            if existing:
-                folder_id = existing["id"]
-            else:
-                folder_id = db_exec("INSERT INTO memo_folders (name, icon, color, created) VALUES (?,?,?,?)",
-                                   (today, "📅", "", now))
         if mid:
-            db_exec("UPDATE memos SET name=?, content=?, folder_id=?, is_temp=?, modified=? WHERE id=?",
-                    (name, content, folder_id, is_temp, now, mid))
+            # 안전: 기존 행 백업 (UPDATE 전 휴지통에 스냅샷)
+            try:
+                existing_row = db_exec("SELECT id, name, content, folder_id, is_temp, pinned, color, created, modified FROM memos WHERE id=?", (mid,), fetchone=True)
+                if existing_row and ("name" in body or "content" in body):
+                    # name/content를 갱신하는 경우만 백업 (드래그 이동 등 메타만 바뀌면 백업 불필요)
+                    snap = json.dumps(dict(existing_row), ensure_ascii=False, default=str)
+                    db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
+                            ("memos_pre_update", str(mid), existing_row.get("name", ""), snap, now))
+            except Exception as e:
+                log(f"[MEMO_SAVE] backup failed (non-fatal): {e}")
+            # 부분 UPDATE — body에 있는 필드만
+            updates, params = ["modified=?"], [now]
+            if "name" in body:
+                updates.append("name=?"); params.append(body.get("name") or "")
+            if "content" in body:
+                updates.append("content=?"); params.append(body.get("content") or "")
+            if "folderId" in body:
+                fid = body.get("folderId")
+                updates.append("folder_id=?"); params.append(fid if fid else None)
+            if "isTemp" in body:
+                updates.append("is_temp=?"); params.append(1 if body.get("isTemp") else 0)
+            if "pinned" in body:
+                updates.append("pinned=?"); params.append(1 if body.get("pinned") else 0)
+            if "color" in body:
+                updates.append("color=?"); params.append(body.get("color") or "")
+            params.append(mid)
+            db_exec(f"UPDATE memos SET {', '.join(updates)} WHERE id=?", tuple(params))
+            log(f"[MEMO_SAVE] partial update id={mid} fields={list(body.keys())}")
             return {"ok": True, "id": mid}
         else:
+            # 신규 생성 — folder 자동 처리
+            name = body.get("name", "") or f"메모{int(time.time())}"
+            content = body.get("content", "")
+            is_temp = 1 if body.get("isTemp", True) else 0
+            folder_id = body.get("folderId")
+            if not folder_id and not is_temp:
+                today = datetime.now().strftime("%Y-%m-%d")
+                existing = db_exec("SELECT id FROM memo_folders WHERE name=?", (today,), fetchone=True)
+                if existing:
+                    folder_id = existing["id"]
+                else:
+                    folder_id = db_exec("INSERT INTO memo_folders (name, icon, color, created) VALUES (?,?,?,?)",
+                                       (today, "📅", "", now))
             new_id = db_exec("INSERT INTO memos (name, content, folder_id, is_temp, created, modified) VALUES (?,?,?,?,?,?)",
-                             (name or f"메모{int(time.time())}", content, folder_id, is_temp, now, now))
+                             (name, content, folder_id, is_temp, now, now))
             return {"ok": True, "id": new_id}
 
     def _memo_delete(self, body):
@@ -2218,6 +2247,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 elif kind == 'project':
                     p = db_exec("SELECT name, modified FROM projects WHERE id=?", (tid,), fetchone=True)
                     if p: item["title"] = p.get("name") or "무제"; item["preview"] = (p.get("modified") or "")[:16]
+                elif kind == 'conversation' or kind == 'chat':
+                    c = db_exec("SELECT title, node_name, created FROM conversations WHERE id=?", (tid,), fetchone=True)
+                    if c:
+                        item["title"] = c.get("title") or "(제목 없는 대화)"
+                        item["preview"] = f"노드: {c.get('node_name', '')} · {(c.get('created') or '')[:16]}"
+                        item["nodeName"] = c.get("node_name", "")
             except Exception:
                 pass
             out.append(item)

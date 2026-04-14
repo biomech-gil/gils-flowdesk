@@ -13,6 +13,128 @@
   --blue:#2196F3;--blue-dim:#1565C0;--orange:#FF9800;--red:#F44336;--purple:#8B5CF6;--cyan:#06B6D4;--amber:#F59E0B;
   --radius:8px;--radius-sm:4px;
   --mono:'Consolas','D2Coding',monospace;
+  /* 네오브루탈리즘 — 일관된 디자인 토큰 */
+  --nb-border:#000;
+  --nb-border-w:2px;
+  --nb-shadow:3px 3px 0 #000;
+  --nb-shadow-lg:5px 5px 0 #000;
+  --nb-radius:4px;
+}
+/* ═══════════════════════════════════════
+   네오브루탈리즘 UI 레이어 (전반 적용)
+   특징: 두꺼운 검정 보더, 하드 오프셋 그림자, 강한 색상, 샤프한 모서리
+   ═══════════════════════════════════════ */
+.nb-btn,
+.tb button,
+.fav-folder-chip,
+.fav-add-btn,
+.pinned-chip,
+.pf-bar button,
+.fp-hd button,
+.memo-bar button,
+button.act,
+button.danger,
+button.fld,
+button.add{
+  border:var(--nb-border-w) solid var(--nb-border)!important;
+  box-shadow:var(--nb-shadow)!important;
+  border-radius:var(--nb-radius)!important;
+  font-weight:700!important;
+  text-transform:none;
+  transition:transform .08s,box-shadow .08s!important;
+}
+.nb-btn:hover,
+.tb button:hover,
+.fav-folder-chip:hover,
+.fav-add-btn:hover,
+.pinned-chip:hover,
+.pf-bar button:hover,
+.memo-bar button:hover,
+button.act:hover,
+button.danger:hover,
+button.fld:hover,
+button.add:hover{
+  transform:translate(-1px,-1px)!important;
+  box-shadow:4px 4px 0 #000!important;
+}
+.nb-btn:active,
+.tb button:active,
+.fav-folder-chip:active,
+.pf-bar button:active,
+.memo-bar button:active,
+button.act:active,
+button.fld:active{
+  transform:translate(2px,2px)!important;
+  box-shadow:1px 1px 0 #000!important;
+}
+/* 모달 / 팝업 = 두꺼운 검정 보더 + 하드 그림자 */
+.fav-modal,
+.at-picker,
+#fav-popup,
+#landing > div,
+#mo > div,
+#fs-modal > div,
+#fm-modal > div,
+#appearance-modal,
+#attach-modal,
+#memo-picker,
+#conv-picker{
+  border:3px solid var(--nb-border)!important;
+  box-shadow:var(--nb-shadow-lg),0 0 0 1px rgba(255,255,255,.05)!important;
+  border-radius:var(--nb-radius)!important;
+}
+/* input — 두꺼운 보더 + 강조 포커스 */
+input[type="text"],input[type="password"],input:not([type]),textarea,select{
+  border:var(--nb-border-w) solid var(--nb-border)!important;
+  border-radius:var(--nb-radius)!important;
+  box-shadow:2px 2px 0 #000!important;
+  transition:box-shadow .1s,transform .1s!important;
+}
+input[type="text"]:focus,input[type="password"]:focus,textarea:focus,select:focus{
+  box-shadow:3px 3px 0 var(--accent)!important;
+  outline:none!important;
+}
+/* 노드 카드 = 두꺼운 보더 + 색상 그림자 */
+.nd{
+  border:var(--nb-border-w) solid var(--nb-border)!important;
+  box-shadow:4px 4px 0 #000!important;
+  border-radius:var(--nb-radius)!important;
+}
+.nd.sel{
+  box-shadow:4px 4px 0 var(--accent)!important;
+  transform:translate(-1px,-1px);
+}
+.nd.running{box-shadow:4px 4px 0 var(--blue)!important}
+.nd.complete{box-shadow:4px 4px 0 #6ec46e!important}
+.nd.error{box-shadow:4px 4px 0 var(--red)!important}
+/* 즐겨찾기 칩 — 강한 가독성 */
+.fav-folder-chip,.pinned-chip{
+  background:var(--amber)!important;
+  color:#000!important;
+  text-shadow:none!important;
+}
+/* nav 링크 — 활성 시 두꺼운 underline */
+.nav a.active{border-bottom:3px solid var(--accent)!important}
+/* 폴더/메모 행 hover — 컬러 박스 */
+.fav-row:hover,.fp-memo:hover{
+  outline:2px solid var(--accent);
+  outline-offset:-2px;
+  box-shadow:3px 3px 0 var(--accent)!important;
+}
+/* 사이드바 액션 버튼 */
+.sb-hd button,.sb-row button{
+  border:1.5px solid var(--nb-border)!important;
+  border-radius:3px!important;
+  box-shadow:2px 2px 0 #000!important;
+  font-weight:600!important;
+}
+.sb-hd button:hover,.sb-row button:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000!important}
+/* 토스트 = 네오브루 스타일 */
+#copy-toast{
+  border:3px solid #000!important;
+  box-shadow:5px 5px 0 #000!important;
+  border-radius:4px!important;
+  font-weight:700!important;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
