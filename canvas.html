@@ -138,19 +138,35 @@ input[type="text"]:focus,input[type="password"]:focus,textarea:focus,select:focu
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
-.nav{display:flex;align-items:center;background:linear-gradient(180deg,#1e2030,#181825);border-bottom:1px solid rgba(76,175,80,.2);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-.nav a{color:var(--text-dim);text-decoration:none;padding:10px 22px;font-size:.85em;font-weight:500;border-bottom:2px solid transparent;transition:.2s;letter-spacing:.3px}
-.nav a:hover{color:#fff;background:rgba(255,255,255,.05)}.nav a.active{color:var(--accent);border-bottom-color:var(--accent);text-shadow:0 0 8px rgba(76,175,80,.4)}
-.tb{display:flex;align-items:center;gap:6px;padding:5px 10px;background:linear-gradient(180deg,#16161e,#12121a);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
-.tb button{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.1);padding:4px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:.78em;transition:.2s;backdrop-filter:blur(4px)}
-.tb button:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.2);transform:translateY(-1px)}
-.tb .act{background:linear-gradient(135deg,var(--accent),#388E3C);color:#000;border-color:var(--accent);font-weight:600;box-shadow:0 0 8px rgba(76,175,80,.3)}
-.tb .act:hover{box-shadow:0 0 14px rgba(76,175,80,.5)}
-.tb .danger{background:rgba(244,67,54,.15);color:var(--red);border-color:rgba(244,67,54,.3)}
-.tb .danger:hover{background:rgba(244,67,54,.25)}
-.tb select,.tb input{background:rgba(255,255,255,.06);color:var(--text);border:1px solid rgba(255,255,255,.1);padding:3px 6px;border-radius:var(--radius-sm);font-size:.78em}
-.tb .sep{width:1px;height:16px;background:linear-gradient(180deg,transparent,var(--border),transparent);margin:0 4px}
-.tb .lbl{font-size:.72em;color:var(--text-muted)}
+.nav{display:flex;align-items:center;background:linear-gradient(180deg,#1e2030,#181825);border-bottom:2px solid #000;flex-shrink:0;box-shadow:0 4px 0 #000;height:46px;overflow:hidden}
+.nav a{color:var(--text-dim);text-decoration:none;padding:0 18px;font-size:.85em;font-weight:600;border-bottom:3px solid transparent;transition:.15s;letter-spacing:.3px;display:flex;align-items:center;height:100%;flex-shrink:0;white-space:nowrap}
+.nav a:hover{color:#fff;background:rgba(255,255,255,.05)}.nav a.active{color:var(--accent);border-bottom-color:var(--accent)}
+.nav-fav-label{margin-left:18px;padding-right:10px;font-size:.7em;color:#ebcb8b;font-weight:700;letter-spacing:.3px;flex-shrink:0;white-space:nowrap;border-right:2px solid #000;height:24px;display:flex;align-items:center}
+.nav-actions{display:flex;align-items:center;gap:6px;margin-left:auto;padding:0 12px;flex-shrink:0;border-left:2px solid #000;height:100%}
+.nav-btn{height:28px;padding:0 12px;border:2px solid #000;border-radius:4px;cursor:pointer;font-size:.74em;font-weight:700;display:inline-flex;align-items:center;gap:4px;flex-shrink:0;white-space:nowrap;box-shadow:2px 2px 0 #000;line-height:1;transition:transform .08s,box-shadow .08s}
+.nav-btn:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000}
+.nav-btn:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+.nav-btn-amber{background:#F59E0B;color:#000}
+.nav-btn-amber:hover{background:#fbbd2c}
+.nav-btn-purple{background:#7c3aed;color:#fff}
+.nav-btn-purple:hover{background:#9460ff}
+.nav-btn-red{background:#dc2626;color:#fff}
+.nav-btn-red:hover{background:#ef4444}
+/* 툴바 — 단일 행 강제, 넘치면 가로 스크롤 */
+.tb{display:flex;align-items:center;gap:6px;padding:6px 10px;background:linear-gradient(180deg,#16161e,#12121a);border-bottom:2px solid #000;flex-shrink:0;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;height:44px;scrollbar-width:thin}
+.tb::-webkit-scrollbar{height:4px}
+.tb::-webkit-scrollbar-thumb{background:var(--bg-3);border-radius:2px}
+.tb button{background:rgba(255,255,255,.08);color:var(--text);border:2px solid #000;padding:0 10px;height:28px;border-radius:4px;cursor:pointer;font-size:.78em;font-weight:700;transition:transform .08s,box-shadow .08s;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;gap:3px;box-shadow:2px 2px 0 #000;line-height:1}
+.tb button:hover{background:rgba(255,255,255,.14);transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000}
+.tb button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+.tb .act{background:var(--accent)!important;color:#000!important;border-color:#000!important;box-shadow:2px 2px 0 #000!important}
+.tb .act:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000!important;background:var(--accent-hover)!important}
+.tb .danger{background:var(--red)!important;color:#fff!important;border-color:#000!important}
+.tb .danger:hover{background:#d63a2e!important}
+.tb select,.tb input{background:rgba(255,255,255,.08);color:var(--text);border:2px solid #000;padding:0 6px;height:28px;border-radius:4px;font-size:.78em;flex-shrink:0;box-shadow:2px 2px 0 #000;font-weight:600}
+.tb select:focus,.tb input:focus{outline:none;box-shadow:3px 3px 0 var(--accent)}
+.tb .sep{width:2px;height:22px;background:#000;margin:0 4px;flex-shrink:0;border-radius:1px}
+.tb .lbl{font-size:.72em;color:var(--text-muted);font-weight:600;flex-shrink:0;white-space:nowrap}
 .main{display:flex;flex:1;overflow:hidden;position:relative}
 .cw{flex:1;overflow:hidden;position:relative;cursor:grab;
   background-color:var(--canvas-bg,transparent);
@@ -319,19 +335,22 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .ce.sel .ce-del{opacity:.9}
 /* SELECTION BOX */
 /* MEMO BAR (상단 탭) */
-.memo-bar{display:flex;align-items:center;background:linear-gradient(180deg,#0d0d1a,#0a0a14);border-bottom:1px solid rgba(245,158,11,.15);padding:3px 8px;flex-shrink:0;gap:4px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:thin;min-height:30px;box-shadow:inset 0 -1px 4px rgba(0,0,0,.2)}
-.memo-bar::-webkit-scrollbar{height:3px}
-.memo-bar::-webkit-scrollbar-thumb{background:rgba(245,158,11,.3);border-radius:2px}
-.memo-tab{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-bottom:2px solid transparent;border-radius:6px 6px 0 0;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:.2s;flex-shrink:0;max-width:160px}
-.memo-tab:hover{background:rgba(245,158,11,.1);color:var(--text);border-color:rgba(245,158,11,.2)}
-.memo-tab.active{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.4);border-bottom-color:#F59E0B;color:#F59E0B;box-shadow:0 -2px 6px rgba(245,158,11,.15)}
+.memo-bar{display:flex;align-items:center;background:linear-gradient(180deg,#0d0d1a,#0a0a14);border-bottom:2px solid #000;padding:5px 10px;flex-shrink:0;gap:5px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;scrollbar-width:thin;height:38px}
+.memo-bar::-webkit-scrollbar{height:4px}
+.memo-bar::-webkit-scrollbar-thumb{background:rgba(245,158,11,.4);border-radius:2px}
+.memo-tab{display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:24px;background:rgba(255,255,255,.04);border:2px solid #000;border-radius:4px;cursor:pointer;font-size:.78em;color:var(--text-dim);transition:transform .08s,box-shadow .08s;flex-shrink:0;max-width:160px;box-shadow:2px 2px 0 #000;font-weight:600;line-height:1}
+.memo-tab:hover{background:rgba(245,158,11,.18);color:var(--text);transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000}
+.memo-tab.active{background:#F59E0B;color:#000;box-shadow:2px 2px 0 #000}
 .memo-tab .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
-.memo-tab .x{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:13px;padding:0 2px;border-radius:3px}
-.memo-tab .x:hover{color:var(--red);background:rgba(244,67,54,.2)}
-.memo-bar button.add{background:linear-gradient(135deg,#F59E0B,#D97706);color:#000;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:.78em;font-weight:600;flex-shrink:0;box-shadow:0 1px 4px rgba(245,158,11,.3)}
-.memo-bar button.add:hover{filter:brightness(1.15);transform:translateY(-1px)}
-.memo-bar button.fld{background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.78em;flex-shrink:0}
-.memo-bar button.fld:hover{background:rgba(139,92,246,.25)}
+.memo-tab .x{background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0 2px;border-radius:3px;line-height:1}
+.memo-tab .x:hover{color:var(--red)}
+.memo-bar button{height:26px;padding:0 10px;border:2px solid #000;border-radius:4px;cursor:pointer;font-size:.78em;font-weight:700;flex-shrink:0;box-shadow:2px 2px 0 #000;display:inline-flex;align-items:center;gap:3px;line-height:1;transition:transform .08s,box-shadow .08s;white-space:nowrap}
+.memo-bar button:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000}
+.memo-bar button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+.memo-bar button.add{background:#F59E0B;color:#000}
+.memo-bar button.add:hover{background:#fbbd2c}
+.memo-bar button.fld{background:#7c3aed;color:#fff}
+.memo-bar button.fld:hover{background:#9460ff}
 /* MEMO EDITOR (full-screen tab inside .main) */
 #memo-editor{font-family:var(--mono)}
 #memo-editor button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer}
@@ -463,15 +482,15 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .pinned-memos{display:flex;align-items:center;gap:5px;margin-left:auto;padding:0 10px}
 .pinned-chip{display:inline-block;padding:3px 10px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);border-radius:12px;font-size:.7em;color:#ebcb8b;cursor:pointer;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:.2s}
 .pinned-chip:hover{color:#F59E0B;background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.4);box-shadow:0 0 6px rgba(245,158,11,.2);transform:translateY(-1px)}
-/* 즐겨찾기 폴더 nav (gold/amber 테마 — 캔버스/채팅과 시각적 구분) */
-.fav-nav{display:flex;align-items:center;gap:4px;margin-left:20px;padding:0 12px;border-left:2px solid rgba(245,158,11,.3);background:linear-gradient(to right,rgba(245,158,11,.04),transparent);overflow-x:auto;max-width:60vw;flex:1;scrollbar-width:thin}
+/* 즐겨찾기 폴더 nav — 단일 행, 가로 스크롤 */
+.fav-nav{display:flex;align-items:center;gap:5px;padding:0 8px;overflow-x:auto;overflow-y:hidden;flex:1;min-width:0;scrollbar-width:thin;height:100%;}
 .fav-nav::-webkit-scrollbar{height:4px}
-.fav-nav::-webkit-scrollbar-thumb{background:rgba(245,158,11,.3);border-radius:2px}
-.fav-folder-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);border-radius:14px;font-size:.75em;color:#ebcb8b;cursor:pointer;white-space:nowrap;transition:.15s;flex-shrink:0}
-.fav-folder-chip:hover{background:rgba(245,158,11,.25);color:#fff;transform:translateY(-1px)}
-.fav-folder-chip .add-mini{font-size:.85em;opacity:.6}
-.fav-add-btn{padding:3px 8px;background:rgba(245,158,11,.08);border:1px dashed rgba(245,158,11,.4);border-radius:14px;color:#ebcb8b;cursor:pointer;font-size:.75em;flex-shrink:0}
-.fav-add-btn:hover{background:rgba(245,158,11,.2)}
+.fav-nav::-webkit-scrollbar-thumb{background:rgba(245,158,11,.4);border-radius:2px}
+.fav-folder-chip{display:inline-flex;align-items:center;gap:4px;padding:0 10px;height:24px;background:#F59E0B;color:#000!important;border:2px solid #000!important;border-radius:4px;font-size:.74em;font-weight:700;cursor:pointer;white-space:nowrap;transition:transform .08s,box-shadow .08s;flex-shrink:0;box-shadow:2px 2px 0 #000;line-height:1}
+.fav-folder-chip:hover{background:#fbbd2c;transform:translate(-1px,-1px);box-shadow:3px 3px 0 #000}
+.fav-folder-chip:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+.fav-add-btn{display:inline-flex;align-items:center;padding:0 10px;height:24px;background:rgba(245,158,11,.1);border:2px dashed #F59E0B;border-radius:4px;color:#ebcb8b;cursor:pointer;font-size:.72em;font-weight:700;flex-shrink:0;line-height:1;white-space:nowrap}
+.fav-add-btn:hover{background:rgba(245,158,11,.25);color:#fff}
 /* 즐겨찾기 모달 */
 .fav-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg-1);border:2px solid rgba(245,158,11,.4);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);z-index:10000;min-width:480px;max-width:80vw;max-height:80vh;display:none;flex-direction:column}
 .fav-modal.show{display:flex}
@@ -522,7 +541,17 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
     </div>
   </div>
 </div>
-<nav class="nav"><a href="/" class="active">캔버스</a><a href="/chat.html">채팅</a><span style="margin-left:16px;font-size:.7em;color:#ebcb8b;font-weight:600;letter-spacing:.5px">⭐ 프로젝트 즐겨찾기:</span><div class="fav-nav" id="fav-nav"></div><button onclick="openFileManager()" title="작업 폴더 파일 탐색" style="margin-left:8px;background:none;border:1px solid rgba(245,158,11,.3);color:#ebcb8b;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">📁 파일</button><button onclick="openSettings()" title="시스템 설정" style="background:none;border:1px solid rgba(139,92,246,.3);color:#b48ead;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;margin-right:6px;flex-shrink:0">⚙️ 설정</button><button onclick="doLogout()" title="로그아웃" style="background:none;border:1px solid rgba(244,67,54,.3);color:#bf616a;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.75em;flex-shrink:0">🔒 로그아웃</button></nav>
+<nav class="nav">
+  <a href="/" class="active">캔버스</a>
+  <a href="/chat.html">채팅</a>
+  <span class="nav-fav-label">⭐ 프로젝트 즐겨찾기</span>
+  <div class="fav-nav" id="fav-nav"></div>
+  <div class="nav-actions">
+    <button class="nb-btn nav-btn nav-btn-amber" onclick="openFileManager()" title="작업 폴더 파일 탐색">📁 파일</button>
+    <button class="nb-btn nav-btn nav-btn-purple" onclick="openSettings()" title="시스템 설정">⚙️ 설정</button>
+    <button class="nb-btn nav-btn nav-btn-red" onclick="doLogout()" title="로그아웃">🔒 로그아웃</button>
+  </div>
+</nav>
 <div class="memo-bar" id="memo-bar">
   <button class="add" onclick="newMemo()" title="새 메모 생성">📝 메모생성</button>
   <button class="fld" onclick="toggleFolderPanel()" title="메모 폴더 관리">📁 메모폴더</button>
