@@ -195,6 +195,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 @keyframes busyGlow{0%,100%{box-shadow:0 0 8px rgba(33,150,243,.3)}50%{box-shadow:0 0 20px rgba(33,150,243,.7),0 0 40px rgba(33,150,243,.3)}}
 @keyframes errorPulse{0%,100%{box-shadow:0 0 8px rgba(244,67,54,.4)}50%{box-shadow:0 0 20px rgba(244,67,54,.8)}}
 .nd[data-type="agent"]{border-color:#3B82F6}.nd[data-type="agent"] .nd-hd{background:rgba(59,130,246,.12)}
+.nd[data-type="agent-gemini"]{border-color:#A78BFA}.nd[data-type="agent-gemini"] .nd-hd{background:rgba(167,139,250,.14)}
 .nd[data-type="memo"]{border-color:#F59E0B}.nd[data-type="memo"] .nd-hd{background:rgba(245,158,11,.12)}
 .nd[data-type="input"]{border-color:#06B6D4}.nd[data-type="input"] .nd-hd{background:rgba(6,182,212,.12)}
 .nd[data-type="trigger"]{border-color:#EF4444}.nd[data-type="trigger"] .nd-hd{background:rgba(239,68,68,.12)}
@@ -213,6 +214,8 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .coll-badge{font-size:10px;padding:2px 8px;border-radius:6px;font-weight:600;white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis}
 .nd.collapsed[data-type="agent"]{background:linear-gradient(135deg,#0f1a2e,#1a1a2e);border-color:#3B82F6}
 .nd.collapsed[data-type="agent"] .coll-badge{background:rgba(59,130,246,.25);color:#3B82F6}
+.nd.collapsed[data-type="agent-gemini"]{background:linear-gradient(135deg,#1a1030,#1a1a2e);border-color:#A78BFA}
+.nd.collapsed[data-type="agent-gemini"] .coll-badge{background:rgba(167,139,250,.28);color:#C4B5FD}
 .nd.collapsed[data-type="memo"]{background:linear-gradient(135deg,#2a2210,#1a1a2e);border-color:#F59E0B}
 .nd.collapsed[data-type="memo"] .coll-badge{background:rgba(245,158,11,.25);color:#F59E0B}
 .nd.collapsed[data-type="input"]{background:linear-gradient(135deg,#0a1a20,#1a1a2e);border-color:#06B6D4}
@@ -441,6 +444,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 #preview-canvas > *{pointer-events:auto}
 .preview-node{position:absolute;background:var(--bg-2);border:1.5px solid var(--border);border-radius:6px;font-size:9px;padding:4px 6px;color:var(--text);overflow:hidden;cursor:pointer;min-width:60px}
 .preview-node[data-type="agent"]{border-color:#3B82F6}
+.preview-node[data-type="agent-gemini"]{border-color:#A78BFA}
 .preview-node[data-type="memo"]{border-color:#F59E0B}
 .preview-node[data-type="input"]{border-color:#06B6D4}
 .preview-node[data-type="trigger"]{border-color:#EF4444}
@@ -630,8 +634,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
         <select id="sb-conv" onchange="sbConvSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">분기</option></select><button onclick="forkConv()" style="font-size:9px;padding:1px 3px">+</button>
         <select id="sb-pane" onchange="sbPane(this.value)" style="font-size:9px;padding:1px;width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px;display:none"></select>
-        <select id="sb-provider" onchange="sbSetProvider(this.value)" title="Agent 모델 공급자 (Claude / Gemini)" style="font-size:9px;padding:1px;max-width:80px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="claude">Claude</option><option value="gemini">Gemini</option></select>
-        <select id="sb-model" onchange="sbSetModel(this.value)" title="모델" style="font-size:9px;padding:1px;max-width:140px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(기본)</option></select>
+        <select id="sb-model" onchange="sbSetModel(this.value)" title="모델 (노드 타입에 따라 Claude / Gemini 모델 목록)" style="font-size:9px;padding:1px;max-width:160px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(기본)</option></select>
         <select id="sb-account" onchange="sbSetAccount(this.value)" title="이 노드에 사용할 Claude 계정 (Claude 전용)" style="font-size:9px;padding:1px;max-width:120px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(자동)</option></select>
       </div>
     </div>
@@ -1095,7 +1098,9 @@ async function attachAddConvPick(convId){
 const _origFavPickMemo=typeof favPickMemo==='function'?favPickMemo:null;
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
-const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};
+const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},'agent-gemini':{icon:'✨',color:'#A78BFA',label:'Gemini',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};
+function isAgentType(t){return t==='agent'||t==='agent-gemini'}
+function providerOfType(t){return t==='agent-gemini'?'gemini':'claude'}
 
 let nodes=[],conns=[],canvasEls=[],selectedNode=null,selectedCe=null,multiSel=[],workflowId=null,paneList=[];
 let isCeCreate=null,ceCreateSX=0,ceCreateSY=0,ceCreateEl=null;
@@ -1403,14 +1408,19 @@ function finishConn(e){
 
 // ═══ NODE ═══
 function mkNode(opts={}){
-  ncnt++;const type=opts.type||'agent';const ti=TYPES[type];
+  ncnt++;
+  // Legacy migration: old flows with type='agent' + provider='gemini' → agent-gemini
+  let type=opts.type||'agent';
+  if(type==='agent' && opts.provider==='gemini') type='agent-gemini';
+  const ti=TYPES[type]||TYPES.agent;
+  const provider=providerOfType(type);
   const n={id:opts.id||('n'+Date.now()+'_'+ncnt),name:opts.name||(ti.label+ncnt),type,
     x:opts.x??100,y:opts.y??100,w:opts.w||280,h:opts.h||240,
     paneIndex:opts.paneIndex||null,collapsed:opts.collapsed||false,textSize:opts.textSize||1,chatOnly:opts.chatOnly??true,
     systemPrompt:opts.systemPrompt||'',images:opts.images||[],customImage:opts.customImage||'',
     inputTemplate:opts.inputTemplate||'',inputResolved:'',outputCapture:opts.outputCapture||'',
     accountId:opts.accountId||null,
-    provider:opts.provider||'claude',model:opts.model||'',
+    provider,model:opts.model||'',
     status:opts.status||'idle',history:opts.history||[],el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
 }
@@ -1420,12 +1430,12 @@ function buildDom(n){
   d.style.cssText=`left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px`;
   if(n.customImage)d.style.backgroundImage=`url('${n.customImage}')`;
   d.dataset.nid=n.id;d.dataset.type=n.type;
-  const showOut=n.type==='agent';const showBody=n.type!=='trigger';
-  const modeIcon=n.type==='agent'?(n.chatOnly?'💬':'🔧'):'';
+  const showOut=isAgentType(n.type);const showBody=n.type!=='trigger';
+  const modeIcon=isAgentType(n.type)?(n.chatOnly?'💬':'🔧'):'';
   d.innerHTML=`
     <div class="coll-body"><span class="coll-icon">${ti.icon}</span><span class="coll-badge">${n.name}</span></div>
-    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${n.type==='agent'?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button><button data-act="delete" title="노드 삭제" style="color:#bf616a">🗑</button></div><div class="nd-st ${n.status}"></div></div>
-    ${showBody?`<div class="nd-body"><div class="sec-lbl">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':'INPUT'}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`:''}
+    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${isAgentType(n.type)?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button><button data-act="delete" title="노드 삭제" style="color:#bf616a">🗑</button></div><div class="nd-st ${n.status}"></div></div>
+    ${showBody?`<div class="nd-body"><div class="sec-lbl">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':n.type==='agent-gemini'?'INPUT ✨':'INPUT'}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`:''}
     <div class="port port-l" data-node="${n.id}" data-side="left"></div>
     <div class="port port-r" data-node="${n.id}" data-side="right"></div>
     <div class="nd-resize"></div>`;
@@ -1505,6 +1515,7 @@ async function addNode(type='agent',x,y){
     try{const acct=await api('POST','/api/claude/accounts/next',{});if(acct&&acct.ok)opts.accountId=acct.accountId;}catch(e){}
     const r=await api('POST','/api/add-pane',{});if(r.ok)opts.paneIndex=r.paneIndex;
   }
+  // agent-gemini: 계정 로테이션/tmux pane 불필요 (단일 OAuth 계정, 비대화형 호출)
   const n=mkNode(opts);selNode(n);autoSave();return n;
 }
 function selNode(n){nodes.forEach(nd=>nd.el.classList.remove('sel','multi-sel'));multiSel=[];n.el.classList.add('sel');selectedNode=n;selectedConn=null;openSb(n);drawConns();document.getElementById('ctx').classList.remove('show')}
@@ -1524,7 +1535,8 @@ function showCtx(x,y,mode,nd){
   ctxPos=s2c(x,y);const m=document.getElementById('ctx');
   let html='';
   if(mode==='canvas'){
-    html=`<div class="ctx-item" onclick="addNode('agent',${ctxPos.x},${ctxPos.y})">🤖 Agent 추가</div>
+    html=`<div class="ctx-item" onclick="addNode('agent',${ctxPos.x},${ctxPos.y})">🤖 Agent (Claude) 추가</div>
+      <div class="ctx-item" onclick="addNode('agent-gemini',${ctxPos.x},${ctxPos.y})" style="color:#C4B5FD">✨ Agent (Gemini) 추가</div>
       <div class="ctx-item" onclick="addNode('memo',${ctxPos.x},${ctxPos.y})">📝 Memo 추가</div>
       <div class="ctx-item" onclick="addNode('input',${ctxPos.x},${ctxPos.y})">📎 Input 추가</div>
       <div class="ctx-item" onclick="addNode('trigger',${ctxPos.x},${ctxPos.y})">⚡ Trigger 추가</div>
@@ -1702,7 +1714,6 @@ async function cloneNodeMulti(n){
       inputTemplate:n.inputTemplate,
       systemPrompt:n.systemPrompt,
       chatOnly:n.chatOnly,
-      provider:n.provider||'claude',
       model:n.model||'',
       images:[...(n.images||[])],
       collapsed:n.collapsed
@@ -1711,6 +1722,7 @@ async function cloneNodeMulti(n){
       const r=await api('POST','/api/add-pane',{});
       if(r.ok)opts.paneIndex=r.paneIndex;
     }
+    // agent-gemini: pane 불필요 (타입 자체로 provider 지정됨, opts.type=n.type 그대로 전달)
     const nn=mkNode(opts);
     nn.name=n.name+'_'+(i+2); // _2, _3, _4...
     nn.el.querySelector('[data-role="name"]').textContent=nn.name;
@@ -1736,7 +1748,6 @@ window.addEventListener('keydown',e=>{
       inputTemplate:selectedNode.inputTemplate,
       systemPrompt:selectedNode.systemPrompt,
       chatOnly:selectedNode.chatOnly,
-      provider:selectedNode.provider||'claude',
       model:selectedNode.model||'',
       images:selectedNode.images||[],
       collapsed:selectedNode.collapsed,
@@ -1873,7 +1884,7 @@ async function processPdfSplit(file){
 
     const sourceNode=selectedNode;
     // 소스에서 이미 연결된 agent 노드들 (downstream)
-    const existingDownstream=conns.filter(c=>c.sid===sourceNode.id).map(c=>nodes.find(n=>n.id===c.tid)).filter(n=>n&&n.type==='agent');
+    const existingDownstream=conns.filter(c=>c.sid===sourceNode.id).map(c=>nodes.find(n=>n.id===c.tid)).filter(n=>n&&isAgentType(n.type));
 
     let reuse=false;
     if(existingDownstream.length>0){
@@ -2015,14 +2026,14 @@ function setupImageInput(){
 
 // ═══ SPLIT NODE ═══
 async function splitNode(){
-  if(!selectedNode||selectedNode.type!=='agent')return;
+  if(!selectedNode||!isAgentType(selectedNode.type))return;
   const count=parseInt(prompt('분할 개수:','3'))||3;
   const src=selectedNode;
   // 연결된 upstream 찾기
   const upConns=conns.filter(c=>c.tid===src.id);
   for(let i=0;i<count;i++){
-    const nn=await addNode('agent',src.x+(i+1)*320,src.y+i*40);
-    nn.inputTemplate=src.inputTemplate;nn.chatOnly=src.chatOnly;nn.provider=src.provider||'claude';nn.model=src.model||'';
+    const nn=await addNode(src.type,src.x+(i+1)*320,src.y+i*40);
+    nn.inputTemplate=src.inputTemplate;nn.chatOnly=src.chatOnly;nn.model=src.model||'';
     const ta=nn.el.querySelector('.nd-in textarea');if(ta)ta.value=nn.inputTemplate;
     // upstream과 동일하게 연결
     upConns.forEach(uc=>addConn(uc.sid,nn.id));
@@ -2259,7 +2270,7 @@ function setCeNodeType(type){
 function ceImgToTarget(){
   if(!selectedCe||!selectedCe.src)return alert('이미지가 없습니다');
   // 노드 선택 팝업
-  const agentNodes=nodes.filter(n=>n.type==='agent');
+  const agentNodes=nodes.filter(n=>isAgentType(n.type));
   if(!agentNodes.length)return alert('Agent 노드가 없습니다');
   const names=agentNodes.map((n,i)=>`${i+1}. ${n.name}`).join('\n');
   const choice=prompt(`이미지를 첨부할 Agent 노드 번호:\n\n${names}`);
@@ -2408,7 +2419,7 @@ function showCopyToast(msg){
 }
 
 // ═══ SIDEBAR ═══
-function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';document.getElementById('sb').classList.remove('hid');
+function openSb(n){const ti=TYPES[n.type];const isAgent=isAgentType(n.type);document.getElementById('sb').classList.remove('hid');
   // ce 영역 숨기고 노드 영역 다시 표시
   const ceArea=document.getElementById('ce-area');if(ceArea)ceArea.style.display='none';
   document.getElementById('sb-title').textContent=`${ti.icon} ${n.name}`;document.getElementById('sb-name').value=n.name;document.getElementById('sb-input').value=n.inputTemplate;document.getElementById('sb-output').textContent=n.outputCapture||'대기 중';updateCharCount();
@@ -2437,6 +2448,7 @@ function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';documen
 async function populateAccountSelect(){
   const sel = document.getElementById('sb-account');
   if(!sel) return;
+  // 계정 로테이션은 Claude 전용 — agent-gemini 에는 숨김
   if(!selectedNode || selectedNode.type !== 'agent'){ sel.style.display='none'; return; }
   sel.style.display='';
   const r = await api('GET', '/api/claude/accounts/list');
@@ -2467,30 +2479,18 @@ const PROVIDER_MODELS = {
 };
 function renderModelSelect(){
   const sel=document.getElementById('sb-model');
-  if(!sel||!selectedNode||selectedNode.type!=='agent'){if(sel)sel.style.display='none';return;}
+  if(!sel||!selectedNode||!isAgentType(selectedNode.type)){if(sel)sel.style.display='none';return;}
   sel.style.display='';
-  const prov=selectedNode.provider||'claude';
+  const prov=providerOfType(selectedNode.type);
   const list=PROVIDER_MODELS[prov]||PROVIDER_MODELS.claude;
   sel.innerHTML=list.map(m=>`<option value="${m.v}">${m.label}</option>`).join('');
   sel.value=selectedNode.model||'';
 }
 function renderProviderSelect(){
-  const sel=document.getElementById('sb-provider');
-  if(!sel||!selectedNode||selectedNode.type!=='agent'){if(sel)sel.style.display='none';return;}
-  sel.style.display='';
-  sel.value=selectedNode.provider||'claude';
-  // Claude 전용 UI(계정) 표시/숨김
+  // provider 드롭다운 제거됨 — provider 는 노드 타입(agent / agent-gemini)에서 자동 결정
+  // 대신 이 함수는 노드 타입에 따라 Claude 전용 UI 가시성만 제어
   const acc=document.getElementById('sb-account');
-  if(acc) acc.style.display=(sel.value==='claude')?'':'none';
-}
-function sbSetProvider(val){
-  if(!selectedNode) return;
-  selectedNode.provider=(val==='gemini')?'gemini':'claude';
-  selectedNode.model=''; // provider 바뀌면 모델 초기화
-  renderModelSelect();
-  const acc=document.getElementById('sb-account');
-  if(acc) acc.style.display=(selectedNode.provider==='claude')?'':'none';
-  autoSave();
+  if(acc && selectedNode) acc.style.display=(selectedNode.type==='agent')?'':'none';
 }
 function sbSetModel(val){
   if(!selectedNode) return;
@@ -2687,7 +2687,7 @@ const engine={
 
     const cwd=document.getElementById('wf-cwd').value.trim()||undefined;
     const chatOnly=nd.chatOnly!==undefined?nd.chatOnly:true;
-    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null,provider:nd.provider||'claude',model:nd.model||''});
+    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null,provider:providerOfType(nd.type),model:nd.model||''});
 
     if(!exec.ok){
       console.log(`[${nd.name}] API 실패`);
@@ -2742,7 +2742,7 @@ const engine={
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,tabId:TAB_ID,appearance:{...appearance},
-  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:n.provider||'claude',model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history})),
+  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history})),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5})),
   canvasElements:canvasEls.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,w:c.w,h:c.h,color:c.color,label:c.label,content:c.content,fontSize:c.fontSize,src:c.src}))}}
 let _saveTimer=null;
@@ -3493,7 +3493,7 @@ function renderPreview(){
   const svgEl=document.getElementById('preview-svg');
   cvsEl.innerHTML='';svgEl.innerHTML='';
   if(!previewState||!previewState.nodes)return;
-  const TYPES_P={agent:{icon:'🤖',color:'#3B82F6'},memo:{icon:'📝',color:'#F59E0B'},input:{icon:'📎',color:'#06B6D4'},trigger:{icon:'⚡',color:'#EF4444'}};
+  const TYPES_P={agent:{icon:'🤖',color:'#3B82F6'},'agent-gemini':{icon:'✨',color:'#A78BFA'},memo:{icon:'📝',color:'#F59E0B'},input:{icon:'📎',color:'#06B6D4'},trigger:{icon:'⚡',color:'#EF4444'}};
   // 모든 노드를 접힌 상태로 렌더
   const nodeMap={};
   const CW=110,CH=32;
@@ -4503,7 +4503,8 @@ document.addEventListener('keydown',function(e){
   // Alt+단일 (주요 액션 — 왼손만)
   const primary={
     // 노드 생성 (QWER)
-    'KeyQ':()=>addNode&&addNode('agent'),                    // 🤖 Agent
+    'KeyQ':()=>addNode&&addNode('agent'),                    // 🤖 Agent (Claude)
+    'KeyT':()=>addNode&&addNode('agent-gemini'),             // ✨ Agent (Gemini)
     'KeyW':()=>addNode&&addNode('memo'),                     // 📝 Memo 노드
     'KeyE':()=>addNode&&addNode('input'),                    // 📎 Input
     'KeyR':()=>addNode&&addNode('trigger'),                  // ⚡ Trigger
