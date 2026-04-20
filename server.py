@@ -337,6 +337,15 @@ def init_db():
                 priority INTEGER DEFAULT 0,
                 created TEXT NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS gemini_accounts (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                auth_type TEXT NOT NULL DEFAULT 'apikey',
+                credentials TEXT NOT NULL,
+                active INTEGER DEFAULT 0,
+                priority INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
             """CREATE TABLE IF NOT EXISTS fav_folders (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -524,6 +533,15 @@ def init_db():
             priority INTEGER DEFAULT 0,
             created TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS gemini_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            auth_type TEXT NOT NULL DEFAULT 'apikey',
+            credentials TEXT NOT NULL,
+            active INTEGER DEFAULT 0,
+            priority INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS fav_folders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -614,6 +632,7 @@ def db_exec(sql, params=(), fetch=False, fetchone=False):
                 if adapted_sql.strip().upper().startswith("INSERT") and not fetch and not fetchone:
                     # Tables with SERIAL id: temps, memo_folders, memos, messages
                     serial_tables = ("temps", "memo_folders", "memos", "messages", "claude_accounts",
+                                     "gemini_accounts",
                                      "project_folders", "fav_folders", "fav_items", "project_attachments", "icons")
                     sql_upper = adapted_sql.upper()
                     if any(f"INTO {t.upper()}" in sql_upper for t in serial_tables):
@@ -887,6 +906,106 @@ def _sync_all_accounts():
 _sync_all_accounts()
 
 # ═══════════════════════════════════════
+# Gemini credentials sync (DB → ~/.gemini/)
+# ═══════════════════════════════════════
+def _write_gemini_creds_to_dir(target_dir, auth_type, credentials):
+    """Gemini 계정 creds를 디렉토리에 기록.
+    - auth_type='apikey': settings.json에 gemini-api-key 기록 (env GEMINI_API_KEY 도 설정함)
+    - auth_type='oauth': oauth_creds.json + google_accounts.json + settings.json(oauth-personal)
+    """
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+    except Exception:
+        pass
+    oauth_path = os.path.join(target_dir, "oauth_creds.json")
+    google_accounts_path = os.path.join(target_dir, "google_accounts.json")
+    settings_path = os.path.join(target_dir, "settings.json")
+    if auth_type == "oauth":
+        try:
+            with open(oauth_path, "w", encoding="utf-8") as f:
+                f.write(credentials)
+            os.chmod(oauth_path, 0o600)
+        except Exception as e:
+            log(f"[GEMINI] write oauth_creds.json failed: {e}")
+        # google_accounts.json: email 필요 (id_token에서 추출 시도)
+        try:
+            email = ""
+            try:
+                import base64
+                parsed = json.loads(credentials)
+                id_tok = parsed.get("id_token") or ""
+                if id_tok and id_tok.count(".") >= 2:
+                    payload = id_tok.split(".")[1]
+                    payload += "=" * (-len(payload) % 4)
+                    decoded = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
+                    email = decoded.get("email", "")
+            except Exception:
+                pass
+            with open(google_accounts_path, "w", encoding="utf-8") as f:
+                json.dump({"active": email or "user@example.com", "old": []}, f)
+        except Exception as e:
+            log(f"[GEMINI] write google_accounts.json failed: {e}")
+        # settings.json: 최신 gemini-cli 구조 (security.auth.selectedType)
+        try:
+            with open(settings_path, "w", encoding="utf-8") as f:
+                json.dump({"security": {"auth": {"selectedType": "oauth-personal"}}}, f)
+        except Exception:
+            pass
+    elif auth_type == "apikey":
+        # apikey는 env var로 전달하지만, 최신 gemini-cli가 settings.json에서도 선택을 요구
+        try:
+            with open(settings_path, "w", encoding="utf-8") as f:
+                json.dump({"security": {"auth": {"selectedType": "gemini-api-key"}}}, f)
+        except Exception:
+            pass
+        # oauth_creds/google_accounts 있으면 제거
+        for p in (oauth_path, google_accounts_path):
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except Exception:
+                pass
+
+def _sync_gemini_credentials():
+    """DB active row → ~/.gemini/ 동기화 (서버 시작 시 active 계정 1개)."""
+    try:
+        row = db_exec(
+            "SELECT auth_type, credentials FROM gemini_accounts WHERE active=1 LIMIT 1",
+            fetchone=True,
+        )
+        if row:
+            gemini_dir = os.path.expanduser("~/.gemini")
+            _write_gemini_creds_to_dir(gemini_dir, row.get("auth_type") or "apikey", row.get("credentials") or "")
+            log("Gemini credentials synced from active account")
+    except Exception as e:
+        log(f"Gemini credentials sync failed: {e}")
+
+_sync_gemini_credentials()
+
+def _get_gemini_account_dir(account_id):
+    base = os.path.join(tempfile.gettempdir(), "flowdesk-gmini-accts", str(account_id))
+    os.makedirs(base, exist_ok=True)
+    return base
+
+def _sync_gemini_account_to_dir(account_id, auth_type, credentials):
+    """계정별 격리 디렉토리. HOME=<dir>, .gemini/ 하위에 기록."""
+    d = _get_gemini_account_dir(account_id)
+    gemini_sub = os.path.join(d, ".gemini")
+    _write_gemini_creds_to_dir(gemini_sub, auth_type, credentials)
+    return d
+
+def _sync_all_gemini_accounts():
+    try:
+        rows = db_exec("SELECT id, auth_type, credentials FROM gemini_accounts", fetch=True) or []
+        for row in rows:
+            _sync_gemini_account_to_dir(row["id"], row.get("auth_type") or "apikey", row.get("credentials") or "")
+        log(f"Synced {len(rows)} Gemini accounts to temp dirs")
+    except Exception as e:
+        log(f"Sync Gemini accounts failed: {e}")
+
+_sync_all_gemini_accounts()
+
+# ═══════════════════════════════════════
 # tmux
 # ═══════════════════════════════════════
 def run_tmux(*args):
@@ -929,6 +1048,18 @@ def get_session_info():
 # ═══════════════════════════════════════
 # Claude CLI
 # ═══════════════════════════════════════
+def _get_default_model(provider):
+    """system_settings에서 provider별 기본 모델 조회."""
+    try:
+        key = f"default_{provider}_model"
+        row = db_exec("SELECT value FROM system_settings WHERE key=?", (key,), fetchone=True)
+        if row and row.get("value"):
+            return row["value"]
+    except Exception:
+        pass
+    return ""
+
+
 def build_claude_cmd(prompt, opts=None):
     """claude CLI 명령 구성 — 고급 옵션 지원. prompt는 stdin으로 전달."""
     opts = opts or {}
@@ -944,6 +1075,11 @@ def build_claude_cmd(prompt, opts=None):
     sys_prompt = opts.get("systemPrompt", "")
     if sys_prompt:
         cmd += ["--append-system-prompt", sys_prompt]
+
+    # 모델: 노드 지정 > 시스템 기본 > (미지정 → CLI 기본)
+    model = opts.get("model") or _get_default_model("claude")
+    if model:
+        cmd += ["--model", model]
 
     # 폴백 모델
     cmd += ["--fallback-model", "sonnet"]
@@ -986,7 +1122,8 @@ def build_gemini_cmd(prompt, opts=None):
     """
     opts = opts or {}
     cmd = ["gemini"]
-    model = opts.get("model") or "gemini-2.5-pro"
+    # 모델: 노드 지정 > 시스템 기본 > 하드코딩 fallback
+    model = opts.get("model") or _get_default_model("gemini") or "gemini-3.1-pro-preview"
     cmd += ["-m", model]
     # 승인 모드
     chat_only = opts.get("chatOnly", True)
@@ -1025,9 +1162,8 @@ def parse_gemini_output(stdout, output_json=True):
 
 
 def get_gemini_env():
-    """Gemini CLI 실행용 env. Claude와 달리 계정 로테이션 없음, 전역 OAuth 1개 사용."""
+    """Gemini CLI 실행용 env. PATH만 공유 (계정 정보 없음)."""
     env = os.environ.copy()
-    # Claude env의 PATH(nvm 포함)를 상속받아 gemini도 찾을 수 있게 함
     try:
         env["PATH"] = get_claude_env().get("PATH", env.get("PATH", ""))
     except Exception:
@@ -1035,17 +1171,66 @@ def get_gemini_env():
     return env
 
 
-def run_gemini_safe(cmd_builder_fn, run_cwd=None, timeout=600):
-    """Gemini CLI 호출. Claude와 동일한 (stdout, used_account_id, fb_msg) 시그니처.
-    계정 로테이션 없음 (used_account_id는 항상 None 반환).
-    EPERM 등 Windows 경고는 stderr로 흘러나오므로 exit==0이면 stdout만 파싱.
-    """
+def pick_available_gemini_account():
+    """active=1 계정 우선, 없으면 priority/id 가장 낮은 계정."""
+    try:
+        row = db_exec("SELECT id FROM gemini_accounts WHERE active=1 LIMIT 1", fetchone=True)
+        if row:
+            return int(row["id"])
+        row = db_exec("SELECT id FROM gemini_accounts ORDER BY priority ASC, id ASC LIMIT 1", fetchone=True)
+        if row:
+            return int(row["id"])
+    except Exception as e:
+        log(f"[GEMINI] pick account failed: {e}")
+    return None
+
+
+def get_gemini_env_for_account(account_id):
+    """계정별 격리 env: HOME=<per-account-dir>, apikey면 GEMINI_API_KEY 설정."""
     env = get_gemini_env()
+    if not account_id:
+        return env
+    try:
+        row = db_exec(
+            "SELECT auth_type, credentials FROM gemini_accounts WHERE id=?",
+            (int(account_id),), fetchone=True,
+        )
+        if not row:
+            return env
+        auth_type = row.get("auth_type") or "apikey"
+        creds = row.get("credentials") or ""
+        # HOME 격리: gemini CLI가 ~/.gemini/ 를 계정별 디렉토리에서 찾도록
+        acct_dir = _sync_gemini_account_to_dir(int(account_id), auth_type, creds)
+        env["HOME"] = acct_dir
+        if auth_type == "apikey":
+            key = creds.strip()
+            # JSON으로 감싸 저장한 경우 파싱 시도
+            try:
+                parsed = json.loads(creds)
+                if isinstance(parsed, dict):
+                    key = parsed.get("apiKey") or parsed.get("api_key") or key
+            except Exception:
+                pass
+            if key:
+                env["GEMINI_API_KEY"] = key
+    except Exception as e:
+        log(f"[GEMINI] env for account {account_id} failed: {e}")
+    return env
+
+
+def run_gemini_safe(cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
+    """Gemini CLI 호출. (stdout, used_account_id, fb_msg) 시그니처.
+    account_id=None 이면 자동 선택. 레이트리밋 감지/로테이션은 미구현 (단순 실행).
+    """
+    cur_id = account_id
+    if cur_id is None:
+        cur_id = pick_available_gemini_account()
+    env = get_gemini_env_for_account(cur_id) if cur_id else get_gemini_env()
     try:
         cmd, _ = cmd_builder_fn()
     except Exception as e:
-        return ("", None, f"gemini cmd build failed: {e}")
-    log(f"[GEMINI] model={cmd[cmd.index('-m')+1] if '-m' in cmd else '?'}")
+        return ("", cur_id, f"gemini cmd build failed: {e}")
+    log(f"[GEMINI] account={cur_id} model={cmd[cmd.index('-m')+1] if '-m' in cmd else '?'}")
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True,
@@ -1056,16 +1241,16 @@ def run_gemini_safe(cmd_builder_fn, run_cwd=None, timeout=600):
         stderr = result.stderr or ""
         if result.returncode != 0 and not stdout.strip():
             tail = (stderr or "")[-300:]
-            return ("", None, f"gemini exit {result.returncode}: {tail}")
+            return ("", cur_id, f"gemini exit {result.returncode}: {tail}")
         parsed = parse_gemini_output(stdout, output_json=True)
-        return (parsed, None, "✓ gemini")
+        return (parsed, cur_id, "✓ gemini")
     except subprocess.TimeoutExpired:
-        return ("", None, "timeout")
+        return ("", cur_id, "timeout")
     except FileNotFoundError:
-        return ("", None, "gemini CLI 미설치 (npm install -g @google/gemini-cli)")
+        return ("", cur_id, "gemini CLI 미설치 (npm install -g @google/gemini-cli)")
     except Exception as e:
         log(f"[GEMINI] error: {e}")
-        return ("", None, str(e))
+        return ("", cur_id, str(e))
 
 
 # ═══════════════════════════════════════
@@ -1080,7 +1265,7 @@ def build_agent_cmd(provider, prompt, opts=None):
 
 def run_agent_safe(provider, cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
     if provider == "gemini":
-        return run_gemini_safe(cmd_builder_fn, run_cwd=run_cwd, timeout=timeout)
+        return run_gemini_safe(cmd_builder_fn, account_id=account_id, run_cwd=run_cwd, timeout=timeout)
     return run_claude_safe(cmd_builder_fn, account_id, run_cwd=run_cwd, timeout=timeout)
 
 # ═══════════════════════════════════════
@@ -1338,6 +1523,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/settings/get": self._json(self._settings_get())
         elif p == "/api/claude/accounts/list": self._json(self._claude_accounts_list())
         elif p == "/api/claude/login/status": self._json(self._claude_login_status())
+        elif p == "/api/gemini/accounts/list": self._json(self._gemini_accounts_list())
         elif p == "/api/fs/browse": self._json(self._browse_path(params))
         elif p == "/api/fs/browse-system": self._json(self._fs_browse_system(params))
         elif p == "/api/fs/download":
@@ -1440,6 +1626,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/claude/login/start": self._claude_login_start,
             "/api/claude/login/submit": self._claude_login_submit,
             "/api/claude/login/cancel": self._claude_login_cancel,
+            "/api/gemini/accounts/save": self._gemini_account_save,
+            "/api/gemini/accounts/delete": self._gemini_account_delete,
+            "/api/gemini/accounts/activate": self._gemini_account_activate,
+            "/api/gemini/accounts/test": self._gemini_account_test,
             "/api/fs/mkdir": self._fs_mkdir,
             "/api/fs/mkdir-system": self._fs_mkdir_system,
             "/api/fs/delete": self._fs_delete,
@@ -1574,16 +1764,21 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         # account_id 결정: body에 있으면 사용, 없으면 conversation에서 조회, 그것도 없으면 기본
         account_id = body.get("accountId")
+        chat_provider = (body.get("provider") or "claude").lower()
+        if chat_provider not in SUPPORTED_PROVIDERS:
+            chat_provider = "claude"
 
         # 대화 세션 없으면 생성
         if not conv_id:
             conv_id = str(uuid.uuid4())[:8]
-            # 새 conversation 생성 시 body의 accountId 사용 (없으면 다음 계정 자동 배정)
+            # 새 conversation 생성 시 body의 accountId 사용 (없으면 provider별 자동 배정)
             if not account_id:
-                # 자동 배정 (round-robin 등)
                 try:
-                    nxt = self._claude_next_account({})
-                    if nxt.get("ok"): account_id = nxt.get("accountId")
+                    if chat_provider == "gemini":
+                        account_id = pick_available_gemini_account()
+                    else:
+                        nxt = self._claude_next_account({})
+                        if nxt.get("ok"): account_id = nxt.get("accountId")
                 except: pass
             db_exec("INSERT INTO conversations (id, node_id, node_name, title, account_id, created) VALUES (?,?,?,?,?,?)",
                     (conv_id, node_id, node_name, message[:30], account_id, datetime.now().isoformat()))
@@ -2786,6 +2981,114 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 }
         except subprocess.TimeoutExpired:
             return {"ok": True, "authenticated": False, "msg": "❌ 타임아웃 (30초) — 인증 문제 가능성"}
+        except Exception as e:
+            return {"ok": True, "authenticated": False, "msg": f"❌ 오류: {e}"}
+
+    # ═══════════════════════════════════════
+    # Gemini accounts (API key / OAuth JSON)
+    # ═══════════════════════════════════════
+    def _gemini_accounts_list(self):
+        try:
+            rows = db_exec(
+                "SELECT id, name, auth_type, active, priority, created FROM gemini_accounts ORDER BY priority ASC, created DESC",
+                fetch=True,
+            ) or []
+            return {"ok": True, "accounts": [dict(r) for r in rows]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _gemini_account_save(self, body):
+        """name + auth_type('apikey'|'oauth') + credentials(문자열). id 있으면 업데이트."""
+        name = (body.get("name") or "").strip()
+        auth_type = (body.get("auth_type") or "apikey").strip()
+        credentials = (body.get("credentials") or "").strip()
+        aid = body.get("id")
+        if auth_type not in ("apikey", "oauth"):
+            return {"ok": False, "error": "auth_type은 apikey 또는 oauth"}
+        if not name or not credentials:
+            return {"ok": False, "error": "name/credentials 필수"}
+        # 간단 검증
+        if auth_type == "oauth":
+            try:
+                json.loads(credentials)
+            except Exception:
+                return {"ok": False, "error": "oauth_creds.json 형식이 올바르지 않음"}
+        try:
+            if aid:
+                db_exec(
+                    "UPDATE gemini_accounts SET name=?, auth_type=?, credentials=? WHERE id=?",
+                    (name, auth_type, credentials, int(aid)),
+                )
+                new_id = int(aid)
+            else:
+                new_id = db_exec(
+                    "INSERT INTO gemini_accounts (name, auth_type, credentials, active, created) VALUES (?,?,?,?,?)",
+                    (name, auth_type, credentials, 0, datetime.now().isoformat()),
+                )
+            _sync_gemini_account_to_dir(new_id, auth_type, credentials)
+            # active 계정이면 전역 ~/.gemini도 갱신
+            active = db_exec("SELECT id FROM gemini_accounts WHERE active=1 LIMIT 1", fetchone=True)
+            if active and int(active["id"]) == int(new_id):
+                _sync_gemini_credentials()
+            return {"ok": True, "id": new_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _gemini_account_delete(self, body):
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            db_exec("DELETE FROM gemini_accounts WHERE id=?", (int(aid),))
+            # 디렉토리 정리 (best-effort)
+            try:
+                import shutil
+                shutil.rmtree(_get_gemini_account_dir(int(aid)), ignore_errors=True)
+            except Exception:
+                pass
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _gemini_account_activate(self, body):
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            db_exec("UPDATE gemini_accounts SET active=0")
+            db_exec("UPDATE gemini_accounts SET active=1 WHERE id=?", (int(aid),))
+            _sync_gemini_credentials()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _gemini_account_test(self, body):
+        """계정으로 Gemini CLI 간단 호출 테스트."""
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            env = get_gemini_env_for_account(int(aid))
+            result = subprocess.run(
+                ["gemini", "-m", "gemini-2.5-flash", "-p", "Reply only with: OK"],
+                capture_output=True, text=True, timeout=30, env=env,
+                encoding="utf-8", errors="replace",
+            )
+            output = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            if result.returncode == 0 and output:
+                return {
+                    "ok": True, "authenticated": True,
+                    "response": output[:200],
+                    "msg": f"✅ 인증 성공! 응답: \"{output[:80]}\"",
+                }
+            err = stderr or output or "(응답 없음)"
+            return {
+                "ok": True, "authenticated": False,
+                "error": err[:300],
+                "msg": f"❌ 인증 실패\n{err[:300]}",
+            }
+        except subprocess.TimeoutExpired:
+            return {"ok": True, "authenticated": False, "msg": "❌ 타임아웃 (30초)"}
+        except FileNotFoundError:
+            return {"ok": True, "authenticated": False, "msg": "❌ gemini CLI 미설치"}
         except Exception as e:
             return {"ok": True, "authenticated": False, "msg": f"❌ 오류: {e}"}
 

@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Python deps
 RUN pip install --no-cache-dir psycopg2-binary
 
-# Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Claude Code CLI + Gemini CLI
+RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli
 
 # 일반 사용자 생성 (Claude CLI가 root에서 --dangerously-skip-permissions 거부함)
 RUN useradd -m -u 1000 -s /bin/bash flowdesk
@@ -25,9 +25,10 @@ COPY --chown=flowdesk:flowdesk migrate_to_pg.py setup_pg.sql /app/
 
 # 볼륨 마운트 포인트 (bind mount로 덮어써짐)
 # /app 자체도 chown 해야 server.py가 config.json 등 새 파일 생성 가능
-RUN mkdir -p /workspace /claude-creds /app/uploads \
-    && chown -R flowdesk:flowdesk /app /workspace /claude-creds \
-    && ln -sf /claude-creds /home/flowdesk/.claude
+RUN mkdir -p /workspace /claude-creds /gemini-creds /app/uploads \
+    && chown -R flowdesk:flowdesk /app /workspace /claude-creds /gemini-creds \
+    && ln -sf /claude-creds /home/flowdesk/.claude \
+    && ln -sf /gemini-creds /home/flowdesk/.gemini
 
 # 비-root 사용자로 전환
 USER flowdesk

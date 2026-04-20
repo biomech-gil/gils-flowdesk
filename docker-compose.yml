@@ -11,10 +11,10 @@ services:
     environment:
       POSTGRES_DB: canvas_db
       POSTGRES_USER: canvas
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-FlowDesk2026Strong!}
       TZ: Asia/Seoul
     volumes:
-      - ${DB_DATA_HOST}:/var/lib/postgresql/data
+      - ${DB_DATA_HOST:-/volume1/FlowDesk/db}:/var/lib/postgresql/data
 
   flowdesk:
     build: .
@@ -23,20 +23,21 @@ services:
     depends_on:
       - postgres
     ports:
-      - "${PORT}:8888"
+      - "${PORT:-9090}:8888"
     environment:
       DB_TYPE: postgresql
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: canvas_db
       DB_USER: canvas
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:-FlowDesk2026Strong!}
       TZ: Asia/Seoul
     volumes:
-      - ${WORKSPACE_HOST}:/workspace
-      - ${CLAUDE_CREDS_HOST}:/claude-creds
-      - ${UPLOADS_HOST}:/app/uploads
+      - ${WORKSPACE_HOST:-/volume1/FlowDesk/workspace}:/workspace
+      - ${CLAUDE_CREDS_HOST:-/volume1/FlowDesk/creds}:/claude-creds
+      - ${GEMINI_CREDS_HOST:-/volume1/FlowDesk/gemini-creds}:/gemini-creds
+      - ${UPLOADS_HOST:-/volume1/FlowDesk/uploads}:/app/uploads
       # 시놀로지 전체 디스크를 컨테이너에서 접근 (사용자가 임의 폴더 작업 폴더로 지정 가능)
       # 컨테이너 안에서 /synology/... 로 시놀로지 어떤 폴더든 접근 가능
       # 권한 주의: 컨테이너의 flowdesk(uid 1000)가 쓸 수 있는 폴더만 작성 가능
-      - ${SYNOLOGY_ROOT:-/volume1}:/synology
+      - ${SYNOLOGY_ROOT:-/volume1/00_Gils_Project}:/synology

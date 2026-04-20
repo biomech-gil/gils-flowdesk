@@ -828,6 +828,24 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         </div>
       </div>
 
+      <!-- 기본 모델 설정 -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#ebcb8b;margin-bottom:6px">🧠 기본 모델 (Default Model)</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;line-height:1.5">
+          노드에서 모델을 "(시스템 기본)"으로 두면 여기 설정값이 사용됩니다. 각 노드 사이드바에서 개별 모델 선택 가능.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:11px;color:#88c0d0;margin-bottom:4px">🤖 Claude</div>
+            <select id="s-default-claude-model" onchange="saveDefaultModel('claude',this.value)" style="width:100%;padding:5px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11px"></select>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="font-size:11px;color:#C4B5FD;margin-bottom:4px">✨ Gemini</div>
+            <select id="s-default-gemini-model" onchange="saveDefaultModel('gemini',this.value)" style="width:100%;padding:5px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11px"></select>
+          </div>
+        </div>
+      </div>
+
       <!-- Claude 계정 관리 -->
       <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
         <div style="font-weight:600;color:#88c0d0;margin-bottom:6px">🔑 Claude Code 계정 관리</div>
@@ -899,6 +917,58 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
           <div style="display:flex;gap:6px">
             <button onclick="saveClaudeAccount()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장</button>
             <button onclick="document.getElementById('claude-paste-form').style.display='none'" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gemini 계정 관리 -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#C4B5FD;margin-bottom:6px">✨ Gemini 계정 관리</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+          API 키 또는 OAuth JSON으로 여러 계정을 저장/전환. 각 계정은 격리된 홈 디렉토리로 분리됩니다.
+        </div>
+
+        <!-- Account list -->
+        <div id="gemini-accounts-list" style="margin-bottom:10px"></div>
+
+        <!-- Actions -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="document.getElementById('s-gemini-file').click()" style="padding:6px 12px;background:linear-gradient(135deg,#8B5CF6,#6D28D9);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600" title="본인 PC에서 gemini 로그인 후 ~/.gemini/oauth_creds.json 선택">📂 oauth_creds.json 파일 (권장)</button>
+          <button onclick="showGeminiOauthForm()" style="padding:6px 12px;background:rgba(167,139,250,.2);color:#C4B5FD;border:1px solid rgba(167,139,250,.3);border-radius:4px;cursor:pointer;font-size:12px">📋 OAuth JSON 붙여넣기</button>
+          <button onclick="showGeminiApikeyForm()" style="padding:6px 12px;background:rgba(167,139,250,.15);color:#C4B5FD;border:1px solid rgba(167,139,250,.3);border-radius:4px;cursor:pointer;font-size:12px" title="aistudio.google.com/app/apikey 에서 발급">🔑 API 키 붙여넣기</button>
+          <input type="file" id="s-gemini-file" accept=".json" style="display:none">
+        </div>
+
+        <!-- API 키 입력 폼 -->
+        <div id="gemini-apikey-form" style="display:none;margin-top:10px;padding:10px;background:var(--bg-0);border:1px solid rgba(139,92,246,.3);border-radius:4px">
+          <div style="font-size:11px;color:#C4B5FD;margin-bottom:8px;line-height:1.7">
+            <b>📝 사용 방법:</b><br>
+            1. <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#7ecfff">https://aistudio.google.com/app/apikey</a> 접속<br>
+            2. <b>Create API key</b> 클릭 → 키 복사 (AIza...로 시작)<br>
+            3. 아래에 계정 이름과 키 붙여넣기
+          </div>
+          <input type="text" id="gemini-apikey-name" placeholder="계정 이름 (예: 개인-메인, 회사용)" style="width:100%;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <textarea id="gemini-apikey-value" placeholder="AIzaSy..." style="width:100%;height:60px;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
+          <div style="display:flex;gap:6px">
+            <button onclick="saveGeminiApikey()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장</button>
+            <button onclick="document.getElementById('gemini-apikey-form').style.display='none'" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+          </div>
+        </div>
+
+        <!-- OAuth JSON 폼 -->
+        <div id="gemini-oauth-form" style="display:none;margin-top:10px;padding:10px;background:var(--bg-0);border:1px solid rgba(167,139,250,.3);border-radius:4px">
+          <div style="font-size:11px;color:#C4B5FD;margin-bottom:8px;line-height:1.7">
+            <b>📝 사용 방법:</b><br>
+            1. 본인 PC에 gemini CLI 설치: <code style="background:rgba(0,0,0,.3);padding:2px 6px;border-radius:3px">npm install -g @google/gemini-cli</code><br>
+            2. <code style="background:rgba(0,0,0,.3);padding:2px 6px;border-radius:3px">gemini</code> 실행 → Sign in with Google 로그인<br>
+            3. 생성된 <code style="background:rgba(0,0,0,.3);padding:2px 6px;border-radius:3px">~/.gemini/oauth_creds.json</code> 내용 전체 복사<br>
+            4. 아래에 계정 이름과 JSON 붙여넣기
+          </div>
+          <input type="text" id="gemini-oauth-name" placeholder="계정 이름 (예: 개인-google)" style="width:100%;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <textarea id="gemini-oauth-value" placeholder='{"access_token":"...","refresh_token":"...","token_type":"Bearer","expiry_date":...}' style="width:100%;height:100px;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
+          <div style="display:flex;gap:6px">
+            <button onclick="saveGeminiOauth()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장</button>
+            <button onclick="document.getElementById('gemini-oauth-form').style.display='none'" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
           </div>
         </div>
       </div>
@@ -2448,10 +2518,12 @@ function openSb(n){const ti=TYPES[n.type];const isAgent=isAgentType(n.type);docu
 async function populateAccountSelect(){
   const sel = document.getElementById('sb-account');
   if(!sel) return;
-  // 계정 로테이션은 Claude 전용 — agent-gemini 에는 숨김
-  if(!selectedNode || selectedNode.type !== 'agent'){ sel.style.display='none'; return; }
+  if(!selectedNode || !isAgentType(selectedNode.type)){ sel.style.display='none'; return; }
   sel.style.display='';
-  const r = await api('GET', '/api/claude/accounts/list');
+  const provider = providerOfType(selectedNode.type);
+  const endpoint = provider === 'gemini' ? '/api/gemini/accounts/list' : '/api/claude/accounts/list';
+  sel.title = provider === 'gemini' ? '이 노드에 사용할 Gemini 계정' : '이 노드에 사용할 Claude 계정';
+  const r = await api('GET', endpoint);
   const accounts = (r && r.ok) ? (r.accounts || []) : [];
   sel.innerHTML = '<option value="">(자동)</option>' +
     accounts.map(a => `<option value="${a.id}">${escapeHtml(a.name)}</option>`).join('');
@@ -2465,16 +2537,23 @@ function sbSetAccount(val){
 // ═══ PROVIDER (Claude / Gemini) ═══
 const PROVIDER_MODELS = {
   claude: [
-    {v:'',label:'(기본)'},
-    {v:'opus',label:'opus'},
-    {v:'sonnet',label:'sonnet'},
-    {v:'haiku',label:'haiku'},
+    {v:'',label:'(시스템 기본)'},
+    {v:'opus',label:'opus (최신)'},
+    {v:'sonnet',label:'sonnet (최신)'},
+    {v:'haiku',label:'haiku (최신)'},
+    {v:'claude-opus-4-7',label:'claude-opus-4-7'},
+    {v:'claude-sonnet-4-6',label:'claude-sonnet-4-6'},
+    {v:'claude-haiku-4-5',label:'claude-haiku-4-5'},
   ],
   gemini: [
-    {v:'',label:'(기본 gemini-2.5-pro)'},
+    {v:'',label:'(시스템 기본)'},
+    {v:'gemini-3.1-pro-preview',label:'gemini-3.1-pro-preview (최신)'},
+    {v:'gemini-3-pro',label:'gemini-3-pro'},
+    {v:'gemini-3-pro-preview',label:'gemini-3-pro-preview'},
+    {v:'gemini-3-flash',label:'gemini-3-flash'},
+    {v:'gemini-3-flash-preview',label:'gemini-3-flash-preview'},
     {v:'gemini-2.5-pro',label:'gemini-2.5-pro'},
     {v:'gemini-2.5-flash',label:'gemini-2.5-flash'},
-    {v:'gemini-3-flash-preview',label:'gemini-3-flash-preview'},
   ],
 };
 function renderModelSelect(){
@@ -2488,9 +2567,9 @@ function renderModelSelect(){
 }
 function renderProviderSelect(){
   // provider 드롭다운 제거됨 — provider 는 노드 타입(agent / agent-gemini)에서 자동 결정
-  // 대신 이 함수는 노드 타입에 따라 Claude 전용 UI 가시성만 제어
+  // sb-account 는 agent / agent-gemini 모두에서 사용 (populateAccountSelect가 provider에 맞는 목록을 채움)
   const acc=document.getElementById('sb-account');
-  if(acc && selectedNode) acc.style.display=(selectedNode.type==='agent')?'':'none';
+  if(acc && selectedNode) acc.style.display=isAgentType(selectedNode.type)?'':'none';
 }
 function sbSetModel(val){
   if(!selectedNode) return;
@@ -4858,8 +4937,29 @@ async function openSettings(){
   const s = (r && r.ok) ? (r.settings || {}) : {};
   document.getElementById('s-workspace').value = s.workspace_root || '';
   document.getElementById('s-db-info').textContent = 'PostgreSQL 연결됨 (canvas_db)';
+  // 기본 모델 드롭다운 채우기
+  populateDefaultModelSelect('claude', s.default_claude_model || '');
+  populateDefaultModelSelect('gemini', s.default_gemini_model || '');
   document.getElementById('settings-modal').style.display = 'flex';
   loadClaudeAccounts();
+  loadGeminiAccounts();
+}
+
+function populateDefaultModelSelect(provider, current){
+  const sel = document.getElementById('s-default-' + provider + '-model');
+  if(!sel) return;
+  const list = PROVIDER_MODELS[provider] || [];
+  // "(시스템 기본)" 은 CLI 자체 기본으로 해석되므로 여기서는 "(CLI 기본)" 으로 표기
+  sel.innerHTML = list.map(m => {
+    const label = m.v === '' ? '(CLI 기본값)' : m.label;
+    return `<option value="${m.v}">${label}</option>`;
+  }).join('');
+  sel.value = current || '';
+}
+
+async function saveDefaultModel(provider, value){
+  const key = 'default_' + provider + '_model';
+  await api('POST', '/api/settings/set', {key, value: value || ''});
 }
 
 function closeSettings(){
@@ -5139,6 +5239,124 @@ document.addEventListener('DOMContentLoaded', ()=>{
         const r = await api('POST', '/api/claude/accounts/save', {name, credentials: reader.result});
         if(r && r.ok){
           loadClaudeAccounts();
+          alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
+        } else alert('실패: ' + ((r && r.error) || ''));
+        fi.value = '';
+      };
+      reader.readAsText(f);
+    });
+  }
+});
+
+// ═══════════════════════════════════════
+// Gemini multi-account manager
+// ═══════════════════════════════════════
+async function loadGeminiAccounts(){
+  const r = await api('GET', '/api/gemini/accounts/list');
+  const accounts = (r && r.ok) ? (r.accounts || []) : [];
+  window._geminiAccountsCache = accounts;
+  const el = document.getElementById('gemini-accounts-list');
+  if(!el) return;
+  if(!accounts.length){
+    el.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center">저장된 Gemini 계정이 없습니다</div>';
+    return;
+  }
+  el.innerHTML = accounts.map((a, i) => {
+    const typeLabel = a.auth_type === 'oauth' ? '🔐 OAuth' : '🔑 API Key';
+    const bg = a.active ? 'rgba(139,92,246,.15)' : 'var(--bg-0)';
+    const border = a.active ? 'rgba(139,92,246,.4)' : 'var(--border)';
+    return `
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${bg};border:1px solid ${border};border-radius:4px;margin-bottom:4px">
+      <span style="color:${a.active?'#C4B5FD':'var(--text)'};flex:1;font-size:12px">${a.active?'★':'○'} ${i+1}. ${escapeHtml(a.name)} <span style="font-size:10px;color:var(--text-dim)">(${typeLabel})</span></span>
+      <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
+      ${a.active?'':`<button onclick="activateGeminiAccount(${a.id})" title="이 계정으로 활성화" style="font-size:10px;padding:2px 6px;background:rgba(139,92,246,.15);color:#C4B5FD;border:1px solid rgba(139,92,246,.3);border-radius:3px;cursor:pointer">활성화</button>`}
+      <button onclick="testGeminiAccount(${a.id})" title="이 계정으로 인증 테스트" style="font-size:10px;padding:2px 6px;background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:3px;cursor:pointer">🧪 테스트</button>
+      <button onclick="deleteGeminiAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
+    </div>`;
+  }).join('');
+}
+
+function showGeminiApikeyForm(){
+  document.getElementById('gemini-apikey-form').style.display='block';
+  document.getElementById('gemini-oauth-form').style.display='none';
+  document.getElementById('gemini-apikey-name').value='';
+  document.getElementById('gemini-apikey-value').value='';
+}
+function showGeminiOauthForm(){
+  document.getElementById('gemini-oauth-form').style.display='block';
+  document.getElementById('gemini-apikey-form').style.display='none';
+  document.getElementById('gemini-oauth-name').value='';
+  document.getElementById('gemini-oauth-value').value='';
+}
+
+async function saveGeminiApikey(){
+  const name = document.getElementById('gemini-apikey-name').value.trim() || 'Gemini 키';
+  const key = document.getElementById('gemini-apikey-value').value.replace(/[\s\r\n\t]+/g,'');
+  if(!key) return alert('API 키를 입력하세요');
+  if(!/^AIza[A-Za-z0-9_\-]{20,}$/.test(key)){
+    if(!confirm('키가 AIza...로 시작하지 않습니다. 그래도 저장할까요?')) return;
+  }
+  const r = await api('POST', '/api/gemini/accounts/save', {name, auth_type:'apikey', credentials:key});
+  if(r && r.ok){
+    document.getElementById('gemini-apikey-form').style.display='none';
+    loadGeminiAccounts();
+    alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
+  } else alert('실패: ' + ((r && r.error) || ''));
+}
+
+async function saveGeminiOauth(){
+  const name = document.getElementById('gemini-oauth-name').value.trim() || 'Gemini OAuth';
+  const creds = document.getElementById('gemini-oauth-value').value.trim();
+  if(!creds) return alert('OAuth JSON을 입력하세요');
+  try { JSON.parse(creds); } catch(e){ return alert('유효한 JSON이 아닙니다'); }
+  const r = await api('POST', '/api/gemini/accounts/save', {name, auth_type:'oauth', credentials:creds});
+  if(r && r.ok){
+    document.getElementById('gemini-oauth-form').style.display='none';
+    loadGeminiAccounts();
+    alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
+  } else alert('실패: ' + ((r && r.error) || ''));
+}
+
+async function activateGeminiAccount(id){
+  const r = await api('POST','/api/gemini/accounts/activate',{id});
+  if(r && r.ok){ loadGeminiAccounts(); } else alert('실패: '+((r&&r.error)||''));
+}
+async function deleteGeminiAccount(id){
+  if(!confirm('이 Gemini 계정을 삭제할까요?')) return;
+  await api('POST','/api/gemini/accounts/delete',{id});
+  loadGeminiAccounts();
+}
+async function testGeminiAccount(id){
+  const btn=event.target;
+  const origText=btn.textContent;
+  btn.textContent='⏳ 테스트 중...';
+  btn.disabled=true;
+  try{
+    const r=await api('POST','/api/gemini/accounts/test',{id});
+    alert(r.msg||(r.authenticated?'✅ 성공':'❌ 실패'));
+  }catch(e){
+    alert('❌ 오류: '+e.message);
+  }finally{
+    btn.textContent=origText;
+    btn.disabled=false;
+  }
+}
+
+// File picker for Gemini OAuth creds
+document.addEventListener('DOMContentLoaded', ()=>{
+  const fi = document.getElementById('s-gemini-file');
+  if(fi){
+    fi.addEventListener('change', e=>{
+      const f = e.target.files[0];
+      if(!f) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const name = prompt('계정 이름:', f.name.replace('.json',''));
+        if(!name){ fi.value=''; return; }
+        try { JSON.parse(reader.result); } catch(err){ alert('유효한 JSON이 아닙니다'); fi.value=''; return; }
+        const r = await api('POST', '/api/gemini/accounts/save', {name, auth_type:'oauth', credentials: reader.result});
+        if(r && r.ok){
+          loadGeminiAccounts();
           alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
         } else alert('실패: ' + ((r && r.error) || ''));
         fi.value = '';
