@@ -1006,6 +1006,31 @@ def _sync_all_gemini_accounts():
 _sync_all_gemini_accounts()
 
 # ═══════════════════════════════════════
+# Recovery slot TTL cleanup (이름 없는 임시 작업 2일 후 제거)
+# ═══════════════════════════════════════
+def _cleanup_stale_recovery_slots(days=2):
+    """projects 테이블에서 id가 '__current_'로 시작하는 행 중 modified < now-Nd 인 행 삭제.
+    이름 있는 프로젝트는 uuid 기반 id 라서 영향 없음."""
+    try:
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        rows = db_exec("SELECT id, modified FROM projects", fetch=True) or []
+        removed = 0
+        for r in rows:
+            rid = str(r.get("id", ""))
+            if not rid.startswith("__current_"):
+                continue
+            mod = r.get("modified") or ""
+            if mod and mod < cutoff:
+                db_exec("DELETE FROM projects WHERE id=?", (rid,))
+                removed += 1
+        if removed:
+            log(f"[CLEANUP] 2일 경과 임시 복구 슬롯 {removed}개 제거")
+    except Exception as e:
+        log(f"[CLEANUP] recovery slots failed: {e}")
+
+_cleanup_stale_recovery_slots(days=2)
+
+# ═══════════════════════════════════════
 # tmux
 # ═══════════════════════════════════════
 def run_tmux(*args):

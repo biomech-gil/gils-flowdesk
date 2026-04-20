@@ -51,8 +51,21 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .conv-item{display:flex;align-items:center;gap:6px;padding:6px 10px 6px 20px;cursor:pointer;border-bottom:1px solid rgba(51,51,85,.2);font-size:.75em;color:var(--text-dim);transition:.1s}
 .conv-item:hover{background:var(--bg-3);color:var(--text)}.conv-item.active{background:var(--bg-3);color:var(--accent)}
 /* 멀티 채팅 영역 — 가로 스크롤 */
-.chat-multi{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;gap:1px;background:var(--border);min-width:0}
-.chat-panel{flex:0 0 calc(25vw - 60px);min-width:280px;display:flex;flex-direction:column;background:var(--bg-0);min-height:0}
+.chat-multi{flex:1;display:flex;overflow-x:auto;overflow-y:hidden;gap:0;background:var(--border);min-width:0}
+.chat-panel{flex:0 0 var(--panel-default-w,420px);min-width:280px;display:flex;flex-direction:column;background:var(--bg-0);min-height:0;position:relative;border-right:1px solid var(--border)}
+.chat-panel:last-child{border-right:none}
+/* 리사이즈 핸들 (우측 경계) */
+.chat-panel-resize{position:absolute;right:-3px;top:0;width:6px;height:100%;cursor:col-resize;z-index:10;background:transparent;transition:background .15s}
+.chat-panel-resize:hover,.chat-panel-resize.resizing{background:rgba(76,175,80,.25)}
+/* 렌더 모드 (마크다운) */
+.chat-panel.render-mode .msg-bubble{font-family:'Segoe UI',sans-serif;white-space:normal}
+.chat-panel.render-mode .msg-bubble h1,.chat-panel.render-mode .msg-bubble h2,.chat-panel.render-mode .msg-bubble h3{color:var(--accent);margin:.6em 0 .3em;border-bottom:1px solid var(--border);padding-bottom:.2em}
+.chat-panel.render-mode .msg-bubble code{background:var(--bg-3);padding:1px 5px;border-radius:3px;font-family:var(--mono);font-size:.9em}
+.chat-panel.render-mode .msg-bubble pre{background:var(--bg-0);border:1px solid var(--border);border-radius:var(--radius);padding:10px;overflow-x:auto;margin:.6em 0}
+.chat-panel.render-mode .msg-bubble pre code{background:none;padding:0}
+.chat-panel.render-mode .msg-bubble table{border-collapse:collapse;margin:.6em 0;width:100%;font-size:.9em}
+.chat-panel.render-mode .msg-bubble th,.chat-panel.render-mode .msg-bubble td{border:1px solid var(--border);padding:4px 8px}
+.chat-panel.render-mode .msg-bubble blockquote{border-left:3px solid var(--accent);padding-left:10px;margin:.5em 0;color:var(--text-dim)}
 .chat-panel.empty{flex:1;align-items:center;justify-content:center;color:var(--text-muted);font-size:.82em}
 .chat-header{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.82em;font-weight:600;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .chat-header .ttl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -102,7 +115,18 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
   <span class="lbl" style="color:#ebcb8b">💬 채팅 즐겨찾기</span>
   <div id="chat-fav-bar" style="display:flex;gap:5px;align-items:center;flex:1;min-width:0;overflow-x:auto;height:100%;padding:0 4px"></div>
   <span class="lbl">패널 <span id="panel-count" style="color:var(--accent);font-weight:700">0</span></span>
+  <div class="sep"></div>
+  <span class="lbl" title="새로 열리는 패널의 기본 가로 너비">기본 너비</span>
+  <input type="number" id="panel-default-w" min="280" max="1400" step="20" style="width:70px" oninput="setDefaultPanelWidth(this.value)">
+  <span class="lbl" style="color:var(--text-muted);font-size:.7em">px</span>
 </div>
+<script>
+// 기본 너비 입력 초기값
+document.addEventListener('DOMContentLoaded',()=>{
+  const inp=document.getElementById('panel-default-w');
+  if(inp)inp.value=getDefaultPanelWidth();
+});
+</script>
 <div class="chat-area">
   <div class="side" id="side-panel"></div>
   <div class="chat-multi" id="chat-multi"><div class="chat-panel empty"><div class="empty-msg">← 좌측에서 노드 또는 분기를 선택하면 채팅 패널이 열립니다.<br><br>여러 채팅을 동시에 진행할 수 있어요 (가로 스크롤).</div></div></div>
@@ -167,6 +191,198 @@ function togglePanelMode(key,chatOnly){
   console.log(`[MODE] ${key} → ${chatOnly?'chat-only':'tool-use'}`);
 }
 
+// ═══ PANEL WIDTH / FONT SIZE / TOOLBAR HELPERS ═══
+function panelWidthKey(key){return 'chat_panel_w_'+key}
+function panelFontKey(key){return 'chat_panel_fs_'+key}
+function panelRenderKey(key){return 'chat_panel_rd_'+key}
+function loadPanelWidth(key){const v=localStorage.getItem(panelWidthKey(key));return v?parseInt(v):0}
+function savePanelWidth(key,w){localStorage.setItem(panelWidthKey(key),String(w))}
+function loadPanelFontSize(key){const v=localStorage.getItem(panelFontKey(key));return v?parseFloat(v):0}
+
+// 기본 너비 (새 패널에 적용) — 최상단 설정 입력과 연동
+const LS_DEFAULT_W='chat_panel_default_w';
+function getDefaultPanelWidth(){const v=localStorage.getItem(LS_DEFAULT_W);return v?parseInt(v):420}
+function setDefaultPanelWidth(w){
+  w=Math.max(280,Math.min(1400,parseInt(w)||420));
+  localStorage.setItem(LS_DEFAULT_W,String(w));
+  document.documentElement.style.setProperty('--panel-default-w',w+'px');
+  const inp=document.getElementById('panel-default-w');
+  if(inp&&parseInt(inp.value)!==w)inp.value=w;
+}
+// 초기 적용
+document.documentElement.style.setProperty('--panel-default-w',getDefaultPanelWidth()+'px');
+
+// 리사이즈 핸들
+function setupPanelResize(panel,key){
+  const handle=panel.querySelector('.chat-panel-resize');
+  if(!handle)return;
+  let startX=0,startW=0,dragging=false;
+  handle.addEventListener('mousedown',e=>{
+    e.preventDefault();e.stopPropagation();
+    dragging=true;startX=e.clientX;startW=panel.offsetWidth;
+    handle.classList.add('resizing');
+    document.body.style.cursor='col-resize';
+    const move=ev=>{
+      if(!dragging)return;
+      const w=Math.max(280,Math.min(1600,startW+(ev.clientX-startX)));
+      panel.style.flex=`0 0 ${w}px`;
+    };
+    const up=()=>{
+      if(!dragging)return;
+      dragging=false;
+      handle.classList.remove('resizing');
+      document.body.style.cursor='';
+      savePanelWidth(key,panel.offsetWidth);
+      document.removeEventListener('mousemove',move);
+      document.removeEventListener('mouseup',up);
+    };
+    document.addEventListener('mousemove',move);
+    document.addEventListener('mouseup',up);
+  });
+  // 더블클릭 → 기본 너비로 리셋
+  handle.addEventListener('dblclick',()=>{
+    panel.style.flex=`0 0 ${getDefaultPanelWidth()}px`;
+    localStorage.removeItem(panelWidthKey(key));
+  });
+}
+
+// 글자 크기
+function panelFontSize(key,delta){
+  const el=document.querySelector(`[data-msgs="${key}"]`);
+  if(!el)return;
+  const cur=parseFloat(getComputedStyle(el).fontSize);
+  const base=parseFloat(el.style.fontSize)||(cur/16);
+  // stored as em string; if px, fallback to em base .82
+  let emNow=parseFloat((el.style.fontSize||'0.82em').replace('em',''));
+  if(!emNow||isNaN(emNow))emNow=0.82;
+  emNow=Math.max(.6,Math.min(1.6,emNow+delta*0.08));
+  el.style.fontSize=emNow+'em';
+  localStorage.setItem(panelFontKey(key),String(emNow));
+}
+
+// 마크다운 렌더 토글 (marked.js 필요 — CDN 로드)
+let _markedLoaded=false;
+async function ensureMarked(){
+  if(_markedLoaded)return;
+  if(window.marked){_markedLoaded=true;return}
+  await new Promise((ok,ng)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+    s.onload=()=>{_markedLoaded=true;ok()};
+    s.onerror=ng;
+    document.head.appendChild(s);
+  });
+}
+async function panelToggleRender(key){
+  await ensureMarked();
+  const panel=document.querySelector(`[data-panel-key="${key}"]`);
+  if(!panel)return;
+  const on=panel.classList.toggle('render-mode');
+  localStorage.setItem(panelRenderKey(key),on?'1':'0');
+  // 기존 bubble들 렌더 or 원문 복구
+  panel.querySelectorAll('.msg-bubble').forEach(b=>{
+    if(on){
+      const raw=b.dataset.raw||b.textContent;
+      b.dataset.raw=raw;
+      try{b.innerHTML=window.marked.parse(raw)}catch(e){b.textContent=raw}
+    } else {
+      if(b.dataset.raw)b.textContent=b.dataset.raw;
+    }
+  });
+}
+
+// 대화 전체 텍스트
+function _panelAllText(key){
+  const el=document.querySelector(`[data-msgs="${key}"]`);
+  if(!el)return '';
+  const parts=[];
+  el.querySelectorAll('.msg').forEach(m=>{
+    const role=m.classList.contains('user')?'[User]':'[Assistant]';
+    const b=m.querySelector('.msg-bubble');
+    const t=b?(b.dataset.raw||b.textContent):'';
+    parts.push(role+': '+t);
+  });
+  return parts.join('\n\n');
+}
+function _panelLastAssistantText(key){
+  const el=document.querySelector(`[data-msgs="${key}"]`);
+  if(!el)return '';
+  const msgs=[...el.querySelectorAll('.msg.assistant')];
+  if(!msgs.length)return '';
+  const b=msgs[msgs.length-1].querySelector('.msg-bubble');
+  return b?(b.dataset.raw||b.textContent):'';
+}
+
+// 단독 HTML 파싱 (canvas와 동일 규칙)
+function _chatExtractStandaloneHtml(text){
+  if(!text)return null;
+  let m=text.match(/<!DOCTYPE\s+html[\s\S]*?<\/html\s*>/i);
+  if(m)return m[0];
+  m=text.match(/```(?:html|HTML)\s*\n?([\s\S]*?)```/);
+  if(m){
+    const inner=m[1].trim();
+    if(/<html[\s>]/i.test(inner)||/<!DOCTYPE/i.test(inner))return inner;
+  }
+  m=text.match(/<html[\s\S]*?<\/html\s*>/i);
+  if(m)return m[0];
+  return null;
+}
+function panelOpenStandaloneHtml(key){
+  const html=_chatExtractStandaloneHtml(_panelLastAssistantText(key));
+  if(!html)return alert('마지막 어시스턴트 응답에 단독 HTML이 없습니다.');
+  try{
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    window.open(url,'_blank');
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){alert('새 탭 열기 실패: '+e.message)}
+}
+function panelDownloadStandaloneHtml(key){
+  const html=_chatExtractStandaloneHtml(_panelLastAssistantText(key));
+  if(!html)return alert('단독 HTML을 찾을 수 없습니다.');
+  const st=panels.get(key);
+  const base=((st&&st.nodeName)||'chat').replace(/[\\/:*?"<>|]/g,'_');
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`${base}_${Date.now()}.html`;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url)},500);
+}
+// 대화 전체를 HTML 페이지로 (marked 렌더)
+async function panelOpenHtmlTab(key){
+  await ensureMarked();
+  const el=document.querySelector(`[data-msgs="${key}"]`);
+  if(!el)return;
+  const st=panels.get(key);
+  const title=(st&&st.nodeName)||'대화';
+  let body='';
+  el.querySelectorAll('.msg').forEach(m=>{
+    const who=m.classList.contains('user')?'user':'assistant';
+    const b=m.querySelector('.msg-bubble');
+    const raw=b?(b.dataset.raw||b.textContent):'';
+    let rendered;try{rendered=window.marked.parse(raw)}catch{rendered=raw.replace(/</g,'&lt;')}
+    body+=`<div class="m ${who}"><div class="lbl">${who==='user'?'YOU':'CLAUDE'}</div><div class="c">${rendered}</div></div>`;
+  });
+  const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${title}</title><style>body{font-family:-apple-system,'Segoe UI',sans-serif;max-width:900px;margin:24px auto;padding:0 20px;background:#111;color:#e0e0e0;line-height:1.6}.m{margin:14px 0;padding:14px 18px;border-radius:10px;background:#1a1a24;border:1px solid #333}.m.user{background:#132540;border-color:#234}.lbl{font-size:10px;color:#888;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase}h1,h2,h3{color:#4CAF50;border-bottom:1px solid #333;padding-bottom:4px}code{background:#0d0d14;padding:2px 6px;border-radius:3px}pre{background:#0d0d14;padding:12px;border-radius:6px;overflow-x:auto;border:1px solid #333}table{border-collapse:collapse;margin:10px 0;width:100%}th,td{border:1px solid #444;padding:6px 10px}blockquote{border-left:3px solid #4CAF50;padding-left:10px;color:#aaa;margin:10px 0}</style></head><body><h1>💬 ${title}</h1>${body}</body></html>`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  window.open(url,'_blank');
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+
+// 대화 전체 복사
+function panelCopyAll(key){
+  const text=_panelAllText(key);
+  if(!text)return alert('복사할 내용이 없습니다');
+  try{
+    navigator.clipboard.writeText(text);
+    console.log('[COPY]',key,text.length,'자');
+  }catch(e){
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+  }
+}
+
 async function renderSidePanel(){
   const panel=document.getElementById('side-panel');
   const nodesList=loadNodes();
@@ -225,6 +441,9 @@ async function openChat(convId,nodeId,nodeName,nodeType){
   const panel=document.createElement('div');
   panel.className='chat-panel';
   panel.dataset.panelKey=key;
+  // 저장된 개별 너비가 있으면 적용 (없으면 CSS var)
+  const savedW=loadPanelWidth(key);
+  if(savedW)panel.style.flex=`0 0 ${savedW}px`;
   const t=TYPES[nodeType]||TYPES.agent;
   panel.innerHTML=`
     <div class="chat-header">
@@ -235,17 +454,27 @@ async function openChat(convId,nodeId,nodeName,nodeType){
           <input type="checkbox" ${state.chatOnly?'':'checked'} onchange="togglePanelMode('${key}',!this.checked)" style="cursor:pointer">
           <span data-mode-label="${key}">${state.chatOnly?'💬 대화전용':'🔧 툴사용'}</span>
         </label>
-        <button onclick="addChatToFav('${key}')" title="이 대화를 즐겨찾기에 저장 (다시 열어 이어가기)">⭐ 즐겨찾기</button>
-        <button onclick="exportChatToMemo('${key}')" title="이 대화 전체를 메모로 저장">📝→메모</button>
+        <button onclick="panelFontSize('${key}',-1)" title="글자 축소">A-</button>
+        <button onclick="panelFontSize('${key}',1)" title="글자 확대">A+</button>
+        <button onclick="panelToggleRender('${key}')" title="마크다운 렌더 on/off" data-btn="render-${key}">🖋 렌더</button>
+        <button onclick="panelOpenHtmlTab('${key}')" title="전체 대화를 HTML 페이지로 열기">📄 HTML</button>
+        <button onclick="panelOpenStandaloneHtml('${key}')" title="마지막 어시스턴트 응답 내 단독 HTML 블록만 새 탭으로 렌더" style="color:#c4b5fd">🌐 단독HTML</button>
+        <button onclick="panelDownloadStandaloneHtml('${key}')" title="마지막 응답 내 단독 HTML 블록을 .html 파일로 다운로드" style="color:#c4b5fd">⬇ HTML</button>
+        <button onclick="panelCopyAll('${key}')" title="대화 전체 복사">📋 복사</button>
+        <button onclick="addChatToFav('${key}')" title="이 대화를 즐겨찾기에 저장 (다시 열어 이어가기)">⭐ 즐찾</button>
+        <button onclick="exportChatToMemo('${key}')" title="이 대화 전체를 메모로 저장">📝 메모</button>
         <span class="x" onclick="closePanel('${key}')" title="닫기" style="cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px">✕</span>
       </div>
     </div>
-    <div class="chat-messages" data-msgs="${key}"></div>
+    <div class="chat-messages" data-msgs="${key}" style="font-size:${loadPanelFontSize(key)||.82}em"></div>
     <div class="chat-input-bar">
       <textarea data-input="${key}" placeholder="메시지... (Enter=전송, Shift+Enter=줄바꿈)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat('${key}')}"></textarea>
       <button data-send="${key}" onclick="sendChat('${key}')">전송</button>
-    </div>`;
+    </div>
+    <div class="chat-panel-resize" data-resize="${key}"></div>`;
   multi.appendChild(panel);
+  // 리사이즈 핸들 이벤트
+  setupPanelResize(panel, key);
 
   // 메시지 로드 + 폴링 재개 판단
   if(convId){
@@ -270,6 +499,10 @@ async function reloadMessages(key){
       state.lastMsgId=m.id;
     });
     state.lastRole=r.messages.length?r.messages[r.messages.length-1].role:null;
+  }
+  // 저장된 렌더 모드 복원
+  if(localStorage.getItem(panelRenderKey(key))==='1'){
+    panelToggleRender(key);  // toggles on
   }
 }
 
@@ -311,8 +544,15 @@ function addMsgUI(key,role,content,ts,label,chatOnlyFlag){
     const isChat=(chatOnlyFlag==1||chatOnlyFlag===true);
     modeBadge=`<span class="mode-badge ${isChat?'chat':'tool'}" title="${isChat?'대화전용 모드 (도구 사용 안 함)':'툴사용 모드 (파일/웹/Bash 등 가능)'}">${isChat?'💬':'🔧'}</span>`;
   }
-  d.innerHTML=`<div class="msg-label">${label||role.toUpperCase()}${modeBadge}</div><div class="msg-bubble">${escH(content)}</div><div class="msg-time">${time}</div>`;
+  const rawAttr=content.replace(/"/g,'&quot;');
+  d.innerHTML=`<div class="msg-label">${label||role.toUpperCase()}${modeBadge}</div><div class="msg-bubble" data-raw="${rawAttr}">${escH(content)}</div><div class="msg-time">${time}</div>`;
   el.appendChild(d);el.scrollTop=el.scrollHeight;
+  // 패널이 렌더 모드라면 새 메시지도 즉시 마크다운 렌더
+  const panel=el.closest('.chat-panel');
+  if(panel&&panel.classList.contains('render-mode')&&window.marked){
+    const b=d.querySelector('.msg-bubble');
+    try{b.innerHTML=window.marked.parse(content)}catch(e){}
+  }
 }
 
 function showTyping(key){
