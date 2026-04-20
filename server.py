@@ -969,6 +969,121 @@ def build_claude_cmd(prompt, opts=None):
     return cmd, final_prompt
 
 # ═══════════════════════════════════════
+# Gemini CLI (provider=gemini)
+# ═══════════════════════════════════════
+def build_gemini_cmd(prompt, opts=None):
+    """gemini CLI 명령 구성 (v0.38.2+ 기준). prompt는 -p 인자로 직접 전달.
+
+    Claude 대비 지원 사항:
+      - model           → -m
+      - systemPrompt    → 프롬프트 앞부분에 [시스템 지시사항] 블록으로 삽입
+      - chatOnly        → True면 --approval-mode plan (읽기전용) / False면 yolo
+      - jsonSchema      → 미지원, 프롬프트에 스키마 지시문 삽입으로 에뮬레이트
+      - maxTurns        → 미지원 (무시)
+      - images          → 프롬프트에 파일 경로 텍스트로 추가
+      - outputJson      → -o json (stdout에서 .response 필드만 추출)
+    Returns (cmd, final_prompt). final_prompt는 run_agent_safe가 기록용으로만 사용 (stdin 전달 안 함).
+    """
+    opts = opts or {}
+    cmd = ["gemini"]
+    model = opts.get("model") or "gemini-2.5-pro"
+    cmd += ["-m", model]
+    # 승인 모드
+    chat_only = opts.get("chatOnly", True)
+    cmd += ["--approval-mode", "plan" if chat_only else "yolo"]
+    # JSON 출력 기본 on (파싱 안정성)
+    output_json = opts.get("outputJson", True)
+    if output_json:
+        cmd += ["-o", "json"]
+    # 최종 프롬프트 조립
+    final_prompt = prompt
+    sys_prompt = opts.get("systemPrompt", "")
+    if sys_prompt:
+        final_prompt = f"[시스템 지시사항]\n{sys_prompt}\n\n[사용자 요청]\n{final_prompt}"
+    images = opts.get("images", [])
+    if images:
+        final_prompt += "\n\n[첨부 이미지 파일]:\n" + "\n".join(f"- {img}" for img in images)
+    json_schema = opts.get("jsonSchema", "")
+    if json_schema:
+        final_prompt = (
+            "[중요] 아래 JSON 스키마에 완벽히 일치하는 JSON만 답변으로 출력하세요.\n"
+            f"스키마:\n{json_schema}\n\n---\n\n{final_prompt}"
+        )
+    cmd += ["-p", final_prompt]
+    return cmd, final_prompt
+
+
+def parse_gemini_output(stdout, output_json=True):
+    """gemini -o json stdout에서 .response 필드만 추출. 실패 시 원문."""
+    if not output_json:
+        return (stdout or "").strip()
+    try:
+        data = json.loads(stdout)
+        return (data.get("response") or "").strip()
+    except Exception:
+        return (stdout or "").strip()
+
+
+def get_gemini_env():
+    """Gemini CLI 실행용 env. Claude와 달리 계정 로테이션 없음, 전역 OAuth 1개 사용."""
+    env = os.environ.copy()
+    # Claude env의 PATH(nvm 포함)를 상속받아 gemini도 찾을 수 있게 함
+    try:
+        env["PATH"] = get_claude_env().get("PATH", env.get("PATH", ""))
+    except Exception:
+        pass
+    return env
+
+
+def run_gemini_safe(cmd_builder_fn, run_cwd=None, timeout=600):
+    """Gemini CLI 호출. Claude와 동일한 (stdout, used_account_id, fb_msg) 시그니처.
+    계정 로테이션 없음 (used_account_id는 항상 None 반환).
+    EPERM 등 Windows 경고는 stderr로 흘러나오므로 exit==0이면 stdout만 파싱.
+    """
+    env = get_gemini_env()
+    try:
+        cmd, _ = cmd_builder_fn()
+    except Exception as e:
+        return ("", None, f"gemini cmd build failed: {e}")
+    log(f"[GEMINI] model={cmd[cmd.index('-m')+1] if '-m' in cmd else '?'}")
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            timeout=timeout, env=env, cwd=run_cwd,
+            encoding="utf-8", errors="replace",
+        )
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if result.returncode != 0 and not stdout.strip():
+            tail = (stderr or "")[-300:]
+            return ("", None, f"gemini exit {result.returncode}: {tail}")
+        parsed = parse_gemini_output(stdout, output_json=True)
+        return (parsed, None, "✓ gemini")
+    except subprocess.TimeoutExpired:
+        return ("", None, "timeout")
+    except FileNotFoundError:
+        return ("", None, "gemini CLI 미설치 (npm install -g @google/gemini-cli)")
+    except Exception as e:
+        log(f"[GEMINI] error: {e}")
+        return ("", None, str(e))
+
+
+# ═══════════════════════════════════════
+# Provider Dispatcher (agent 노드 provider 분기)
+# ═══════════════════════════════════════
+SUPPORTED_PROVIDERS = ("claude", "gemini")
+
+def build_agent_cmd(provider, prompt, opts=None):
+    if provider == "gemini":
+        return build_gemini_cmd(prompt, opts)
+    return build_claude_cmd(prompt, opts)
+
+def run_agent_safe(provider, cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
+    if provider == "gemini":
+        return run_gemini_safe(cmd_builder_fn, run_cwd=run_cwd, timeout=timeout)
+    return run_claude_safe(cmd_builder_fn, account_id, run_cwd=run_cwd, timeout=timeout)
+
+# ═══════════════════════════════════════
 # Claude login subprocess (web-based OAuth)
 # ═══════════════════════════════════════
 _claude_login_proc = None   # PID (int)
@@ -1399,15 +1514,19 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     except Exception as e:
                         log(f"EXEC [{exec_id}] auto-cwd failed: {e}")
                         run_cwd = None
+                provider = (body.get("provider") or "claude").lower()
+                if provider not in SUPPORTED_PROVIDERS:
+                    provider = "claude"
                 def _build():
-                    return build_claude_cmd(prompt, {
+                    return build_agent_cmd(provider, prompt, {
                         "chatOnly": chat_only,
                         "systemPrompt": body.get("systemPrompt", ""),
                         "jsonSchema": body.get("jsonSchema", ""),
                         "maxTurns": body.get("maxTurns", 0),
                         "images": body.get("images", []),
+                        "model": body.get("model", ""),
                     })
-                output, used_acc, fb_msg = run_claude_safe(_build, account_id, run_cwd=run_cwd, timeout=600)
+                output, used_acc, fb_msg = run_agent_safe(provider, _build, account_id, run_cwd=run_cwd, timeout=600)
                 if used_acc and used_acc != account_id:
                     log(f"EXEC [{exec_id}] 계정 폴백: {account_id} → {used_acc}")
                     # node에 새 계정 영구 배정 (다음에도 같은 계정 쓰게)
@@ -1495,13 +1614,17 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         def run():
             try:
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
+                provider = (body.get("provider") or "claude").lower()
+                if provider not in SUPPORTED_PROVIDERS:
+                    provider = "claude"
                 def _build():
-                    return build_claude_cmd(full_prompt, {
+                    return build_agent_cmd(provider, full_prompt, {
                         "chatOnly": chat_only,
                         "systemPrompt": body.get("systemPrompt", ""),
                         "images": body.get("images", []),
+                        "model": body.get("model", ""),
                     })
-                reply, used_acc, fb_msg = run_claude_safe(_build, account_id, run_cwd=run_cwd, timeout=600)
+                reply, used_acc, fb_msg = run_agent_safe(provider, _build, account_id, run_cwd=run_cwd, timeout=600)
                 if used_acc and used_acc != account_id:
                     log(f"CHAT [{conv_id}] 계정 폴백 {account_id} → {used_acc}")
                     # 대화에 새 계정 영구 배정 (다음 메시지부터 같은 계정 사용)

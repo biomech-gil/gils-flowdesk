@@ -630,7 +630,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
         <select id="sb-exec" onchange="sbExecSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">기록</option></select><button onclick="loadExecHistory()" style="font-size:9px;padding:1px 3px">↻</button>
         <select id="sb-conv" onchange="sbConvSelect(this.value)" style="font-size:9px;padding:1px;flex:1;min-width:0;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">분기</option></select><button onclick="forkConv()" style="font-size:9px;padding:1px 3px">+</button>
         <select id="sb-pane" onchange="sbPane(this.value)" style="font-size:9px;padding:1px;width:50px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px;display:none"></select>
-        <select id="sb-account" onchange="sbSetAccount(this.value)" title="이 노드에 사용할 Claude 계정" style="font-size:9px;padding:1px;max-width:120px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(자동)</option></select>
+        <select id="sb-provider" onchange="sbSetProvider(this.value)" title="Agent 모델 공급자 (Claude / Gemini)" style="font-size:9px;padding:1px;max-width:80px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="claude">Claude</option><option value="gemini">Gemini</option></select>
+        <select id="sb-model" onchange="sbSetModel(this.value)" title="모델" style="font-size:9px;padding:1px;max-width:140px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(기본)</option></select>
+        <select id="sb-account" onchange="sbSetAccount(this.value)" title="이 노드에 사용할 Claude 계정 (Claude 전용)" style="font-size:9px;padding:1px;max-width:120px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:2px"><option value="">(자동)</option></select>
       </div>
     </div>
   </div>
@@ -1408,6 +1410,7 @@ function mkNode(opts={}){
     systemPrompt:opts.systemPrompt||'',images:opts.images||[],customImage:opts.customImage||'',
     inputTemplate:opts.inputTemplate||'',inputResolved:'',outputCapture:opts.outputCapture||'',
     accountId:opts.accountId||null,
+    provider:opts.provider||'claude',model:opts.model||'',
     status:opts.status||'idle',history:opts.history||[],el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
 }
@@ -1699,6 +1702,8 @@ async function cloneNodeMulti(n){
       inputTemplate:n.inputTemplate,
       systemPrompt:n.systemPrompt,
       chatOnly:n.chatOnly,
+      provider:n.provider||'claude',
+      model:n.model||'',
       images:[...(n.images||[])],
       collapsed:n.collapsed
     };
@@ -1731,6 +1736,8 @@ window.addEventListener('keydown',e=>{
       inputTemplate:selectedNode.inputTemplate,
       systemPrompt:selectedNode.systemPrompt,
       chatOnly:selectedNode.chatOnly,
+      provider:selectedNode.provider||'claude',
+      model:selectedNode.model||'',
       images:selectedNode.images||[],
       collapsed:selectedNode.collapsed,
       textSize:selectedNode.textSize
@@ -2015,7 +2022,7 @@ async function splitNode(){
   const upConns=conns.filter(c=>c.tid===src.id);
   for(let i=0;i<count;i++){
     const nn=await addNode('agent',src.x+(i+1)*320,src.y+i*40);
-    nn.inputTemplate=src.inputTemplate;nn.chatOnly=src.chatOnly;
+    nn.inputTemplate=src.inputTemplate;nn.chatOnly=src.chatOnly;nn.provider=src.provider||'claude';nn.model=src.model||'';
     const ta=nn.el.querySelector('.nd-in textarea');if(ta)ta.value=nn.inputTemplate;
     // upstream과 동일하게 연결
     upConns.forEach(uc=>addConn(uc.sid,nn.id));
@@ -2426,7 +2433,7 @@ function openSb(n){const ti=TYPES[n.type];const isAgent=n.type==='agent';documen
   if(isAgent)ps.style.display='';else ps.style.display='none';
   // reset resolved preview
   if(resolvedPreviewOn){resolvedPreviewOn=false;document.getElementById('rv-toggle').classList.remove('active');document.getElementById('sb-input').style.display='';document.getElementById('sb-resolved').style.display='none'}
-  loadExecHistory();loadConvList();populateAccountSelect();setupImageInput();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
+  loadExecHistory();loadConvList();populateAccountSelect();renderProviderSelect();renderModelSelect();setupImageInput();setupPdfInput();checkTokenLimit(n);setTimeout(drawConns,30)}
 async function populateAccountSelect(){
   const sel = document.getElementById('sb-account');
   if(!sel) return;
@@ -2441,6 +2448,53 @@ async function populateAccountSelect(){
 function sbSetAccount(val){
   if(!selectedNode) return;
   selectedNode.accountId = val ? parseInt(val) : null;
+  autoSave();
+}
+// ═══ PROVIDER (Claude / Gemini) ═══
+const PROVIDER_MODELS = {
+  claude: [
+    {v:'',label:'(기본)'},
+    {v:'opus',label:'opus'},
+    {v:'sonnet',label:'sonnet'},
+    {v:'haiku',label:'haiku'},
+  ],
+  gemini: [
+    {v:'',label:'(기본 gemini-2.5-pro)'},
+    {v:'gemini-2.5-pro',label:'gemini-2.5-pro'},
+    {v:'gemini-2.5-flash',label:'gemini-2.5-flash'},
+    {v:'gemini-3-flash-preview',label:'gemini-3-flash-preview'},
+  ],
+};
+function renderModelSelect(){
+  const sel=document.getElementById('sb-model');
+  if(!sel||!selectedNode||selectedNode.type!=='agent'){if(sel)sel.style.display='none';return;}
+  sel.style.display='';
+  const prov=selectedNode.provider||'claude';
+  const list=PROVIDER_MODELS[prov]||PROVIDER_MODELS.claude;
+  sel.innerHTML=list.map(m=>`<option value="${m.v}">${m.label}</option>`).join('');
+  sel.value=selectedNode.model||'';
+}
+function renderProviderSelect(){
+  const sel=document.getElementById('sb-provider');
+  if(!sel||!selectedNode||selectedNode.type!=='agent'){if(sel)sel.style.display='none';return;}
+  sel.style.display='';
+  sel.value=selectedNode.provider||'claude';
+  // Claude 전용 UI(계정) 표시/숨김
+  const acc=document.getElementById('sb-account');
+  if(acc) acc.style.display=(sel.value==='claude')?'':'none';
+}
+function sbSetProvider(val){
+  if(!selectedNode) return;
+  selectedNode.provider=(val==='gemini')?'gemini':'claude';
+  selectedNode.model=''; // provider 바뀌면 모델 초기화
+  renderModelSelect();
+  const acc=document.getElementById('sb-account');
+  if(acc) acc.style.display=(selectedNode.provider==='claude')?'':'none';
+  autoSave();
+}
+function sbSetModel(val){
+  if(!selectedNode) return;
+  selectedNode.model=val||'';
   autoSave();
 }
 function closeSb(){document.getElementById('sb').classList.add('hid');setTimeout(drawConns,10)}
@@ -2633,7 +2687,7 @@ const engine={
 
     const cwd=document.getElementById('wf-cwd').value.trim()||undefined;
     const chatOnly=nd.chatOnly!==undefined?nd.chatOnly:true;
-    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null});
+    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null,provider:nd.provider||'claude',model:nd.model||''});
 
     if(!exec.ok){
       console.log(`[${nd.name}] API 실패`);
@@ -2688,7 +2742,7 @@ const engine={
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,tabId:TAB_ID,appearance:{...appearance},
-  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,status:n.status==='running'?'idle':n.status,history:n.history})),
+  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:n.provider||'claude',model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history})),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5})),
   canvasElements:canvasEls.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,w:c.w,h:c.h,color:c.color,label:c.label,content:c.content,fontSize:c.fontSize,src:c.src}))}}
 let _saveTimer=null;
