@@ -1,16 +1,23 @@
 # Gil's FlowDesk — Docker image
 FROM python:3.12-slim
 
-# Node.js 22 + 시스템 도구
+# Node.js 22 + 시스템 도구 (ffmpeg는 아래에서 정적 바이너리로 빠르게 설치)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates gnupg \
+    curl ca-certificates gnupg xz-utils \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && apt-get install -y --no-install-recommends lsof \
+    && apt-get install -y --no-install-recommends nodejs lsof \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps
-RUN pip install --no-cache-dir psycopg2-binary
+# ffmpeg 정적 바이너리 (johnvansickle 공식 정적 빌드, 의존성 없음 · apt ffmpeg 대비 10배+ 빠름)
+RUN curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o /tmp/ffmpeg.tar.xz \
+    && mkdir -p /tmp/ffmpeg \
+    && tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1 \
+    && mv /tmp/ffmpeg/ffmpeg /tmp/ffmpeg/ffprobe /usr/local/bin/ \
+    && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe \
+    && rm -rf /tmp/ffmpeg /tmp/ffmpeg.tar.xz
+
+# Python deps + yt-dlp (YouTube/Instagram/TikTok 등 다운로더)
+RUN pip install --no-cache-dir psycopg2-binary yt-dlp
 
 # Claude Code CLI + Gemini CLI
 RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli

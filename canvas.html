@@ -987,6 +987,7 @@ body.focus-mode #canvas-controls{display:none}
         <span class="dot"></span>
         <span class="status">자동저장</span>
       </div>
+      <button class="ts-btn icon" onclick="openInDsm((window._currentWorkDir||document.getElementById('wf-cwd').value||'').trim())" title="현재 프로젝트 폴더를 DSM 파일스테이션(새 탭)에서 열기" style="color:#c4b5fd">🌐</button>
       <div class="ts-spacer"></div>
       <div class="ts-fav-wrap">
         <span class="ts-fav-label">⭐</span>
@@ -1027,13 +1028,54 @@ body.focus-mode #canvas-controls{display:none}
       <div class="cc-row"><span class="cc-k">간격</span><input type="range" min="10" max="200" step="5" id="cc-gs" oninput="ccUpdateGrid()"><span class="cc-v" id="cc-gs-v">40</span></div>
       <div class="cc-row"><span class="cc-k">두께</span><input type="range" min="0" max="5" step="0.5" id="cc-gt" oninput="ccUpdateGrid()"><span class="cc-v" id="cc-gt-v">1</span></div>
       <div class="cc-row"><span class="cc-k">투명도</span><input type="range" min="0" max="1" step="0.01" id="cc-ga" oninput="ccUpdateGrid()"><span class="cc-v" id="cc-ga-v">0.05</span></div>
-      <div class="cc-row"><span class="cc-k">색상</span><input type="color" id="cc-gc" onchange="ccUpdateGrid()"></div>
+      <div class="cc-row"><span class="cc-k">색상</span><input type="color" id="cc-gc" oninput="ccUpdateGrid()" onchange="ccUpdateGrid()"></div>
     </div>
     <div class="cc-section">
       <div class="cc-label">배경</div>
-      <div class="cc-row"><span class="cc-k">색상</span><input type="color" id="cc-bg" onchange="ccUpdateBg()"></div>
+      <div class="cc-row"><span class="cc-k">색상</span><input type="color" id="cc-bg" oninput="ccUpdateBg()" onchange="ccUpdateBg()"></div>
     </div>
     <button class="cc-reset" onclick="ccReset()">↺ 기본값 복원</button>
+  </div>
+</div>
+
+<!-- 💾 저장 모달 (하이브리드: 이름 파싱 + 날짜 picker + 경로 편집) -->
+<div id="save-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="width:560px;max-width:92vw;background:linear-gradient(180deg,#14141f,#0e0e18);border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.04);padding:22px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <span style="font-size:22px;filter:drop-shadow(0 0 8px rgba(245,158,11,.5))">💾</span>
+      <div>
+        <h2 style="margin:0;font-size:17px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(135deg,#fbbd2c,#f59e0b);-webkit-background-clip:text;background-clip:text;color:transparent">프로젝트 저장</h2>
+        <div style="font-size:10.5px;color:var(--text-muted);letter-spacing:.3px;margin-top:2px">이름과 날짜로 작업 폴더 자동 결정</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <!-- 이름 -->
+      <div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:5px;font-weight:600;letter-spacing:.3px">프로젝트 이름 · 💡 <code style="color:#fbbf24">20251020_이름</code> 처럼 앞에 날짜 넣으면 자동 감지됨</div>
+        <input id="sv-name" type="text" oninput="svRefresh()" placeholder="예: 신약검토 · 20251020_논문작성 · 2024-05-12 실험분석" style="width:100%;padding:10px 12px;background:rgba(0,0,0,.3);color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:8px;font-size:13px;outline:none;font-family:inherit;box-sizing:border-box">
+      </div>
+      <!-- 날짜 -->
+      <div style="display:flex;gap:10px;align-items:end">
+        <div style="flex:1">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:5px;font-weight:600;letter-spacing:.3px">날짜 <span id="sv-date-hint" style="font-weight:400;color:var(--text-muted);margin-left:6px"></span></div>
+          <input id="sv-date" type="date" onchange="svRefresh(true)" style="width:100%;padding:9px 12px;background:rgba(0,0,0,.3);color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:8px;font-size:13px;outline:none;font-family:var(--mono);box-sizing:border-box;color-scheme:dark">
+        </div>
+        <button onclick="svSetToday()" style="padding:9px 14px;background:rgba(34,197,94,.14);color:#86efac;border:1px solid rgba(34,197,94,.3);border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap">📅 오늘</button>
+      </div>
+      <!-- 미리보기 경로 (편집 가능) -->
+      <div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:5px;font-weight:600;letter-spacing:.3px">작업 폴더 경로 <span style="font-weight:400;color:var(--text-muted);margin-left:6px">(직접 편집 가능)</span></div>
+        <div style="display:flex;gap:6px">
+          <input id="sv-path" type="text" oninput="svPathManualEdit=true" style="flex:1;padding:10px 12px;background:rgba(0,0,0,.3);color:#a7f3d0;border:1px solid rgba(76,175,80,.25);border-radius:8px;font-size:12px;outline:none;font-family:var(--mono);box-sizing:border-box">
+          <button onclick="svResetPath()" title="이름+날짜로 다시 계산" style="padding:9px 12px;background:rgba(255,255,255,.05);color:var(--text-dim);border:1px solid rgba(255,255,255,.12);border-radius:8px;cursor:pointer;font-size:13px">↻</button>
+        </div>
+        <div id="sv-path-warn" style="font-size:10.5px;color:var(--text-muted);margin-top:5px;line-height:1.5"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
+      <button onclick="svCancel()" style="padding:9px 18px;background:rgba(255,255,255,.05);color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600">취소</button>
+      <button onclick="svConfirm()" style="padding:9px 22px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1a14;border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:700;box-shadow:0 3px 10px rgba(245,158,11,.3)">💾 저장</button>
+    </div>
   </div>
 </div>
 
@@ -1108,6 +1150,8 @@ body.focus-mode #canvas-controls{display:none}
       <span class="cwd-label">📁</span>
       <input class="cwd-input" type="text" id="wf-cwd" placeholder="/synology/…  또는  /workspace/…" title="시놀로지 임의 폴더는 /synology/... 로 접근">
       <button class="cwd-btn icon" onclick="openFolderBrowser('wf-cwd')" title="폴더 탐색">⋯</button>
+      <button class="cwd-btn" onclick="openInDsm(document.getElementById('wf-cwd').value)" title="외부에서 열기 — DSM 파일스테이션 새 탭 (로그인 필요)" style="color:#c4b5fd">🌐 DSM</button>
+      <button class="cwd-btn icon" onclick="copyHostPath(document.getElementById('wf-cwd').value)" title="호스트 경로 복사 (/volume1/...)" style="color:#88c0d0">📋</button>
       <div class="cwd-spacer"></div>
       <button class="cwd-btn icon" onclick="zoomFit()" title="전체 보기">⤢</button>
       <button class="cwd-btn icon" onclick="zoomDelta(-.2)" title="축소">−</button>
@@ -1124,6 +1168,7 @@ body.focus-mode #canvas-controls{display:none}
         <span class="landing-subtitle">최근 작업 이어하기 · 새 프로젝트 시작</span>
       </div>
       <input id="landing-search" class="landing-search" placeholder="🔍 이름으로 필터 (프로젝트 + 임시 모두)" oninput="landingFilter(this.value)" autocomplete="off">
+      <button class="new-btn" onclick="adoptExistingFolder()" title="시놀로지의 기존 폴더를 FlowDesk 프로젝트로 편입" style="background:linear-gradient(135deg,#7c3aed,#5b21b6);padding:10px 18px">📂 기존 폴더 불러오기</button>
       <button class="new-btn" onclick="landingNewProject()">📄 새 프로젝트</button>
       <button onclick="document.getElementById('landing').classList.remove('show')">취소</button>
     </div>
@@ -1329,6 +1374,107 @@ body.focus-mode #canvas-controls{display:none}
             <div style="font-size:11px;color:#C4B5FD;margin-bottom:4px">✨ Gemini</div>
             <select id="s-default-gemini-model" onchange="saveDefaultModel('gemini',this.value)" style="width:100%;padding:5px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11px"></select>
           </div>
+        </div>
+      </div>
+
+      <!-- 프로젝트 작업 폴더 설정 -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#7ecfff;margin-bottom:6px">💼 프로젝트 작업 폴더 (Project = Folder)</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.5">
+          새 프로젝트 저장 시 자동으로 여기에 실제 폴더를 만들어 Claude/Gemini가 작업할 공간으로 사용합니다. 기존 폴더는 "📂 기존 폴더 불러오기"로 편입 가능.
+        </div>
+
+        <!-- Root 경로 -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">기본 작업 루트</div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="s-wf-root" placeholder="/synology" oninput="saveWfSetting('project_work_root',this.value);updateWfPreview()" style="flex:1;padding:6px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--mono)">
+            <button onclick="openSystemBrowser('s-wf-root')" style="padding:6px 12px;background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:5px;cursor:pointer;font-size:11px">📁 선택</button>
+          </div>
+        </div>
+
+        <!-- 중간 폴더 패턴 -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">중간 폴더 패턴 (선택)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px">
+            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
+              <input type="radio" name="s-wf-sub" value="{year}" onchange="saveWfSetting('project_sub_pattern',this.value);updateWfPreview()">
+              <span>년도별 <code style="color:#88c0d0">{year}</code> (권장)</span>
+            </label>
+            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
+              <input type="radio" name="s-wf-sub" value="{year}-{month}" onchange="saveWfSetting('project_sub_pattern',this.value);updateWfPreview()">
+              <span>월별 <code style="color:#88c0d0">{year}-{month}</code></span>
+            </label>
+            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
+              <input type="radio" name="s-wf-sub" value="" onchange="saveWfSetting('project_sub_pattern',this.value);updateWfPreview()">
+              <span>없음 (루트 바로 밑)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 프로젝트 폴더 패턴 -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">프로젝트 폴더 이름 규칙</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px">
+            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
+              <input type="radio" name="s-wf-folder" value="{date}_{name}" onchange="saveWfSetting('project_folder_pattern',this.value);updateWfPreview()">
+              <span><code style="color:#a3e635">{date}_{name}</code> (권장)</span>
+            </label>
+            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
+              <input type="radio" name="s-wf-folder" value="{name}_{date}" onchange="saveWfSetting('project_folder_pattern',this.value);updateWfPreview()">
+              <span><code style="color:#a3e635">{name}_{date}</code></span>
+            </label>
+            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
+              <input type="radio" name="s-wf-folder" value="{name}" onchange="saveWfSetting('project_folder_pattern',this.value);updateWfPreview()">
+              <span><code style="color:#a3e635">{name}</code> (날짜 없이)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- 미리보기 -->
+        <div style="padding:8px 12px;background:rgba(76,175,80,.07);border:1px solid rgba(76,175,80,.2);border-radius:5px;font-size:11px;color:var(--text-dim)">
+          <b style="color:#a7f3d0">미리보기:</b> 프로젝트명 <code id="s-wf-sample-name">오늘작업</code> 저장 시 →
+          <code id="s-wf-preview" style="color:#a7f3d0;font-family:var(--mono);word-break:break-all">/synology/2026/20260420_오늘작업</code>
+        </div>
+      </div>
+
+      <!-- 외부 DSM 접속 설정 -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#C4B5FD;margin-bottom:6px">🌐 외부 접속 (DSM 파일 스테이션)</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.55">
+          다른 컴퓨터에서 프로젝트 폴더를 열고 싶을 때 사용. RaiDrive/드라이브 매핑 없이 DSM 웹 파일 매니저가 새 탭에서 열리고 해당 폴더로 자동 진입합니다.
+        </div>
+
+        <!-- DSM URL -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">DSM URL (외부 접속)</div>
+          <input type="text" id="s-ext-dsm-url" placeholder="https://gilhojong.synology.me:5001" oninput="saveWfSetting('ext_dsm_url',this.value);window._extDsmUrl=this.value" style="width:100%;padding:6px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--mono);box-sizing:border-box">
+          <div style="font-size:10px;color:var(--text-muted);margin-top:3px">DDNS: <code>gilhojong.synology.me:5001</code> · 또는 <code>https://QuickConnect.to/Gils-House-DB</code></div>
+        </div>
+
+        <!-- QuickConnect ID -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">QuickConnect ID <span style="color:var(--text-muted);font-weight:400">(대체 URL용)</span></div>
+          <input type="text" id="s-ext-qcid" placeholder="Gils-House-DB" oninput="saveWfSetting('ext_quickconnect_id',this.value);window._extQcId=this.value" style="width:100%;padding:6px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;box-sizing:border-box">
+        </div>
+
+        <!-- 경로 매핑 -->
+        <div style="display:flex;gap:10px;margin-bottom:10px">
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">컨테이너 경로 접두사</div>
+            <input type="text" id="s-ext-cp" placeholder="/synology" oninput="saveWfSetting('ext_container_prefix',this.value);window._extContainerP=this.value" style="width:100%;padding:6px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--mono);box-sizing:border-box">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">호스트 경로 접두사</div>
+            <input type="text" id="s-ext-hp" placeholder="/volume1/00_Gils_Project" oninput="saveWfSetting('ext_host_prefix',this.value);window._extHostP=this.value" style="width:100%;padding:6px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--mono);box-sizing:border-box">
+          </div>
+        </div>
+
+        <div style="padding:8px 12px;background:rgba(139,92,246,.07);border:1px solid rgba(139,92,246,.2);border-radius:5px;font-size:11px;color:var(--text-dim);line-height:1.55">
+          <b style="color:#c4b5fd">변환 예시:</b><br>
+          컨테이너 <code>/synology/2026/20260420_test</code><br>
+          → 호스트 <code>/volume1/00_Gils_Project/2026/20260420_test</code><br>
+          → DSM 열기: <code style="color:#a7f3d0;font-size:10px">https://gilhojong.synology.me:5001/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=openfile%3D%2Fvolume1%2F00_Gils_Project%2F2026%2F20260420_test</code>
         </div>
       </div>
 
@@ -1556,15 +1702,30 @@ function hexToRgba(hex,a){
   const [r,g,b]=m.map(x=>parseInt(x,16));return `rgba(${r},${g},${b},${a})`;
 }
 function applyAppearance(){
-  const cw=document.getElementById('cw');if(!cw)return;
+  const cw=document.getElementById('cw');
   const a=appearance;
-  cw.style.setProperty('--canvas-bg',a.bgColor);
-  cw.style.setProperty('--grid-color',hexToRgba(a.gridColor,a.gridAlpha));
-  cw.style.setProperty('--grid-thickness',a.gridThickness+'px');
-  cw.style.setProperty('--grid-size',a.gridSize+'px');
+  // 값 검증 (NaN/undefined 차단 — hexToRgba가 rgba(,,,NaN)이 되면 브라우저가 무효화)
+  const bg = a.bgColor || '#0a0a14';
+  const gridHex = a.gridColor || '#ffffff';
+  const gridAlpha = (typeof a.gridAlpha==='number' && !isNaN(a.gridAlpha)) ? a.gridAlpha : 0.05;
+  const gridTh = (typeof a.gridThickness==='number' && !isNaN(a.gridThickness)) ? a.gridThickness : 1;
+  const gridSz = (typeof a.gridSize==='number' && !isNaN(a.gridSize)) ? a.gridSize : 40;
+  const gridRgba = hexToRgba(gridHex, gridAlpha);
+  // 다양한 엘리먼트에 CSS var 설정 (cw만 있어도 충분하지만 상속 차단 대비 root에도)
+  const targets = [document.documentElement, cw].filter(Boolean);
+  targets.forEach(el=>{
+    el.style.setProperty('--canvas-bg', bg);
+    el.style.setProperty('--grid-color', gridRgba);
+    el.style.setProperty('--grid-thickness', gridTh+'px');
+    el.style.setProperty('--grid-size', gridSz+'px');
+  });
+  // .cw 직접 스타일도 강제 (CSS var 우선순위 문제 대비)
+  if(cw){
+    cw.style.backgroundColor = bg;
+  }
   // 모달 열려있으면 입력값도 동기화
-  const bg=document.getElementById('ap-bg');if(bg){
-    bg.value=a.bgColor;document.getElementById('ap-bg-v').textContent=a.bgColor;
+  const bgEl=document.getElementById('ap-bg');if(bgEl){
+    bgEl.value=a.bgColor;document.getElementById('ap-bg-v').textContent=a.bgColor;
     document.getElementById('ap-grid-color').value=a.gridColor;
     document.getElementById('ap-grid-color-v').textContent=a.gridColor;
     document.getElementById('ap-grid-alpha').value=a.gridAlpha;
@@ -1641,7 +1802,7 @@ function ccUpdateBg(){
 }
 function ccReset(){
   appearance={bgColor:'#0a0a14',gridColor:'#ffffff',gridAlpha:0.05,gridThickness:1,gridSize:40};
-  arrGapX=180;arrGapY=40;
+  arrGapX=60;arrGapY=30;
   applyAppearance();
   ccSyncFromState();
   if(typeof autoSave==='function')autoSave();
@@ -1735,7 +1896,7 @@ async function attachAddConvPick(convId){
 const _origFavPickMemo=typeof favPickMemo==='function'?favPickMemo:null;
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
-const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},'agent-gemini':{icon:'✨',color:'#A78BFA',label:'Gemini',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true}};
+const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},'agent-gemini':{icon:'✨',color:'#A78BFA',label:'Gemini',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true},downloader:{icon:'⬇️',color:'#10B981',label:'Downloader',hasExec:true}};
 function isAgentType(t){return t==='agent'||t==='agent-gemini'}
 function providerOfType(t){return t==='agent-gemini'?'gemini':'claude'}
 
@@ -2178,6 +2339,7 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item" onclick="addNode('memo',${ctxPos.x},${ctxPos.y})">📝 Memo 추가</div>
       <div class="ctx-item" onclick="addNode('input',${ctxPos.x},${ctxPos.y})">📎 Input 추가</div>
       <div class="ctx-item" onclick="addNode('trigger',${ctxPos.x},${ctxPos.y})">⚡ Trigger 추가</div>
+      <div class="ctx-item" onclick="addNode('downloader',${ctxPos.x},${ctxPos.y})" style="color:#6ee7b7">⬇️ 다운로더 (YouTube/Instagram/TikTok)</div>
       <div class="ctx-sep"></div>
       <div class="ctx-item" onclick="startCeCreate('region')">🟦 영역 그리기</div>
       <div class="ctx-item" onclick="addCeText(${ctxPos.x},${ctxPos.y})">📝 텍스트 메모</div>
@@ -2198,7 +2360,20 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-sep"></div>
       <div class="ctx-item danger" onclick="delNode('${nd.id}')">삭제</div>`;
   }
-  m.innerHTML=html;m.style.left=x+'px';m.style.top=y+'px';m.classList.add('show');
+  m.innerHTML=html;
+  // 먼저 화면 밖에 숨겨놓고 실제 크기 측정 → 뷰포트 경계를 넘으면 반대방향으로 플립
+  m.style.left='-9999px';m.style.top='-9999px';m.classList.add('show');
+  requestAnimationFrame(()=>{
+    const r=m.getBoundingClientRect();
+    const vw=window.innerWidth, vh=window.innerHeight;
+    const margin=8;
+    let lx=x, ty=y;
+    if(lx + r.width  > vw - margin) lx = Math.max(margin, vw - r.width - margin);
+    if(ty + r.height > vh - margin) ty = Math.max(margin, vh - r.height - margin);
+    if(ty < margin) ty = margin;
+    if(lx < margin) lx = margin;
+    m.style.left=lx+'px';m.style.top=ty+'px';
+  });
 }
 let arrGapX=60,arrGapY=30,arrVCenter=false; // 저장되는 간격값
 function ctxArrLive(){
@@ -3439,6 +3614,38 @@ const engine={
   async executeNode(nd, retryCount=0){
     this.running=true;
     if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
+    if(nd.type==='downloader'){
+      // URL이 인풋 (resolved)
+      const url = (await this.resolve(nd)).trim();
+      if(!url){this.setSt(nd,'error');nd.outputCapture='❌ URL이 비어있습니다';const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;autoSave();return}
+      this.setSt(nd,'running');
+      console.log(`[DL] ${nd.name} → ${url}`);
+      try{
+        const r = await api('POST','/api/media/download',{url, projectId:workflowId||'', nodeId:nd.id});
+        if(r&&r.ok){
+          const lines = r.files.map(f=>{
+            const ic = f.kind==='video'?'🎬':(f.kind==='image'?'🖼️':'🎵');
+            const kb = Math.round((f.size||0)/1024);
+            return `${ic} ${f.name}  (${kb.toLocaleString()} KB)\n   └ ${f.path}`;
+          }).join('\n\n');
+          nd.outputCapture = `✅ ${r.count}개 다운로드 완료\n`
+            + `🎬 영상 ${r.videoCount||0} · 🖼️ 이미지 ${r.imageCount||0} · 🎵 오디오 ${r.audioCount||0}\n`
+            + `📂 저장 폴더: ${r.workDir}\n\n${lines}`;
+          this.setSt(nd,'complete');
+          this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
+        } else {
+          nd.outputCapture = '❌ ' + (r&&r.error||'알 수 없는 오류');
+          this.setSt(nd,'error');
+        }
+      }catch(e){
+        nd.outputCapture = '❌ 네트워크 오류: '+e.message;
+        this.setSt(nd,'error');
+      }
+      // 노드 출력 UI 갱신
+      const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+      autoSave();
+      return;
+    }
     if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
 
     // 다중 upstream 대기 (complete / outputCapture / 이미지엘 / nodeType없는 캔버스엘 = 즉시 ready)
@@ -3524,7 +3731,7 @@ const engine={
 
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
-function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,tabId:TAB_ID,appearance:{...appearance},
+function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,workDir:window._currentWorkDir||'',tabId:TAB_ID,appearance:{...appearance},
   nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history})),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5})),
   canvasElements:canvasEls.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,w:c.w,h:c.h,color:c.color,label:c.label,content:c.content,fontSize:c.fontSize,src:c.src}))}}
@@ -3584,7 +3791,9 @@ window.addEventListener('beforeunload',()=>{
 function loadState(st){
   nodes.forEach(n=>n.el.remove());nodes=[];conns=[];ncnt=0;selectedNode=null;closeSb();
   canvasEls.forEach(c=>c.el.remove());canvasEls=[];selectedCe=null;
-  cx=st.cx||0;cy=st.cy||0;zoom=st.zoom||1;document.getElementById('wf-cwd').value=st.cwd||'';wfName=st.wfName||'';workflowId=st.workflowId||null;if(typeof syncProjectNameUi==='function')syncProjectNameUi();
+  // work_dir이 있으면 그것을, 없으면 기존 cwd를 캔버스 CWD로 (Project = Folder 우선)
+  window._currentWorkDir = st.workDir||'';
+  cx=st.cx||0;cy=st.cy||0;zoom=st.zoom||1;document.getElementById('wf-cwd').value=st.workDir||st.cwd||'';wfName=st.wfName||'';workflowId=st.workflowId||null;if(typeof syncProjectNameUi==='function')syncProjectNameUi();
   // 외관 설정 복원 (없으면 기본값)
   if(st.appearance)appearance={...appearance,...st.appearance};
   applyAppearance();
@@ -3602,6 +3811,100 @@ function loadState(st){
 
 // ═══ WORKFLOW SAVE/LOAD ═══
 function dateStamp(){const d=new Date();return d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')}
+// ═══ 저장 모달 (하이브리드: 이름 파싱 + 날짜 picker + 경로 편집) ═══
+let svPathManualEdit=false;
+let _svResolver=null;  // Promise resolver
+
+function svOpen(defaultName){
+  svPathManualEdit=false;
+  document.getElementById('sv-name').value=defaultName||'';
+  // 오늘 날짜로 초기화
+  const now=new Date();
+  const iso=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  document.getElementById('sv-date').value=iso;
+  document.getElementById('sv-date-hint').textContent='';
+  document.getElementById('sv-path-warn').textContent='';
+  document.getElementById('save-modal').style.display='flex';
+  setTimeout(()=>{const n=document.getElementById('sv-name');if(n){n.focus();n.select()}},100);
+  svRefresh();
+  // Promise 반환 — 사용자가 확인/취소 시 resolve
+  return new Promise(resolve=>{ _svResolver=resolve; });
+}
+
+function svSetToday(){
+  const now=new Date();
+  document.getElementById('sv-date').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+  svRefresh(true);
+}
+
+// 이름에서 YYYYMMDD 감지 → 날짜 picker 자동 반영
+function _svParseDateFromName(name){
+  if(!name)return null;
+  const m=name.match(/^\s*(\d{4})[-\/\.]?(\d{2})[-\/\.]?(\d{2})[\s_\-]+(.+?)\s*$/);
+  if(!m)return null;
+  const y=+m[1],mo=+m[2],d=+m[3];
+  const dt=new Date(y,mo-1,d);
+  if(isNaN(dt.getTime()))return null;
+  return {date:`${m[1]}-${m[2]}-${m[3]}`, cleanName:m[4].trim()};
+}
+
+async function svRefresh(dateJustChanged){
+  const name=document.getElementById('sv-name').value;
+  const dateInp=document.getElementById('sv-date');
+  const hintEl=document.getElementById('sv-date-hint');
+  // 이름에서 날짜 감지 (날짜 picker 수동 변경 직후가 아닐 때만 자동 반영)
+  if(!dateJustChanged){
+    const parsed=_svParseDateFromName(name);
+    if(parsed){
+      dateInp.value=parsed.date;
+      hintEl.innerHTML='💡 이름에서 자동 감지됨';
+      hintEl.style.color='#a3e635';
+    } else {
+      hintEl.innerHTML='';
+    }
+  } else {
+    hintEl.innerHTML='📅 수동 지정';
+    hintEl.style.color='#88c0d0';
+  }
+  // 서버에 경로 미리보기 요청
+  if(!name.trim())return;
+  try{
+    const r=await api('GET',`/api/project/preview-work-dir?name=${encodeURIComponent(name)}&date=${encodeURIComponent(dateInp.value)}`);
+    if(r&&r.ok){
+      // 사용자가 수동 편집 중이면 덮어쓰지 않음
+      if(!svPathManualEdit){
+        document.getElementById('sv-path').value=r.path;
+      }
+      const warn=document.getElementById('sv-path-warn');
+      if(r.exists){
+        warn.innerHTML='⚠ 이 폴더가 이미 존재합니다 — 그대로 사용하면 기존 파일과 합쳐집니다';
+        warn.style.color='#ebcb8b';
+      } else {
+        warn.innerHTML='';
+      }
+    }
+  }catch(e){}
+}
+
+function svResetPath(){
+  svPathManualEdit=false;
+  svRefresh();
+}
+
+function svCancel(){
+  document.getElementById('save-modal').style.display='none';
+  if(_svResolver){_svResolver(null);_svResolver=null;}
+}
+function svConfirm(){
+  const name=document.getElementById('sv-name').value.trim();
+  if(!name){alert('이름을 입력하세요');return;}
+  const date=document.getElementById('sv-date').value;
+  const path=document.getElementById('sv-path').value.trim();
+  document.getElementById('save-modal').style.display='none';
+  const res={name,date,path,manualPath:svPathManualEdit};
+  if(_svResolver){_svResolver(res);_svResolver=null;}
+}
+
 async function saveWorkflow(){
   let useFolderId=null;  // 자동 날짜 폴더에 배치할지
   if(workflowId&&wfName){
@@ -3623,10 +3926,13 @@ async function saveWorkflow(){
       wfName=name.trim();workflowId=null;
     }
   } else {
-    const def=`${dateStamp()}_${wfName||''}`.replace(/_$/,'')||`${dateStamp()}_프로젝트`;
-    const name=prompt(`프로젝트 이름:\n(💡 디폴트로 YYYYMMDD_ 접두사가 붙습니다. 지워도 됩니다)`,def);
-    if(!name||!name.trim())return;
-    wfName=name.trim();
+    // 새 프로젝트 — 저장 모달 (이름 + 날짜 + 경로 하이브리드)
+    const defName = wfName || '';
+    const res = await svOpen(defName);
+    if(!res)return;  // 취소
+    wfName = res.name;
+    var _saveDate = res.date;
+    var _explicitPath = res.manualPath ? res.path : null;
   }
   // 오늘 날짜 폴더 자동 생성/확보 (사용자가 매일 쌓이는 프로젝트를 자동 분류)
   try{
@@ -3635,19 +3941,29 @@ async function saveWorkflow(){
   }catch(e){}
 
   const d=getState();d.id=workflowId||undefined;d.name=wfName;
+  // 모달에서 받은 날짜/경로 반영
+  if(typeof _saveDate!=='undefined'&&_saveDate)d.saveDate=_saveDate;
+  if(typeof _explicitPath!=='undefined'&&_explicitPath)d.workDir=_explicitPath;
   const r=await api('POST','/api/project/save',d);
   if(r.ok&&r.id){
     workflowId=r.id;
     location.hash='wf='+workflowId;
     if(typeof syncProjectNameUi==='function')syncProjectNameUi();
-    // 자동 날짜 폴더로 이동
+    // 서버가 실제 적용한 work_dir을 캔버스 CWD 입력창에 반영
+    if(r.workDir){
+      window._currentWorkDir=r.workDir;
+      const cw=document.getElementById('wf-cwd');
+      if(cw)cw.value=r.workDir;
+    }
+    // 자동 날짜 폴더로 이동 (DB 계층용 — 선택적 유지)
     if(useFolderId){
       try{await api('POST','/api/project/move',{id:workflowId,folderId:useFolderId})}catch(e){}
     }
     refreshWfList();
     if(typeof loadLandingLists==='function')loadLandingLists().catch(()=>{});
-    console.log('[SAVE] 신규 OK:',wfName,workflowId,'folder:',useFolderId);
-    alert(`✅ 저장 완료\n이름: ${wfName}\n${useFolderId?'📅 오늘 날짜 폴더에 자동 분류됨':''}`);
+    console.log('[SAVE] 신규 OK:',wfName,workflowId,'work_dir:',r.workDir);
+    const wdMsg = r.workDir?`\n📁 작업 폴더: ${r.workDir}${r.folderCreated===false?'\n⚠ 폴더 생성은 실패 (권한 확인 필요)':''}`:'';
+    alert(`✅ 저장 완료\n이름: ${wfName}${wdMsg}`);
   }else{
     alert('❌ 저장 실패\n'+(r.error||''));
   }
@@ -4204,6 +4520,7 @@ async function loadLandingLists(){
           <div class="meta">${(p.modified||'').substring(0,16)} · 노드 ${p.nodeCount} · 연결 ${p.connCount}</div>
         </div>
         <button onclick="event.stopPropagation();window.open(location.origin+'/#wf=${p.id}','_blank')" title="새 탭에서 열기 (멀티 탭 작업)" style="background:none;border:none;color:#c4b5fd;cursor:pointer;font-size:12px;padding:2px">↗</button>
+        ${p.work_dir?`<button onclick="event.stopPropagation();openInDsm('${p.work_dir.replace(/'/g,"&#39;")}')" title="DSM 파일스테이션에서 열기 (${escapeHtml(p.work_dir)})" style="background:none;border:none;color:#c4b5fd;cursor:pointer;font-size:12px;padding:2px">🌐</button>`:''}
         <button onclick="event.stopPropagation();moveProjectFolder('${p.id}')" title="폴더 이동" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px">📂</button>
         <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
@@ -4461,6 +4778,43 @@ async function confirmLanding(){
 function landingNewProject(){
   document.getElementById('landing').classList.remove('show');
   newProject();
+}
+
+// ═══ 기존 폴더 편입 (Adopt) ═══
+async function adoptExistingFolder(){
+  // 폴더 탐색 모달을 임시 input과 연결
+  const temp=document.createElement('input');
+  temp.id='__adopt_tmp_input';
+  temp.type='hidden';
+  document.body.appendChild(temp);
+  openSystemBrowser('__adopt_tmp_input');
+  // 사용자가 선택할 때까지 대기 (change 이벤트)
+  temp.addEventListener('change', async ()=>{
+    const folder=temp.value.trim();
+    document.body.removeChild(temp);
+    if(!folder)return;
+    const suggested=folder.split('/').filter(Boolean).pop()||'Imported';
+    const name=prompt('프로젝트 이름 (편입 후 FlowDesk에서 사용할 이름):',suggested);
+    if(!name||!name.trim())return;
+    const r=await api('POST','/api/project/adopt',{folderPath:folder,name:name.trim()});
+    if(r.ok){
+      if(r.already){
+        if(confirm(`이미 "${r.name}" 프로젝트로 편입된 폴더입니다.\n그 프로젝트를 열까요?`)){
+          await loadWorkflow(r.id);
+          document.getElementById('landing').classList.remove('show');
+        }
+      } else {
+        alert(`✅ 편입 완료\n프로젝트: ${r.name}\n폴더: ${r.workDir}`);
+        loadLandingLists();
+        if(confirm('이 프로젝트를 지금 열까요?')){
+          await loadWorkflow(r.id);
+          document.getElementById('landing').classList.remove('show');
+        }
+      }
+    } else {
+      alert('편입 실패: '+(r.error||''));
+    }
+  }, {once:true});
 }
 
 async function toggleStar(id,fav){
@@ -5394,6 +5748,7 @@ document.addEventListener('keydown',function(e){
     'KeyW':()=>addNode&&addNode('memo'),                     // 📝 Memo 노드
     'KeyE':()=>addNode&&addNode('input'),                    // 📎 Input
     'KeyR':()=>addNode&&addNode('trigger'),                  // ⚡ Trigger
+    'KeyY':()=>addNode&&addNode('downloader'),               // ⬇️ Downloader (YouTube/Instagram)
     // 액션/파일 (ASDF)
     'KeyA':()=>engine&&engine.startAll&&engine.startAll(),   // ▶ 전체실행
     'KeyS':()=>saveWorkflow&&saveWorkflow(),                 // 💾 저장
@@ -5681,12 +6036,16 @@ async function init(){
   undoStack=[];redoStack=[];
   loadFolders();loadMemoTabs();loadPinnedMemos();
   setupJsonDragDrop();
-  // 시스템 기본 대화모드 로드 (새 노드 생성 시 기본값)
+  // 시스템 기본 대화모드 + 외부 DSM 경로 매핑 로드
   try{
     const sr=await api('GET','/api/settings/get');
     if(sr&&sr.ok&&sr.settings){
-      const v=sr.settings.default_chat_only;
-      window._defaultChatOnly = v==='false' ? false : true;  // 문자열로 저장됨
+      const s=sr.settings;
+      window._defaultChatOnly = s.default_chat_only==='false' ? false : true;
+      window._extDsmUrl     = s.ext_dsm_url || 'https://gilhojong.synology.me:5001';
+      window._extQcId       = s.ext_quickconnect_id || 'Gils-House-DB';
+      window._extContainerP = s.ext_container_prefix || '/synology';
+      window._extHostP      = s.ext_host_prefix || '/volume1/00_Gils_Project';
     }
   }catch(e){window._defaultChatOnly=true}
   // URL 해시로 deep-link (#wf=ID) → 해당 프로젝트 자동 로드, 랜딩 스킵
@@ -5867,6 +6226,22 @@ async function openSettings(){
   window._defaultChatOnly = isChatOnly;
   const radios = document.querySelectorAll('input[name="s-default-chat-only"]');
   radios.forEach(r => { r.checked = (r.value === (isChatOnly?'true':'false')); });
+  // 외부 DSM 접속 설정 채우기
+  const dsmUrl = s.ext_dsm_url || 'https://gilhojong.synology.me:5001';
+  const qcId   = s.ext_quickconnect_id || 'Gils-House-DB';
+  const extCP  = s.ext_container_prefix || '/synology';
+  const extHP  = s.ext_host_prefix || '/volume1/00_Gils_Project';
+  window._extDsmUrl=dsmUrl; window._extQcId=qcId; window._extContainerP=extCP; window._extHostP=extHP;
+  const _seti=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v};
+  _seti('s-ext-dsm-url',dsmUrl); _seti('s-ext-qcid',qcId); _seti('s-ext-cp',extCP); _seti('s-ext-hp',extHP);
+  // 작업 폴더 설정 채우기
+  const wfRoot = s.project_work_root || '/synology';
+  const wfSub  = s.project_sub_pattern ?? '{year}';
+  const wfFold = s.project_folder_pattern || '{date}_{name}';
+  const rootInp = document.getElementById('s-wf-root'); if(rootInp) rootInp.value = wfRoot;
+  document.querySelectorAll('input[name="s-wf-sub"]').forEach(r => r.checked = (r.value === wfSub));
+  document.querySelectorAll('input[name="s-wf-folder"]').forEach(r => r.checked = (r.value === wfFold));
+  updateWfPreview();
   document.getElementById('settings-modal').style.display = 'flex';
   loadClaudeAccounts();
   loadGeminiAccounts();
@@ -5892,6 +6267,73 @@ async function saveDefaultModel(provider, value){
 async function saveDefaultChatOnly(val){
   window._defaultChatOnly = !!val;
   await api('POST', '/api/settings/set', {key:'default_chat_only', value: val?'true':'false'});
+}
+
+// ═══ 외부 DSM 접속 (시놀로지 File Station 딥링크) ═══
+function extContainerToHost(containerPath){
+  const c=window._extContainerP||'/synology';
+  const h=window._extHostP||'/volume1/00_Gils_Project';
+  if(!containerPath)return containerPath;
+  if(containerPath===c)return h;
+  if(containerPath.startsWith(c+'/'))return h+containerPath.slice(c.length);
+  return containerPath;  // 이미 호스트 경로거나 다른 루트
+}
+function buildDsmFileStationUrl(containerPath){
+  const base=(window._extDsmUrl||'https://gilhojong.synology.me:5001').replace(/\/+$/,'');
+  const hostPath=extContainerToHost(containerPath);
+  // DSM 7.x File Station 3 딥링크 (openfile 파라미터로 폴더 진입)
+  const param=encodeURIComponent('openfile='+hostPath);
+  return `${base}/?launchApp=SYNO.SDS.App.FileStation3.Instance&launchParam=${param}`;
+}
+function openInDsm(containerPath){
+  if(!containerPath){alert('경로가 없습니다');return}
+  const url=buildDsmFileStationUrl(containerPath);
+  console.log('[DSM] open:',url);
+  window.open(url,'_blank');
+}
+function copyHostPath(containerPath){
+  const hp=extContainerToHost(containerPath);
+  if(!hp)return;
+  copyToClipboard(hp);
+  showCopyToast(`📋 호스트 경로 복사됨: ${hp}\n(DSM 파일스테이션 주소창에 붙여넣기)`);
+}
+function copyUncPath(containerPath){
+  const hp=extContainerToHost(containerPath);
+  // /volume1/00_Gils_Project/... → \\DDNS\00_Gils_Project\...
+  const ddns=(window._extDsmUrl||'').replace(/^https?:\/\//,'').split(':')[0];
+  const share=(window._extHostP||'/volume1/00_Gils_Project').split('/').filter(Boolean).slice(1).join('/');  // volume1 제거
+  const rel=hp.replace(/^\/volume1\/[^/]+\/?/,'');
+  const unc='\\\\'+ddns+'\\'+share+(rel?'\\'+rel.replace(/\//g,'\\'):'');
+  copyToClipboard(unc);
+  showCopyToast(`📋 UNC 경로 복사됨 (Windows 탐색기 주소창):\n${unc}`);
+}
+
+// ═══ 프로젝트 작업 폴더 설정 ═══
+async function saveWfSetting(key, value){
+  await api('POST', '/api/settings/set', {key, value: value||''});
+}
+function _wfSafeName(s){return (s||'').replace(/[\\/:*?"<>|]/g,'_').trim().slice(0,160)||'Untitled'}
+function _wfExpandPattern(pattern, name){
+  const now=new Date();
+  const Y=now.getFullYear()+'';
+  const M=String(now.getMonth()+1).padStart(2,'0');
+  const D=String(now.getDate()).padStart(2,'0');
+  return (pattern||'').replace(/\{date\}/g,Y+M+D).replace(/\{year\}/g,Y).replace(/\{month\}/g,M).replace(/\{day\}/g,D).replace(/\{name\}/g,_wfSafeName(name));
+}
+function _wfComputeDir(name){
+  const root = (document.getElementById('s-wf-root')?.value||'').trim()||'/synology';
+  const sub = document.querySelector('input[name="s-wf-sub"]:checked')?.value ?? '{year}';
+  const folder = document.querySelector('input[name="s-wf-folder"]:checked')?.value ?? '{date}_{name}';
+  const parts=[root];
+  const subExp=_wfExpandPattern(sub, name);
+  if(subExp)parts.push(subExp);
+  parts.push(_wfExpandPattern(folder, name)||_wfSafeName(name));
+  return parts.join('/').replace(/\/+/g,'/');
+}
+function updateWfPreview(){
+  const sample = document.getElementById('s-wf-sample-name')?.textContent || '오늘작업';
+  const el = document.getElementById('s-wf-preview');
+  if(el) el.textContent = _wfComputeDir(sample);
 }
 
 function closeSettings(){
@@ -6557,8 +6999,18 @@ async function openSystemBrowser(targetInputId){
 async function sysfsBrowse(path){
   const r = await api('GET', `/api/fs/browse-system?path=${encodeURIComponent(path)}`);
   if(!r.ok){
-    if(path !== '/'){ return sysfsBrowse('/'); }
-    alert('탐색 실패: ' + r.error);
+    // 조용한 폴백 제거 — 실제 에러를 모달에 표시
+    const container = document.getElementById('sysfs-content');
+    if(container){
+      container.innerHTML = `
+        <div style="padding:20px">
+          <div style="padding:14px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;color:#fca5a5;font-size:12.5px;line-height:1.6;white-space:pre-wrap;font-family:var(--mono)">❌ ${escapeHtml(r.error||'알 수 없는 오류')}</div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button onclick="sysfsBrowse('/')" style="padding:8px 14px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer">🏠 루트로</button>
+            <button onclick="sysfsBrowse('${escapeHtml((path||'/').split('/').slice(0,-1).join('/')||'/')}')" style="padding:8px 14px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer">⬆ 상위 폴더</button>
+          </div>
+        </div>`;
+    }
     return;
   }
   sysfsCurrentPath = r.path;
@@ -6575,8 +7027,12 @@ async function sysfsBrowse(path){
   let html = `
     <div style="padding:8px 12px;background:var(--bg-2);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;overflow-x:auto;white-space:nowrap">
       ${crumbHtml}
-    </div>
-    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px">
+    </div>`;
+  // 권한 경고 배너 (폴더에는 진입했지만 listdir 실패)
+  if(r.warn){
+    html += `<div style="padding:10px 14px;background:rgba(245,158,11,.1);border-bottom:1px solid rgba(245,158,11,.3);color:#ebcb8b;font-size:11px;line-height:1.55;white-space:pre-wrap;font-family:var(--mono)">${escapeHtml(r.warn)}</div>`;
+  }
+  html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px">
       <input type="text" id="sysfs-newfolder-name" placeholder="새 폴더 이름 (현재 위치에 생성)" style="flex:1;padding:4px 8px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:12px">
       <button id="sysfs-mkdir-btn" style="padding:4px 10px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:3px;cursor:pointer;font-size:11px">+ 폴더 생성</button>
     </div>`;

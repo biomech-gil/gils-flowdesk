@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gil's FlowDesk — Visual AI Workflow Editor Server (SQLite/PostgreSQL + Claude CLI)"""
 
-import subprocess, json, os, re, uuid, sys, time, sqlite3, threading, hashlib, secrets, tempfile
+import subprocess, json, os, re, uuid, sys, time, sqlite3, threading, hashlib, secrets, tempfile, shutil
 try:
     import psycopg2
     import psycopg2.extras
@@ -391,6 +391,7 @@ def init_db():
         alter_checks = [
             ("projects", "favorite", "ALTER TABLE projects ADD COLUMN favorite INTEGER DEFAULT 0"),
             ("projects", "folder_id", "ALTER TABLE projects ADD COLUMN folder_id INTEGER"),
+            ("projects", "work_dir", "ALTER TABLE projects ADD COLUMN work_dir TEXT"),
             ("memos", "pinned", "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0"),
             ("memos", "color", "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''"),
             ("memo_folders", "color", "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''"),
@@ -579,6 +580,7 @@ def init_db():
         except sqlite3.OperationalError:
             pass
         for stmt in [
+            "ALTER TABLE projects ADD COLUMN work_dir TEXT",
             "ALTER TABLE memos ADD COLUMN pinned INTEGER DEFAULT 0",
             "ALTER TABLE memos ADD COLUMN color TEXT DEFAULT ''",
             "ALTER TABLE memo_folders ADD COLUMN color TEXT DEFAULT ''",
@@ -1029,6 +1031,136 @@ def _cleanup_stale_recovery_slots(days=2):
         log(f"[CLEANUP] recovery slots failed: {e}")
 
 _cleanup_stale_recovery_slots(days=2)
+
+# ═══════════════════════════════════════
+# 프로젝트 작업 폴더 (Project = Folder) 설정 & 헬퍼
+# ═══════════════════════════════════════
+def _seed_work_folder_defaults():
+    """system_settings에 작업 폴더 기본값이 없으면 주입 + 잘못 저장된 구 값 자동 교정."""
+    defaults = {
+        "project_work_root": "/synology",
+        "project_sub_pattern": "{year}",
+        "project_folder_pattern": "{date}_{name}",
+        "ext_dsm_url": "https://gilhojong.synology.me:5001",
+        "ext_quickconnect_id": "Gils-House-DB",
+        "ext_container_prefix": "/synology",
+        "ext_host_prefix": "/volume1/00_Gils_Project",
+    }
+    try:
+        now = datetime.now().isoformat()
+        for k, v in defaults.items():
+            row = db_exec("SELECT value FROM system_settings WHERE key=?", (k,), fetchone=True)
+            if not row:
+                db_exec("INSERT INTO system_settings (key, value, updated) VALUES (?,?,?)", (k, v, now))
+        # 🩹 구 버전 버그 교정: project_work_root 가 '/synology/00_Gils_Project' 로 잘못 저장된 경우
+        # (이 값으로는 실제 컨테이너에서 /volume1/00_Gils_Project/00_Gils_Project 이중 경로 생성됨)
+        bad = db_exec("SELECT value FROM system_settings WHERE key='project_work_root'", fetchone=True)
+        if bad and (bad.get("value") or "").rstrip("/") == "/synology/00_Gils_Project":
+            db_exec("UPDATE system_settings SET value=?, updated=? WHERE key='project_work_root'",
+                    ("/synology", now))
+            log("[MIGRATION] project_work_root '/synology/00_Gils_Project' → '/synology' (이중 경로 버그 교정)")
+        # 이미 잘못된 경로로 저장된 프로젝트 work_dir도 일괄 교정
+        try:
+            rows = db_exec("SELECT id, work_dir FROM projects WHERE work_dir LIKE ?",
+                           ("/synology/00_Gils_Project/%",), fetch=True) or []
+            for r in rows:
+                old = r.get("work_dir") or ""
+                new = old.replace("/synology/00_Gils_Project/", "/synology/", 1)
+                db_exec("UPDATE projects SET work_dir=? WHERE id=?", (new, r["id"]))
+                log(f"[MIGRATION] project {r['id']} work_dir: {old} → {new}")
+        except Exception as e:
+            log(f"[MIGRATION] projects work_dir 교정 실패: {e}")
+    except Exception as e:
+        log(f"[WORKDIR] seed defaults failed: {e}")
+
+_seed_work_folder_defaults()
+
+def _sanitize_folder_name(name):
+    """파일시스템 안전 폴더명."""
+    s = re.sub(r'[\\/:*?"<>|]', '_', (name or '')).strip()
+    s = re.sub(r'\s+', ' ', s)
+    return s[:160] or 'Untitled'
+
+def _get_work_folder_settings():
+    """system_settings에서 패턴 3개 읽어 dict 반환. 누락 시 기본값."""
+    def _get(k, dflt):
+        try:
+            r = db_exec("SELECT value FROM system_settings WHERE key=?", (k,), fetchone=True)
+            v = r.get("value") if r else None
+            return v if v else dflt
+        except Exception:
+            return dflt
+    return {
+        "root": _get("project_work_root", "/synology/00_Gils_Project"),
+        "sub":  _get("project_sub_pattern", "{year}"),
+        "folder": _get("project_folder_pattern", "{date}_{name}"),
+    }
+
+def _parse_date_from_name(name):
+    """이름 앞부분 YYYYMMDD / YYYY-MM-DD / YYYY/MM/DD 감지 → (datetime, clean_name).
+    감지 실패 시 (None, name)."""
+    if not name:
+        return (None, name)
+    m = re.match(r'^\s*(\d{4})[-\/\.]?(\d{2})[-\/\.]?(\d{2})[\s_\-]+(.+?)\s*$', name)
+    if not m:
+        return (None, name.strip())
+    try:
+        dt = datetime(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        return (dt, m.group(4).strip())
+    except ValueError:
+        return (None, name.strip())
+
+def _expand_pattern(pattern, name, now=None):
+    """토큰 치환: {date} {year} {month} {day} {name}."""
+    if not now:
+        now = datetime.now()
+    mapping = {
+        "{date}": now.strftime("%Y%m%d"),
+        "{year}": now.strftime("%Y"),
+        "{month}": now.strftime("%m"),
+        "{day}": now.strftime("%d"),
+        "{name}": _sanitize_folder_name(name),
+    }
+    out = pattern or ""
+    for k, v in mapping.items():
+        out = out.replace(k, v)
+    return out
+
+def compute_work_dir(name, settings=None, date_override=None):
+    """사용자 패턴에 따라 프로젝트 기본 work_dir 절대경로 계산.
+    이름 앞에 YYYYMMDD_ 접두사 있으면 자동으로 날짜 추출 + 이름에서 제거.
+    date_override (datetime) 주면 그것을 우선 사용.
+    Example:
+      name='신약검토' → /synology/00_Gils_Project/2026/20260420_신약검토  (오늘)
+      name='20251020_신약검토' → /synology/00_Gils_Project/2025/20251020_신약검토 (자동 감지)
+      name='신약검토', date_override=date(2025,3,1) → 20250301_신약검토
+    """
+    s = settings or _get_work_folder_settings()
+    root = s.get("root") or "/synology"
+    # 1) 이름에서 날짜 자동 파싱
+    parsed_dt, clean_name = _parse_date_from_name(name)
+    # 2) 우선순위: date_override > parsed_dt > 오늘
+    effective = date_override or parsed_dt or datetime.now()
+    # 3) {name} 토큰 치환엔 clean_name 사용 (날짜 중복 방지)
+    sub = _expand_pattern(s.get("sub") or "", clean_name, effective)
+    folder = _expand_pattern(s.get("folder") or "{name}", clean_name, effective) or _sanitize_folder_name(clean_name)
+    parts = [root]
+    if sub:
+        parts.append(sub)
+    parts.append(folder)
+    return os.path.normpath(os.path.join(*parts))
+
+def ensure_work_dir(path):
+    """폴더 생성(없으면). 실패 시 예외 메시지 반환. 성공 시 (True, path)."""
+    if not path:
+        return (False, "빈 경로")
+    try:
+        os.makedirs(path, exist_ok=True)
+        return (True, path)
+    except PermissionError:
+        return (False, f"권한 없음: {path}")
+    except Exception as e:
+        return (False, str(e))
 
 # ═══════════════════════════════════════
 # tmux
@@ -1525,6 +1657,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/chat-history": self._json(self._chat_history(params))
         elif p == "/api/project/list": self._json(self._project_list())
         elif p == "/api/project/list-meta": self._json(self._project_list_meta())
+        elif p == "/api/project/preview-work-dir": self._json(self._project_preview_work_dir(params))
+        elif p == "/api/project/scan-unregistered": self._json(self._project_scan_unregistered(params))
         elif p == "/api/project/load": self._json(self._project_load(params))
         elif p == "/api/temp/list": self._json(self._temp_list())
         elif p == "/api/temp/load": self._json(self._temp_load(params))
@@ -1599,6 +1733,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/chat": self._chat_send,
             "/api/chat/fork": self._chat_fork,
             "/api/project/save": self._project_save,
+            "/api/project/adopt": self._project_adopt,
+            "/api/media/download": self._media_download,
             "/api/project/delete": self._project_delete,
             "/api/state/save": self._state_save,
             "/api/temp/save": self._temp_save,
@@ -1712,22 +1848,31 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 if cwd and os.path.isdir(cwd):
                     run_cwd = cwd
                 else:
-                    # Auto-create folder: {workspace_root}/{YYYYMMDD_project_name}/{node_name}/
+                    # 우선순위: 1) 프로젝트 work_dir (사용자가 저장한 프로젝트 전용 폴더)
+                    # 2) legacy workspace_root/{date_name}/{node_name}/ (이전 동작 호환)
                     try:
-                        ws_row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
-                        if ws_row and ws_row.get("value"):
-                            ws_root = ws_row["value"]
-                            project_name = body.get("projectName", "") or "Untitled"
-                            def safe_name(s):
-                                return re.sub(r'[/\\:*?"<>|]', '_', s).strip()[:100]
-                            date_str = datetime.now().strftime("%Y%m%d")
-                            project_folder = f"{date_str}_{safe_name(project_name)}"
-                            node_folder = safe_name(node_name)
-                            run_cwd = os.path.join(ws_root, project_folder, node_folder)
-                            os.makedirs(run_cwd, exist_ok=True)
-                            log(f"EXEC [{exec_id}] auto-cwd: {run_cwd}")
+                        wf_id = (body.get("projectId") or "").strip()
+                        if wf_id:
+                            wd_row = db_exec("SELECT work_dir FROM projects WHERE id=?", (wf_id,), fetchone=True)
+                            if wd_row and wd_row.get("work_dir") and os.path.isdir(wd_row["work_dir"]):
+                                run_cwd = wd_row["work_dir"]
+                                log(f"EXEC [{exec_id}] project work_dir: {run_cwd}")
+                        # work_dir 없으면 legacy 자동 생성 경로
+                        if not run_cwd:
+                            ws_row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
+                            if ws_row and ws_row.get("value"):
+                                ws_root = ws_row["value"]
+                                project_name = body.get("projectName", "") or "Untitled"
+                                def safe_name(s):
+                                    return re.sub(r'[/\\:*?"<>|]', '_', s).strip()[:100]
+                                date_str = datetime.now().strftime("%Y%m%d")
+                                project_folder = f"{date_str}_{safe_name(project_name)}"
+                                node_folder = safe_name(node_name)
+                                run_cwd = os.path.join(ws_root, project_folder, node_folder)
+                                os.makedirs(run_cwd, exist_ok=True)
+                                log(f"EXEC [{exec_id}] auto-cwd: {run_cwd}")
                     except Exception as e:
-                        log(f"EXEC [{exec_id}] auto-cwd failed: {e}")
+                        log(f"EXEC [{exec_id}] cwd resolve failed: {e}")
                         run_cwd = None
                 provider = (body.get("provider") or "claude").lower()
                 if provider not in SUPPORTED_PROVIDERS:
@@ -1946,20 +2091,258 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         pid = body.get("id", str(uuid.uuid4())[:8])
         name = body.get("name", "Untitled")
         now = datetime.now().isoformat()
+        # 작업 폴더 결정: body에 workDir 있으면 그것, 아니면 기존 레코드 유지, 아니면 패턴으로 자동 계산
+        explicit_wd = (body.get("workDir") or "").strip()
+        existing = db_exec("SELECT id, work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        work_dir = explicit_wd
+        if not work_dir and existing and existing.get("work_dir"):
+            work_dir = existing["work_dir"]
+        if not work_dir:
+            # 날짜 오버라이드 지원: body.saveDate = YYYY-MM-DD or YYYYMMDD
+            date_override = None
+            date_str = (body.get("saveDate") or "").strip()
+            if date_str:
+                for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
+                    try:
+                        date_override = datetime.strptime(date_str, fmt)
+                        break
+                    except ValueError:
+                        continue
+            work_dir = compute_work_dir(name, date_override=date_override)
+        # 실제 폴더 생성 (없으면)
+        ok_mk, path_or_err = ensure_work_dir(work_dir)
+        if not ok_mk:
+            log(f"[PROJECT_SAVE] 폴더 생성 실패: {path_or_err} (프로젝트는 저장, 폴더는 나중에 수동)")
+        # body의 data에 workDir 포함해서 저장 (프론트엔드가 로드 시 즉시 사용)
+        body["workDir"] = work_dir
         data = json.dumps(body, ensure_ascii=False)
-        existing = db_exec("SELECT id FROM projects WHERE id=?", (pid,), fetchone=True)
         if existing:
-            db_exec("UPDATE projects SET name=?, data=?, modified=? WHERE id=?", (name, data, now, pid))
+            db_exec("UPDATE projects SET name=?, data=?, modified=?, work_dir=? WHERE id=?",
+                    (name, data, now, work_dir, pid))
         else:
-            db_exec("INSERT INTO projects (id, name, data, created, modified) VALUES (?,?,?,?,?)", (pid, name, data, now, now))
-        log(f"PROJECT save [{pid}] {name}")
-        return {"ok": True, "id": pid}
+            db_exec("INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
+                    (pid, name, data, now, now, work_dir))
+        log(f"PROJECT save [{pid}] {name} work_dir={work_dir}")
+        return {"ok": True, "id": pid, "workDir": work_dir, "folderCreated": ok_mk}
 
     def _project_load(self, params):
         pid = params.get("id", [""])[0]
         row = db_exec("SELECT * FROM projects WHERE id=?", (pid,), fetchone=True)
         if not row: return {"ok": False, "error": "not found"}
-        return {"ok": True, "project": json.loads(row["data"])}
+        proj = json.loads(row["data"])
+        # work_dir 보강 (data에 없고 컬럼에만 있을 때)
+        if not proj.get("workDir") and row.get("work_dir"):
+            proj["workDir"] = row["work_dir"]
+        return {"ok": True, "project": proj}
+
+    def _project_preview_work_dir(self, params):
+        """새 프로젝트 이름 주면 자동 생성될 work_dir 경로 미리보기.
+        선택적 date=YYYY-MM-DD or YYYYMMDD 파라미터로 날짜 오버라이드."""
+        name = params.get("name", [""])[0]
+        if not name:
+            return {"ok": False, "error": "name required"}
+        date_override = None
+        date_str = (params.get("date", [""])[0] or "").strip()
+        if date_str:
+            for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
+                try:
+                    date_override = datetime.strptime(date_str, fmt)
+                    break
+                except ValueError:
+                    continue
+        path = compute_work_dir(name, date_override=date_override)
+        exists = os.path.isdir(path)
+        # 파싱된 날짜 / 정리된 이름도 같이 반환 (UI 피드백용)
+        parsed_dt, clean_name = _parse_date_from_name(name)
+        effective = date_override or parsed_dt or datetime.now()
+        return {"ok": True, "path": path, "exists": exists,
+                "effectiveDate": effective.strftime("%Y-%m-%d"),
+                "detectedFromName": bool(parsed_dt and not date_override),
+                "cleanName": clean_name}
+
+    def _project_adopt(self, body):
+        """기존 폴더를 프로젝트로 편입. body: {folderPath, name?}"""
+        folder = (body.get("folderPath") or "").strip()
+        if not folder or not os.path.isdir(folder):
+            return {"ok": False, "error": "유효한 폴더 경로가 아닙니다"}
+        # 이미 편입된 폴더 검사
+        exists_row = db_exec("SELECT id, name FROM projects WHERE work_dir=?", (folder,), fetchone=True)
+        if exists_row:
+            return {"ok": True, "already": True, "id": exists_row["id"], "name": exists_row["name"]}
+        name = (body.get("name") or os.path.basename(folder.rstrip("/")) or "Imported").strip()
+        pid = str(uuid.uuid4())[:8]
+        now = datetime.now().isoformat()
+        # 빈 플로우 JSON 저장 (노드·연결 없음)
+        empty = {"id": pid, "name": name, "workDir": folder, "nodes": [], "connections": [], "canvasElements": [], "cwd": folder}
+        data = json.dumps(empty, ensure_ascii=False)
+        db_exec(
+            "INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
+            (pid, name, data, now, now, folder),
+        )
+        log(f"[PROJECT_ADOPT] {pid} {name} ← {folder}")
+        return {"ok": True, "id": pid, "name": name, "workDir": folder}
+
+    def _project_scan_unregistered(self, params=None):
+        """설정된 work_root 하위에서 아직 DB에 없는 폴더들 반환 (최근 3년까지)."""
+        s = _get_work_folder_settings()
+        root = s.get("root") or "/synology"
+        if not os.path.isdir(root):
+            return {"ok": False, "error": f"작업 루트가 없습니다: {root}", "root": root}
+        # 이미 등록된 work_dir 세트
+        registered = set()
+        try:
+            rows = db_exec("SELECT work_dir FROM projects WHERE work_dir IS NOT NULL", fetch=True) or []
+            for r in rows:
+                if r.get("work_dir"):
+                    registered.add(os.path.normpath(r["work_dir"]))
+        except Exception:
+            pass
+        candidates = []
+        # sub 패턴에 {year}가 있으면 년도 폴더 → 그 하위를 스캔, 없으면 root 바로 하위
+        has_year = "{year}" in (s.get("sub") or "")
+        try:
+            if has_year:
+                for yr in sorted(os.listdir(root), reverse=True)[:5]:
+                    yr_path = os.path.join(root, yr)
+                    if not os.path.isdir(yr_path): continue
+                    if not re.match(r'^\d{4}$', yr): continue
+                    for fn in sorted(os.listdir(yr_path), reverse=True):
+                        full = os.path.normpath(os.path.join(yr_path, fn))
+                        if os.path.isdir(full) and not fn.startswith('.') and full not in registered:
+                            candidates.append({"path": full, "name": fn, "year": yr})
+            else:
+                for fn in sorted(os.listdir(root), reverse=True):
+                    full = os.path.normpath(os.path.join(root, fn))
+                    if os.path.isdir(full) and not fn.startswith('.') and full not in registered:
+                        candidates.append({"path": full, "name": fn})
+        except PermissionError:
+            return {"ok": False, "error": f"권한 없음: {root}"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "folders": candidates[:100], "root": root}
+
+    # ══════════════ 미디어 다운로드 (YouTube/Instagram/TikTok 등) ══════════════
+    def _media_download(self, body):
+        """URL → 프로젝트 work_dir 하위 videos/ 또는 images/ 로 자동 분류 저장.
+        yt-dlp로 다운받은 뒤 확장자 기준으로 이동. 인스타 캐러셀 등 여러 파일 자동 지원."""
+        url = (body.get("url") or "").strip()
+        project_id = (body.get("projectId") or "").strip()
+        if not url:
+            return {"ok": False, "error": "URL이 필요합니다"}
+
+        # 프로젝트 work_dir 조회 (없으면 /workspace fallback)
+        work_dir = None
+        if project_id:
+            try:
+                row = db_exec("SELECT work_dir FROM projects WHERE id=?", (project_id,), fetchone=True)
+                if row and row.get("work_dir"):
+                    work_dir = row["work_dir"]
+            except Exception:
+                pass
+        if not work_dir:
+            work_dir = "/workspace"
+        try:
+            os.makedirs(work_dir, exist_ok=True)
+        except Exception as e:
+            return {"ok": False, "error": f"작업 폴더 생성 실패: {e}"}
+
+        # 임시 하위 폴더에 먼저 다운로드
+        temp_id = str(uuid.uuid4())[:8]
+        temp_dir = os.path.join(work_dir, "_dl_tmp", temp_id)
+        try:
+            os.makedirs(temp_dir, exist_ok=True)
+        except Exception as e:
+            return {"ok": False, "error": f"임시 폴더 생성 실패: {e}"}
+
+        # yt-dlp 실행 (최대 10분)
+        output_template = os.path.join(temp_dir, "%(title).80s.%(ext)s")
+        cmd = [
+            "yt-dlp",
+            "-o", output_template,
+            "--no-playlist-reverse",
+            "--no-warnings",
+            "--ignore-errors",  # 캐러셀 중 일부 실패해도 나머지 계속
+            url,
+        ]
+        log(f"[DL] {url} → {temp_dir}")
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                timeout=600, encoding="utf-8", errors="replace",
+            )
+            stderr_tail = (result.stderr or "")[-800:]
+            stdout_tail = (result.stdout or "")[-800:]
+        except subprocess.TimeoutExpired:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return {"ok": False, "error": "타임아웃 (10분)"}
+        except FileNotFoundError:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return {"ok": False, "error": "yt-dlp가 설치되지 않았습니다. Dockerfile 재빌드 필요 (pip install yt-dlp)."}
+        except Exception as e:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return {"ok": False, "error": f"실행 오류: {e}"}
+
+        # 다운로드된 파일 스캔 → videos/ images/ 로 분류 이동
+        video_exts = {".mp4", ".webm", ".mkv", ".mov", ".avi", ".flv", ".m4v"}
+        image_exts = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".heic"}
+        other_exts = {".mp3", ".m4a", ".wav", ".ogg", ".opus"}  # 오디오면 audio/
+        videos_dir = os.path.join(work_dir, "videos")
+        images_dir = os.path.join(work_dir, "images")
+        audio_dir  = os.path.join(work_dir, "audio")
+        moved = []
+        try:
+            for fn in os.listdir(temp_dir):
+                src = os.path.join(temp_dir, fn)
+                if not os.path.isfile(src):
+                    continue
+                ext = os.path.splitext(fn)[1].lower()
+                if ext in video_exts:
+                    os.makedirs(videos_dir, exist_ok=True)
+                    dst_dir, kind = videos_dir, "video"
+                elif ext in image_exts:
+                    os.makedirs(images_dir, exist_ok=True)
+                    dst_dir, kind = images_dir, "image"
+                elif ext in other_exts:
+                    os.makedirs(audio_dir, exist_ok=True)
+                    dst_dir, kind = audio_dir, "audio"
+                else:
+                    # 기타 메타 파일(썸네일 .jpg, 자막 .vtt 등) 스킵 — 이미 jpg는 위에서 이미지로 처리됨
+                    continue
+                dst = os.path.join(dst_dir, fn)
+                if os.path.exists(dst):
+                    base, e = os.path.splitext(fn)
+                    dst = os.path.join(dst_dir, f"{base}_{int(time.time())}{e}")
+                try:
+                    shutil.move(src, dst)
+                    moved.append({
+                        "path": dst,
+                        "name": os.path.basename(dst),
+                        "kind": kind,
+                        "size": os.path.getsize(dst),
+                    })
+                except Exception as me:
+                    log(f"[DL] 이동 실패 {src}: {me}")
+        except Exception as e:
+            log(f"[DL] 스캔 실패: {e}")
+
+        # 임시 폴더 정리
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        try:
+            parent = os.path.join(work_dir, "_dl_tmp")
+            if os.path.isdir(parent) and not os.listdir(parent):
+                os.rmdir(parent)
+        except Exception:
+            pass
+
+        if not moved:
+            err = stderr_tail or stdout_tail or "다운로드된 파일이 없습니다"
+            return {"ok": False, "error": err, "raw": (result.stderr or '')[-400:]}
+
+        return {"ok": True, "files": moved, "count": len(moved),
+                "workDir": work_dir,
+                "videoCount": sum(1 for m in moved if m["kind"] == "video"),
+                "imageCount": sum(1 for m in moved if m["kind"] == "image"),
+                "audioCount": sum(1 for m in moved if m["kind"] == "audio")}
 
     def _project_list(self):
         rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
@@ -1970,7 +2353,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _project_list_meta(self):
         """메타데이터만 (data 필드 제외, 가벼움) — 노드 수도 함께"""
-        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
+        rows = db_exec("SELECT id, name, modified, created, favorite, folder_id, work_dir FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
         # __current__ 류는 Python에서 필터링
         rows = [r for r in rows if not (r.get("id") or "").startswith("__current")]
         log(f"[PROJECT_LIST_META] {len(rows)}개 반환")
@@ -3726,7 +4109,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             self.send_error(500, str(e))
 
     def _fs_browse_system(self, params):
-        """시스템 전체 파일 탐색 (workspace_root 선택용). 절대경로 기준."""
+        """시스템 전체 파일 탐색 (workspace_root 선택용). 절대경로 기준.
+        권한 에러가 있어도 진입은 허용하고 경고만 표시 (listdir 부분 실패 시 읽을 수 있는 것만 반환)."""
         path = params.get("path", ["/"])[0] or "/"
         try:
             path = os.path.abspath(path)
@@ -3735,27 +4119,39 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         if not os.path.isdir(path):
             return {"ok": False, "error": "디렉토리가 아닙니다", "path": path}
         items = []
+        warn = None
         try:
-            for name in sorted(os.listdir(path)):
-                # 숨김 폴더 건너뛰기
-                if name.startswith("."): continue
-                full = os.path.join(path, name)
-                try:
-                    if os.path.isdir(full):
-                        items.append({"name": name, "path": full, "isDir": True})
-                except:
-                    continue
+            names = sorted(os.listdir(path))
         except PermissionError:
-            return {"ok": False, "error": "접근 권한 없음", "path": path}
+            # 권한 에러여도 진입은 성공으로 처리 (프론트에서 경고 배너 표시)
+            names = []
+            try: import os as _os; uid=_os.geteuid();
+            except: uid='?'
+            warn = (f"⚠ 폴더 읽기 권한 없음 (listdir 실패) — 컨테이너 uid={uid} 에게 읽기 권한 필요\n"
+                    f"→ 시놀로지 SSH에서: chmod -R o+rX {path.replace('/synology','/volume1/00_Gils_Project')}\n"
+                    f"또는 DSM 파일스테이션에서 공유폴더 권한에 'everyone read' 추가")
         except Exception as e:
-            return {"ok": False, "error": str(e), "path": path}
+            names = []
+            warn = f"⚠ 읽기 실패: {e}"
+        for name in names:
+            if name.startswith("."): continue
+            full = os.path.join(path, name)
+            try:
+                if os.path.isdir(full):
+                    items.append({"name": name, "path": full, "isDir": True})
+            except PermissionError:
+                continue
+            except Exception:
+                continue
         # 추천 시작 경로들 (root일 때만)
         suggestions = []
         if path == "/":
             for p in ["/synology", "/workspace", "/app", "/mnt", "/home", "/volume1"]:
                 if os.path.isdir(p):
                     suggestions.append(p)
-        return {"ok": True, "path": path, "items": items, "suggestions": suggestions}
+        resp = {"ok": True, "path": path, "items": items, "suggestions": suggestions}
+        if warn: resp["warn"] = warn
+        return resp
 
     def _fs_mkdir_system(self, body):
         """절대 경로에 폴더 생성 (workspace_root 설정용)."""
