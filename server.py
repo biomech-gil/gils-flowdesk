@@ -398,6 +398,7 @@ def init_db():
             ("memo_folders", "parent_id", "ALTER TABLE memo_folders ADD COLUMN parent_id INTEGER"),
             ("claude_accounts", "priority", "ALTER TABLE claude_accounts ADD COLUMN priority INTEGER DEFAULT 0"),
             ("conversations", "account_id", "ALTER TABLE conversations ADD COLUMN account_id INTEGER"),
+            ("conversations", "project_id", "ALTER TABLE conversations ADD COLUMN project_id TEXT"),
             ("project_folders", "parent_id", "ALTER TABLE project_folders ADD COLUMN parent_id INTEGER"),
             ("messages", "chat_only", "ALTER TABLE messages ADD COLUMN chat_only INTEGER DEFAULT 1"),
             ("claude_accounts", "rate_limited_until", "ALTER TABLE claude_accounts ADD COLUMN rate_limited_until TEXT"),
@@ -593,6 +594,7 @@ def init_db():
             "ALTER TABLE fav_items ADD COLUMN kind TEXT DEFAULT 'project'",
             "ALTER TABLE fav_items ADD COLUMN target_id TEXT",
             "ALTER TABLE fav_folders ADD COLUMN kind TEXT DEFAULT 'project'",
+            "ALTER TABLE conversations ADD COLUMN project_id TEXT",
         ]:
             try:
                 db.execute(stmt)
@@ -1033,67 +1035,160 @@ def _cleanup_stale_recovery_slots(days=2):
 _cleanup_stale_recovery_slots(days=2)
 
 # ═══════════════════════════════════════
-# 프로젝트 작업 폴더 (Project = Folder) 설정 & 헬퍼
+# 프로젝트 작업 폴더 (Project = Folder) 정책 — 하드 고정
 # ═══════════════════════════════════════
+# 설계: 사용자가 경로로 고민하지 않도록 모든 경로는 아래 상수에서 자동 계산.
+#   /synology/{YYYY}/{YYYYMMDD}_{이름}   ← 정식 프로젝트
+#   /synology/_temp/{YYYYMMDD}_{이름|Untitled}__{8id}   ← 저장 안 한 임시 작업
+#   /synology/.trash/_temp/{이름}__trashed-{ts}          ← 임시 작업의 휴지통
+SYNOLOGY_CONTAINER_ROOT = "/synology"
+TEMP_ROOT = os.path.join(SYNOLOGY_CONTAINER_ROOT, "_temp")
+TRASH_ROOT = os.path.join(SYNOLOGY_CONTAINER_ROOT, ".trash", "_temp")
+TEMP_TTL_DAYS = 2       # 임시 폴더 → 휴지통 이동
+TRASH_TTL_DAYS = 5      # 휴지통 → 영구 삭제 (즉 총 2+3=5일 후 삭제)
+PROJECT_SUB_PATTERN = "{year}"
+PROJECT_FOLDER_PATTERN = "{date}_{name}"
+
+# 호스트 prefix basename(e.g. "00_Gils_Project") — 사용자가 /synology/ 뒤에
+# 이걸 중복해서 입력한 경우 자동으로 제거하기 위함.
+def _host_prefix_basename():
+    try:
+        row = db_exec("SELECT value FROM system_settings WHERE key='ext_host_prefix'", fetchone=True)
+        v = row.get("value") if row else None
+        if v:
+            base = os.path.basename(v.rstrip("/"))
+            if base:
+                return base
+    except Exception:
+        pass
+    return "00_Gils_Project"
+
+def _normalize_synology_path(path):
+    """/synology/00_Gils_Project/… 식으로 호스트 prefix 를 컨테이너 경로에 중복
+    지정한 경우 자동 교정. `(normalized, changed)` 반환."""
+    if not path:
+        return path, False
+    original = path
+    p = path.replace("\\", "/")
+    # 이중/다중 슬래시 제거
+    while "//" in p:
+        p = p.replace("//", "/")
+    # /synology/ 바로 뒤 호스트 basename 이 반복되면 전부 접기
+    base = _host_prefix_basename()
+    if base:
+        needle = f"{SYNOLOGY_CONTAINER_ROOT}/{base}"
+        while p == needle or p.startswith(needle + "/"):
+            p = SYNOLOGY_CONTAINER_ROOT + p[len(needle):]
+    p = p.rstrip("/") if p != "/" else p
+    return p, (p != original)
+
 def _seed_work_folder_defaults():
-    """system_settings에 작업 폴더 기본값이 없으면 주입 + 잘못 저장된 구 값 자동 교정."""
+    """system_settings에 기본값 주입 + 과거 잘못 저장된 경로 일괄 정규화.
+    (project_work_root / project_sub_pattern / project_folder_pattern 은 이제
+    코드 상수로 강제되므로 DB 값은 참고용일 뿐이다.)"""
     defaults = {
-        "project_work_root": "/synology",
-        "project_sub_pattern": "{year}",
-        "project_folder_pattern": "{date}_{name}",
+        "project_work_root": SYNOLOGY_CONTAINER_ROOT,
+        "project_sub_pattern": PROJECT_SUB_PATTERN,
+        "project_folder_pattern": PROJECT_FOLDER_PATTERN,
         "ext_dsm_url": "https://gilhojong.synology.me:5001",
         "ext_quickconnect_id": "Gils-House-DB",
-        "ext_container_prefix": "/synology",
+        "ext_container_prefix": SYNOLOGY_CONTAINER_ROOT,
         "ext_host_prefix": "/volume1/00_Gils_Project",
     }
     try:
         now = datetime.now().isoformat()
+        # 기본값 주입 + 상수와 다른 경로 세팅은 강제로 상수 값으로 덮어씀
+        FORCE_KEYS = {"project_work_root": SYNOLOGY_CONTAINER_ROOT,
+                      "project_sub_pattern": PROJECT_SUB_PATTERN,
+                      "project_folder_pattern": PROJECT_FOLDER_PATTERN}
         for k, v in defaults.items():
             row = db_exec("SELECT value FROM system_settings WHERE key=?", (k,), fetchone=True)
             if not row:
                 db_exec("INSERT INTO system_settings (key, value, updated) VALUES (?,?,?)", (k, v, now))
-        # 🩹 구 버전 버그 교정: project_work_root 가 '/synology/00_Gils_Project' 로 잘못 저장된 경우
-        # (이 값으로는 실제 컨테이너에서 /volume1/00_Gils_Project/00_Gils_Project 이중 경로 생성됨)
-        bad = db_exec("SELECT value FROM system_settings WHERE key='project_work_root'", fetchone=True)
-        if bad and (bad.get("value") or "").rstrip("/") == "/synology/00_Gils_Project":
-            db_exec("UPDATE system_settings SET value=?, updated=? WHERE key='project_work_root'",
-                    ("/synology", now))
-            log("[MIGRATION] project_work_root '/synology/00_Gils_Project' → '/synology' (이중 경로 버그 교정)")
-        # 이미 잘못된 경로로 저장된 프로젝트 work_dir도 일괄 교정
+            elif k in FORCE_KEYS and (row.get("value") or "") != FORCE_KEYS[k]:
+                db_exec("UPDATE system_settings SET value=?, updated=? WHERE key=?",
+                        (FORCE_KEYS[k], now, k))
+                log(f"[MIGRATION] system_settings.{k} '{row.get('value')}' → '{FORCE_KEYS[k]}' (상수 강제)")
+        # 이미 잘못된 경로로 저장된 projects.work_dir 전수 정규화
         try:
-            rows = db_exec("SELECT id, work_dir FROM projects WHERE work_dir LIKE ?",
-                           ("/synology/00_Gils_Project/%",), fetch=True) or []
+            rows = db_exec("SELECT id, work_dir FROM projects WHERE work_dir IS NOT NULL", fetch=True) or []
+            fixed = 0
             for r in rows:
                 old = r.get("work_dir") or ""
-                new = old.replace("/synology/00_Gils_Project/", "/synology/", 1)
-                db_exec("UPDATE projects SET work_dir=? WHERE id=?", (new, r["id"]))
-                log(f"[MIGRATION] project {r['id']} work_dir: {old} → {new}")
+                new, changed = _normalize_synology_path(old)
+                if changed:
+                    db_exec("UPDATE projects SET work_dir=? WHERE id=?", (new, r["id"]))
+                    log(f"[MIGRATION] project {r['id']} work_dir: {old} → {new}")
+                    fixed += 1
+            if fixed:
+                log(f"[MIGRATION] {fixed}개 프로젝트 work_dir 정규화 완료")
         except Exception as e:
-            log(f"[MIGRATION] projects work_dir 교정 실패: {e}")
+            log(f"[MIGRATION] projects work_dir 정규화 실패: {e}")
     except Exception as e:
         log(f"[WORKDIR] seed defaults failed: {e}")
 
 _seed_work_folder_defaults()
 
 def _sanitize_folder_name(name):
-    """파일시스템 안전 폴더명."""
+    """파일시스템 안전 폴더명.
+    Windows SMB 호환을 위해 **끝 쪽의 점과 공백을 제거** (Windows/NTFS 는 후행 점 불가,
+    Synology SMB 가 후행 점을 %2E 로 인코딩해서 표시하는 현상 방지)."""
     s = re.sub(r'[\\/:*?"<>|]', '_', (name or '')).strip()
     s = re.sub(r'\s+', ' ', s)
+    # 양쪽 끝의 . 또는 공백 반복 제거 (중간 점은 유지)
+    s = s.strip(' .')
     return s[:160] or 'Untitled'
 
+# Windows 예약 이름 (파일시스템 호환 — NTFS/SMB 에서 쓸 수 없는 이름)
+_RESERVED_WIN_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *{f"COM{i}" for i in range(0, 10)},
+    *{f"LPT{i}" for i in range(0, 10)},
+}
+# 금지 문자 (Windows NTFS + SMB 충돌) + 실용적으로 거부할 문자 (%,&=#)
+_FORBIDDEN_NAME_CHARS = set('\\/:*?"<>|')
+
+def validate_project_name(name):
+    """프로젝트 이름 검증. 유효하면 (True, None), 아니면 (False, 사용자용 오류 메시지).
+    프론트와 서버 양쪽에서 호출되어 저장을 강제 차단."""
+    if name is None:
+        return (False, "이름이 비어있습니다.")
+    raw = name
+    trimmed = raw.strip()
+    if not trimmed:
+        return (False, "이름이 비어있거나 공백만 있습니다.")
+    # 제어문자 (탭/개행/NULL 등)
+    for ch in trimmed:
+        if ord(ch) < 32:
+            return (False, "탭·개행 등 제어문자는 사용할 수 없습니다.")
+    # 앞뒤 점/공백 — Windows SMB 호환 문제
+    if raw != raw.strip(" ."):
+        return (False, "이름의 맨 앞이나 맨 뒤에 점(.) 또는 공백은 사용할 수 없습니다.\n(Windows·시놀로지 SMB 에서 폴더명이 %2E 로 깨집니다)")
+    # 금지 문자
+    bad = sorted({c for c in trimmed if c in _FORBIDDEN_NAME_CHARS})
+    if bad:
+        return (False, f"다음 문자는 폴더명에 쓸 수 없습니다: {' '.join(bad)}\n(허용 안 되는 기호: \\ / : * ? \" < > | )")
+    # URL/HTML 에서 오해 살 수 있는 문자 — %
+    if "%" in trimmed:
+        return (False, "'%' 문자는 사용할 수 없습니다 (Windows 탐색기에서 URL 인코딩과 혼동).")
+    # Windows 예약 이름 (date 접두사 제외한 깨끗한 이름 기준으로도 검사)
+    base_for_reserved = re.sub(r'^\s*\d{4}[-\/\.]?\d{2}[-\/\.]?\d{2}[\s_\-]+', '', trimmed)
+    for candidate in (trimmed, base_for_reserved):
+        root = candidate.split('.', 1)[0].upper().strip()
+        if root in _RESERVED_WIN_NAMES:
+            return (False, f"'{candidate}' 은(는) Windows 예약 이름이라 사용할 수 없습니다.")
+    # 길이 제한 (파일시스템 보수적으로)
+    if len(trimmed) > 150:
+        return (False, "이름이 너무 깁니다. 150자 이하로 줄여주세요.")
+    return (True, None)
+
 def _get_work_folder_settings():
-    """system_settings에서 패턴 3개 읽어 dict 반환. 누락 시 기본값."""
-    def _get(k, dflt):
-        try:
-            r = db_exec("SELECT value FROM system_settings WHERE key=?", (k,), fetchone=True)
-            v = r.get("value") if r else None
-            return v if v else dflt
-        except Exception:
-            return dflt
+    """정책이 하드 고정되었으므로 항상 상수 값 반환.
+    (과거 DB 기반 설정은 _seed_work_folder_defaults 가 상수로 덮어씀.)"""
     return {
-        "root": _get("project_work_root", "/synology/00_Gils_Project"),
-        "sub":  _get("project_sub_pattern", "{year}"),
-        "folder": _get("project_folder_pattern", "{date}_{name}"),
+        "root": SYNOLOGY_CONTAINER_ROOT,
+        "sub":  PROJECT_SUB_PATTERN,
+        "folder": PROJECT_FOLDER_PATTERN,
     }
 
 def _parse_date_from_name(name):
@@ -1127,28 +1222,24 @@ def _expand_pattern(pattern, name, now=None):
     return out
 
 def compute_work_dir(name, settings=None, date_override=None):
-    """사용자 패턴에 따라 프로젝트 기본 work_dir 절대경로 계산.
-    이름 앞에 YYYYMMDD_ 접두사 있으면 자동으로 날짜 추출 + 이름에서 제거.
-    date_override (datetime) 주면 그것을 우선 사용.
-    Example:
-      name='신약검토' → /synology/00_Gils_Project/2026/20260420_신약검토  (오늘)
-      name='20251020_신약검토' → /synology/00_Gils_Project/2025/20251020_신약검토 (자동 감지)
-      name='신약검토', date_override=date(2025,3,1) → 20250301_신약검토
+    """프로젝트 work_dir 절대경로 계산 — 정책 하드 고정.
+    결과: /synology/{YYYY}/{YYYYMMDD}_{이름}
+    이름 앞 YYYYMMDD_ 접두사 자동 감지, date_override 우선.
     """
     s = settings or _get_work_folder_settings()
-    root = s.get("root") or "/synology"
-    # 1) 이름에서 날짜 자동 파싱
+    root = s.get("root") or SYNOLOGY_CONTAINER_ROOT
     parsed_dt, clean_name = _parse_date_from_name(name)
-    # 2) 우선순위: date_override > parsed_dt > 오늘
     effective = date_override or parsed_dt or datetime.now()
-    # 3) {name} 토큰 치환엔 clean_name 사용 (날짜 중복 방지)
     sub = _expand_pattern(s.get("sub") or "", clean_name, effective)
     folder = _expand_pattern(s.get("folder") or "{name}", clean_name, effective) or _sanitize_folder_name(clean_name)
     parts = [root]
     if sub:
         parts.append(sub)
     parts.append(folder)
-    return os.path.normpath(os.path.join(*parts))
+    path = os.path.normpath(os.path.join(*parts))
+    # 안전망: 사용자가 어쩌다 중복 prefix를 넣었을 때도 정규화
+    path, _ = _normalize_synology_path(path.replace("\\", "/"))
+    return path
 
 def ensure_work_dir(path):
     """폴더 생성(없으면). 실패 시 예외 메시지 반환. 성공 시 (True, path)."""
@@ -1161,6 +1252,159 @@ def ensure_work_dir(path):
         return (False, f"권한 없음: {path}")
     except Exception as e:
         return (False, str(e))
+
+# ═══════════════════════════════════════
+# 임시 프로젝트 폴더 (저장 안 한 작업물)
+# ═══════════════════════════════════════
+# 노드를 실행하는 순간 /synology/_temp/<slug>__<id>/ 에 폴더 생성.
+# 매 실행마다 캔버스 JSON 을 snapshot.json 으로 기록해 복원 가능.
+# 2일 경과 → /synology/.trash/_temp/ 로 이동, 추가 3일 후 영구 삭제.
+
+# 프로젝트/세션별 임시 폴더 id → 디렉토리 경로 매핑 (프로세스 로컬)
+_TEMP_DIR_CACHE = {}
+_TEMP_CACHE_LOCK = threading.Lock()
+
+def _temp_slug_from_name(name):
+    safe = _sanitize_folder_name(name or "Untitled")
+    date_str = datetime.now().strftime("%Y%m%d")
+    return f"{date_str}_{safe}"
+
+def get_or_create_temp_dir(session_key, name=None):
+    """session_key(임시 프로젝트 식별자) 기반 폴더 반환. 없으면 생성."""
+    if not session_key:
+        session_key = f"anon_{uuid.uuid4().hex[:8]}"
+    with _TEMP_CACHE_LOCK:
+        cached = _TEMP_DIR_CACHE.get(session_key)
+        if cached and os.path.isdir(cached):
+            return cached
+        slug = _temp_slug_from_name(name)
+        short = session_key.replace("/", "_")[-8:] or uuid.uuid4().hex[:8]
+        folder = os.path.join(TEMP_ROOT, f"{slug}__{short}")
+        try:
+            os.makedirs(folder, exist_ok=True)
+            _TEMP_DIR_CACHE[session_key] = folder
+            return folder
+        except Exception as e:
+            log(f"[TEMP] 폴더 생성 실패 {folder}: {e}")
+            return None
+
+def write_temp_snapshot(temp_dir, canvas_state):
+    """임시 폴더에 캔버스 전체 스냅샷 JSON 기록. 복원용."""
+    if not temp_dir or not os.path.isdir(temp_dir):
+        return False
+    try:
+        snap_path = os.path.join(temp_dir, "snapshot.json")
+        payload = {
+            "savedAt": datetime.now().isoformat(),
+            "kind": "temp_snapshot",
+            "canvas": canvas_state,
+        }
+        with open(snap_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        log(f"[TEMP] snapshot 쓰기 실패 {temp_dir}: {e}")
+        return False
+
+def move_temp_to_trash(temp_dir):
+    """임시 폴더를 /synology/.trash/_temp/ 로 이동. DB trash 테이블에 레코드 삽입."""
+    if not temp_dir or not os.path.isdir(temp_dir):
+        return False
+    try:
+        os.makedirs(TRASH_ROOT, exist_ok=True)
+        base = os.path.basename(temp_dir.rstrip("/"))
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        target = os.path.join(TRASH_ROOT, f"{base}__trashed-{ts}")
+        shutil.move(temp_dir, target)
+        # DB 휴지통에도 포인터 레코드
+        try:
+            snap_path = os.path.join(target, "snapshot.json")
+            snap_data = ""
+            if os.path.exists(snap_path):
+                with open(snap_path, "r", encoding="utf-8") as f:
+                    snap_data = f.read()
+            payload = json.dumps({"path": target, "original": temp_dir,
+                                  "snapshot": snap_data[:1_000_000]}, ensure_ascii=False)
+            db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
+                    ("temps_folder", base, base, payload, datetime.now().isoformat()))
+        except Exception as e:
+            log(f"[TEMP] DB trash 레코드 삽입 실패: {e}")
+        # 캐시에서 제거
+        with _TEMP_CACHE_LOCK:
+            for k, v in list(_TEMP_DIR_CACHE.items()):
+                if v == temp_dir:
+                    _TEMP_DIR_CACHE.pop(k, None)
+        log(f"[TEMP→TRASH] {temp_dir} → {target}")
+        return True
+    except Exception as e:
+        log(f"[TEMP] trash 이동 실패 {temp_dir}: {e}")
+        return False
+
+def cleanup_temp_and_trash():
+    """부팅 시 & 하루 1회: 오래된 임시/휴지통 정리.
+    - /synology/_temp/<dir> mtime > TEMP_TTL_DAYS → 휴지통으로 이동
+    - /synology/.trash/_temp/<dir> mtime > TRASH_TTL_DAYS → 영구 삭제
+    """
+    moved = 0
+    purged = 0
+    # 1) 임시 → 휴지통
+    try:
+        if os.path.isdir(TEMP_ROOT):
+            cutoff_temp = time.time() - TEMP_TTL_DAYS * 86400
+            for name in os.listdir(TEMP_ROOT):
+                full = os.path.join(TEMP_ROOT, name)
+                if not os.path.isdir(full):
+                    continue
+                try:
+                    if os.path.getmtime(full) < cutoff_temp:
+                        if move_temp_to_trash(full):
+                            moved += 1
+                except Exception:
+                    continue
+    except Exception as e:
+        log(f"[CLEANUP] temp 스캔 실패: {e}")
+    # 2) 휴지통 영구 삭제
+    try:
+        if os.path.isdir(TRASH_ROOT):
+            cutoff_trash = time.time() - TRASH_TTL_DAYS * 86400
+            for name in os.listdir(TRASH_ROOT):
+                full = os.path.join(TRASH_ROOT, name)
+                if not os.path.isdir(full):
+                    continue
+                try:
+                    if os.path.getmtime(full) < cutoff_trash:
+                        shutil.rmtree(full, ignore_errors=True)
+                        try:
+                            db_exec("DELETE FROM trash WHERE original_table='temps_folder' AND data LIKE ?",
+                                    (f'%"path": "{full}"%',))
+                        except Exception: pass
+                        purged += 1
+                        log(f"[TRASH→DELETE] {full}")
+                except Exception:
+                    continue
+    except Exception as e:
+        log(f"[CLEANUP] trash 스캔 실패: {e}")
+    if moved or purged:
+        log(f"[CLEANUP] 임시→휴지통 {moved}개, 휴지통→삭제 {purged}개")
+    return {"moved": moved, "purged": purged}
+
+# 부팅 시 1회 정리
+try:
+    cleanup_temp_and_trash()
+except Exception as _e:
+    log(f"[CLEANUP] 부팅 정리 실패: {_e}")
+
+# 백그라운드 일일 정리 스레드
+def _cleanup_daemon():
+    while True:
+        try:
+            time.sleep(6 * 3600)  # 6시간마다
+            cleanup_temp_and_trash()
+        except Exception as e:
+            log(f"[CLEANUP daemon] {e}")
+            time.sleep(600)
+
+threading.Thread(target=_cleanup_daemon, daemon=True).start()
 
 # ═══════════════════════════════════════
 # tmux
@@ -1679,7 +1923,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/pane-content": self._json(self._pane_content(params))
         elif p == "/api/pane-prompt-check": self._json(self._pane_prompt(params))
         elif p == "/api/trash/list": self._json(self._trash_list())
+        elif p == "/api/temp/folder-list": self._json(self._temp_folder_list())
+        elif p == "/api/temp/folder-snapshot": self._json(self._temp_folder_snapshot(params))
         elif p == "/api/settings/get": self._json(self._settings_get())
+        elif p == "/api/auth/health": self._json(self._auth_health(params))
         elif p == "/api/claude/accounts/list": self._json(self._claude_accounts_list())
         elif p == "/api/claude/login/status": self._json(self._claude_login_status())
         elif p == "/api/gemini/accounts/list": self._json(self._gemini_accounts_list())
@@ -1798,6 +2045,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/fs/trash-restore": self._fs_trash_restore,
             "/api/fs/trash-delete": self._fs_trash_delete,
             "/api/fs/trash-empty": self._fs_trash_empty,
+            "/api/temp/folder-restore": self._temp_folder_restore,
+            "/api/temp/folder-promote": self._temp_folder_promote,
+            "/api/temp/folder-delete": self._temp_folder_delete_now,
+            "/api/temp/cleanup-now": self._temp_cleanup_now,
         }
         handler = handlers.get(p)
         if handler:
@@ -1843,13 +2094,14 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         def run():
             try:
-                # env는 run_claude_safe 가 계정마다 새로 만듦 (폴백 시)
+                # run_cwd 결정 우선순위:
+                # 1) body.cwd (명시적 지정)
+                # 2) projects.work_dir (저장된 정식 프로젝트)
+                # 3) /synology/_temp/<date>_<projname>__<id>/ (임시 프로젝트 — 저장 안 됨)
                 run_cwd = None
                 if cwd and os.path.isdir(cwd):
                     run_cwd = cwd
                 else:
-                    # 우선순위: 1) 프로젝트 work_dir (사용자가 저장한 프로젝트 전용 폴더)
-                    # 2) legacy workspace_root/{date_name}/{node_name}/ (이전 동작 호환)
                     try:
                         wf_id = (body.get("projectId") or "").strip()
                         if wf_id:
@@ -1857,20 +2109,18 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                             if wd_row and wd_row.get("work_dir") and os.path.isdir(wd_row["work_dir"]):
                                 run_cwd = wd_row["work_dir"]
                                 log(f"EXEC [{exec_id}] project work_dir: {run_cwd}")
-                        # work_dir 없으면 legacy 자동 생성 경로
+                        # 프로젝트 저장 안 되어 있으면 임시 폴더 사용
                         if not run_cwd:
-                            ws_row = db_exec("SELECT value FROM system_settings WHERE key='workspace_root'", fetchone=True)
-                            if ws_row and ws_row.get("value"):
-                                ws_root = ws_row["value"]
-                                project_name = body.get("projectName", "") or "Untitled"
-                                def safe_name(s):
-                                    return re.sub(r'[/\\:*?"<>|]', '_', s).strip()[:100]
-                                date_str = datetime.now().strftime("%Y%m%d")
-                                project_folder = f"{date_str}_{safe_name(project_name)}"
-                                node_folder = safe_name(node_name)
-                                run_cwd = os.path.join(ws_root, project_folder, node_folder)
-                                os.makedirs(run_cwd, exist_ok=True)
-                                log(f"EXEC [{exec_id}] auto-cwd: {run_cwd}")
+                            temp_key = (body.get("tempKey") or wf_id or body.get("tabId") or f"anon_{node_id}")
+                            temp_name = body.get("projectName") or "Untitled"
+                            tdir = get_or_create_temp_dir(temp_key, temp_name)
+                            if tdir:
+                                run_cwd = tdir
+                                log(f"EXEC [{exec_id}] temp cwd: {run_cwd}")
+                                # 캔버스 스냅샷이 body.canvasState 로 넘어오면 기록
+                                canvas_state = body.get("canvasState")
+                                if canvas_state:
+                                    write_temp_snapshot(tdir, canvas_state)
                     except Exception as e:
                         log(f"EXEC [{exec_id}] cwd resolve failed: {e}")
                         run_cwd = None
@@ -1930,6 +2180,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         chat_only = body.get("chatOnly", True)
         node_id = body.get("nodeId", "")
         node_name = body.get("nodeName", "")
+        project_id = (body.get("projectId") or "").strip()
         if not message: return {"ok": False, "error": "message required"}
 
         # account_id 결정: body에 있으면 사용, 없으면 conversation에서 조회, 그것도 없으면 기본
@@ -1950,8 +2201,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                         nxt = self._claude_next_account({})
                         if nxt.get("ok"): account_id = nxt.get("accountId")
                 except: pass
-            db_exec("INSERT INTO conversations (id, node_id, node_name, title, account_id, created) VALUES (?,?,?,?,?,?)",
-                    (conv_id, node_id, node_name, message[:30], account_id, datetime.now().isoformat()))
+            db_exec("INSERT INTO conversations (id, node_id, node_name, title, account_id, project_id, created) VALUES (?,?,?,?,?,?,?)",
+                    (conv_id, node_id, node_name, message[:30], account_id, project_id or None, datetime.now().isoformat()))
         else:
             # 기존 conversation → 저장된 account_id 조회
             if not account_id:
@@ -1978,7 +2229,32 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         def run():
             try:
+                # cwd 결정: 1) body.cwd → 2) project_id 의 work_dir → 3) 임시 폴더
                 run_cwd = cwd if cwd and os.path.isdir(cwd) else None
+                if not run_cwd:
+                    # conversations 레코드에서 project_id 재조회 (기존 대화는 업데이트 안 했으므로)
+                    pid = project_id
+                    if not pid:
+                        try:
+                            cr = db_exec("SELECT project_id FROM conversations WHERE id=?", (conv_id,), fetchone=True)
+                            if cr and cr.get("project_id"):
+                                pid = cr["project_id"]
+                        except Exception: pass
+                    if pid:
+                        try:
+                            wd_row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+                            if wd_row and wd_row.get("work_dir") and os.path.isdir(wd_row["work_dir"]):
+                                run_cwd = wd_row["work_dir"]
+                                log(f"CHAT [{conv_id}] project work_dir: {run_cwd}")
+                        except Exception: pass
+                    # 그래도 없으면 임시 폴더 (대화 id 를 세션 키로)
+                    if not run_cwd:
+                        temp_key = pid or conv_id
+                        temp_name = body.get("projectName") or node_name or "Chat"
+                        tdir = get_or_create_temp_dir(temp_key, temp_name)
+                        if tdir:
+                            run_cwd = tdir
+                            log(f"CHAT [{conv_id}] temp cwd: {run_cwd}")
                 provider = (body.get("provider") or "claude").lower()
                 if provider not in SUPPORTED_PROVIDERS:
                     provider = "claude"
@@ -2044,8 +2320,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 title = f"{node_name} @{ex['started'][:16]}"
         # 부모 노드의 account_id를 상속 (body에 있으면 사용)
         account_id = body.get("accountId")
-        db_exec("INSERT INTO conversations (id, parent_exec_id, node_id, node_name, title, account_id, created) VALUES (?,?,?,?,?,?,?)",
-                (conv_id, exec_id, node_id, node_name, title, account_id, datetime.now().isoformat()))
+        project_id = (body.get("projectId") or "").strip() or None
+        db_exec("INSERT INTO conversations (id, parent_exec_id, node_id, node_name, title, account_id, project_id, created) VALUES (?,?,?,?,?,?,?,?)",
+                (conv_id, exec_id, node_id, node_name, title, account_id, project_id, datetime.now().isoformat()))
 
         # 실행 기록의 input/output을 초기 대화로 삽입
         if exec_id:
@@ -2088,42 +2365,101 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     # ── Project CRUD ──
 
     def _project_save(self, body):
+        """프로젝트 저장 — 경로 정책 하드 고정.
+        정책:
+          - 신규 프로젝트: body.workDir 완전 무시하고 이름+날짜로 재계산 (잔상 버그 차단)
+          - 기존 프로젝트: 저장된 work_dir 유지 (이름 변경해도 폴더는 그대로)
+          - work_dir 내부에 project.json 실파일 dump (DB + 파일시스템 양방향 진실)
+          - 임시 폴더(/synology/_temp/...)에서 진행하던 작업이면 정식 폴더로 승격/이동
+        """
         pid = body.get("id", str(uuid.uuid4())[:8])
         name = body.get("name", "Untitled")
         now = datetime.now().isoformat()
-        # 작업 폴더 결정: body에 workDir 있으면 그것, 아니면 기존 레코드 유지, 아니면 패턴으로 자동 계산
-        explicit_wd = (body.get("workDir") or "").strip()
+        # 이름 검증 — 금지 문자/후행 점·공백/예약명 있으면 저장 차단
+        ok_name, name_err = validate_project_name(name)
+        if not ok_name:
+            log(f"[PROJECT_SAVE] 이름 거부: '{name}' — {name_err}")
+            return {"ok": False, "error": name_err, "errorKind": "invalid_name"}
         existing = db_exec("SELECT id, work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
-        work_dir = explicit_wd
-        if not work_dir and existing and existing.get("work_dir"):
-            work_dir = existing["work_dir"]
-        if not work_dir:
-            # 날짜 오버라이드 지원: body.saveDate = YYYY-MM-DD or YYYYMMDD
-            date_override = None
-            date_str = (body.get("saveDate") or "").strip()
-            if date_str:
-                for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
-                    try:
-                        date_override = datetime.strptime(date_str, fmt)
-                        break
-                    except ValueError:
-                        continue
+
+        # 날짜 오버라이드: body.saveDate = YYYY-MM-DD / YYYYMMDD / YYYY/MM/DD
+        date_override = None
+        date_str = (body.get("saveDate") or "").strip()
+        if date_str:
+            for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
+                try:
+                    date_override = datetime.strptime(date_str, fmt)
+                    break
+                except ValueError:
+                    continue
+
+        # work_dir 결정
+        prev_work_dir = existing.get("work_dir") if existing else None
+        if existing and prev_work_dir:
+            # 기존 프로젝트 덮어쓰기 → 폴더 유지 (이름이 바뀌어도 물리 폴더는 안 움직임)
+            work_dir = _normalize_synology_path(prev_work_dir)[0]
+        else:
             work_dir = compute_work_dir(name, date_override=date_override)
-        # 실제 폴더 생성 (없으면)
+
+        # 임시 폴더에서 정식 폴더로 승격 (있으면 이동)
+        # 1) body.promoteFromTemp 명시 지정, 또는 2) body.tempKey 로 캐시된 폴더 자동 감지
+        promoted_from = (body.get("promoteFromTemp") or "").strip()
+        if not promoted_from:
+            tkey = (body.get("tempKey") or "").strip()
+            if tkey:
+                with _TEMP_CACHE_LOCK:
+                    cached = _TEMP_DIR_CACHE.get(tkey)
+                if cached and os.path.isdir(cached):
+                    promoted_from = cached
+        if promoted_from and os.path.isdir(promoted_from) and promoted_from.startswith(TEMP_ROOT):
+            try:
+                if os.path.exists(work_dir) and os.listdir(work_dir):
+                    # 이미 정식 폴더에 내용이 있으면 임시 폴더를 그 안의 _from_temp_<ts>/ 로 병합
+                    merge_name = f"_from_temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    shutil.move(promoted_from, os.path.join(work_dir, merge_name))
+                    log(f"[PROMOTE] 임시 폴더 내용 병합: {promoted_from} → {work_dir}/{merge_name}")
+                else:
+                    parent = os.path.dirname(work_dir)
+                    os.makedirs(parent, exist_ok=True)
+                    if os.path.exists(work_dir):
+                        shutil.rmtree(work_dir)
+                    shutil.move(promoted_from, work_dir)
+                    log(f"[PROMOTE] 임시 폴더 → 정식: {promoted_from} → {work_dir}")
+            except Exception as e:
+                log(f"[PROMOTE] 임시 폴더 승격 실패: {e}")
+
+        # 실제 폴더 생성
         ok_mk, path_or_err = ensure_work_dir(work_dir)
         if not ok_mk:
-            log(f"[PROJECT_SAVE] 폴더 생성 실패: {path_or_err} (프로젝트는 저장, 폴더는 나중에 수동)")
-        # body의 data에 workDir 포함해서 저장 (프론트엔드가 로드 시 즉시 사용)
+            log(f"[PROJECT_SAVE] 폴더 생성 실패: {path_or_err} (프로젝트는 DB 저장, 폴더는 나중에 수동)")
+
+        # body 정리 — workDir 은 이제 서버가 결정한 값으로 덮어씀
         body["workDir"] = work_dir
+        body["id"] = pid
+        body["name"] = name
         data = json.dumps(body, ensure_ascii=False)
+
         if existing:
             db_exec("UPDATE projects SET name=?, data=?, modified=?, work_dir=? WHERE id=?",
                     (name, data, now, work_dir, pid))
         else:
             db_exec("INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
                     (pid, name, data, now, now, work_dir))
-        log(f"PROJECT save [{pid}] {name} work_dir={work_dir}")
-        return {"ok": True, "id": pid, "workDir": work_dir, "folderCreated": ok_mk}
+
+        # work_dir/project.json 실파일 기록 (실패해도 DB 저장은 유지)
+        json_written = False
+        if ok_mk:
+            try:
+                proj_json_path = os.path.join(work_dir, "project.json")
+                with open(proj_json_path, "w", encoding="utf-8") as f:
+                    json.dump(body, f, ensure_ascii=False, indent=2)
+                json_written = True
+            except Exception as e:
+                log(f"[PROJECT_SAVE] project.json 쓰기 실패: {e}")
+
+        log(f"PROJECT save [{pid}] {name} work_dir={work_dir} folder={ok_mk} json={json_written}")
+        return {"ok": True, "id": pid, "workDir": work_dir,
+                "folderCreated": ok_mk, "jsonWritten": json_written}
 
     def _project_load(self, params):
         pid = params.get("id", [""])[0]
@@ -2155,13 +2491,20 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         # 파싱된 날짜 / 정리된 이름도 같이 반환 (UI 피드백용)
         parsed_dt, clean_name = _parse_date_from_name(name)
         effective = date_override or parsed_dt or datetime.now()
+        # 이름 검증 결과도 함께 반환 — 프론트가 즉시 경고 표시
+        ok_name, name_err = validate_project_name(name)
         return {"ok": True, "path": path, "exists": exists,
                 "effectiveDate": effective.strftime("%Y-%m-%d"),
                 "detectedFromName": bool(parsed_dt and not date_override),
-                "cleanName": clean_name}
+                "cleanName": clean_name,
+                "nameValid": ok_name,
+                "nameError": name_err or ""}
 
     def _project_adopt(self, body):
-        """기존 폴더를 프로젝트로 편입. body: {folderPath, name?}"""
+        """기존 폴더를 프로젝트로 편입.
+        - folder/project.json 있으면 → 그 상태를 그대로 복원 (노드·연결·캔버스요소·옵션 모두)
+        - 없으면 → 빈 플로우로 시작
+        body: {folderPath, name?}"""
         folder = (body.get("folderPath") or "").strip()
         if not folder or not os.path.isdir(folder):
             return {"ok": False, "error": "유효한 폴더 경로가 아닙니다"}
@@ -2170,17 +2513,50 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         if exists_row:
             return {"ok": True, "already": True, "id": exists_row["id"], "name": exists_row["name"]}
         name = (body.get("name") or os.path.basename(folder.rstrip("/")) or "Imported").strip()
+        ok_name, name_err = validate_project_name(name)
+        if not ok_name:
+            return {"ok": False, "error": name_err, "errorKind": "invalid_name"}
         pid = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
-        # 빈 플로우 JSON 저장 (노드·연결 없음)
-        empty = {"id": pid, "name": name, "workDir": folder, "nodes": [], "connections": [], "canvasElements": [], "cwd": folder}
-        data = json.dumps(empty, ensure_ascii=False)
+
+        # project.json 있으면 그 상태를 그대로 복원
+        proj_json_path = os.path.join(folder, "project.json")
+        restored = False
+        payload = None
+        if os.path.exists(proj_json_path):
+            try:
+                with open(proj_json_path, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+                # 새 프로젝트로 편입하므로 id/workDir/name 은 새 것으로 덮어씀
+                payload["id"] = pid
+                payload["name"] = name
+                payload["workDir"] = folder
+                payload["cwd"] = folder
+                restored = True
+                log(f"[PROJECT_ADOPT] project.json 복원: {folder} · 노드 {len(payload.get('nodes') or [])}개 · 연결 {len(payload.get('connections') or [])}개 · 캔버스요소 {len(payload.get('canvasElements') or [])}개")
+            except Exception as e:
+                log(f"[PROJECT_ADOPT] project.json 파싱 실패 ({e}) — 빈 플로우로 시작")
+                payload = None
+        if payload is None:
+            payload = {"id": pid, "name": name, "workDir": folder,
+                       "nodes": [], "connections": [], "canvasElements": [], "cwd": folder}
+
+        data = json.dumps(payload, ensure_ascii=False)
         db_exec(
             "INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
             (pid, name, data, now, now, folder),
         )
-        log(f"[PROJECT_ADOPT] {pid} {name} ← {folder}")
-        return {"ok": True, "id": pid, "name": name, "workDir": folder}
+        # 새 pid로 project.json 도 갱신 (일관성)
+        if restored:
+            try:
+                with open(proj_json_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                log(f"[PROJECT_ADOPT] project.json 재기록 실패: {e}")
+        log(f"[PROJECT_ADOPT] {pid} {name} ← {folder} (restored={restored})")
+        return {"ok": True, "id": pid, "name": name, "workDir": folder, "restored": restored,
+                "nodeCount": len((payload.get("nodes") or [])),
+                "connCount": len((payload.get("connections") or []))}
 
     def _project_scan_unregistered(self, params=None):
         """설정된 work_root 하위에서 아직 DB에 없는 폴더들 반환 (최근 3년까지)."""
@@ -2224,13 +2600,26 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     # ══════════════ 미디어 다운로드 (YouTube/Instagram/TikTok 등) ══════════════
     def _media_download(self, body):
         """URL → 프로젝트 work_dir 하위 videos/ 또는 images/ 로 자동 분류 저장.
-        yt-dlp로 다운받은 뒤 확장자 기준으로 이동. 인스타 캐러셀 등 여러 파일 자동 지원."""
+        body:
+          url         필수 — 다운로드 대상 URL
+          projectId   프로젝트 id (work_dir 조회)
+          format      'mp4' | 'webm' | 'best'  (기본 mp4)
+          quality     'best' | '1080' | '720' | '480' | '360'  (기본 best)
+          audioOnly   bool — true 면 mp3 추출 (영상/화질 옵션 무시)
+          subtitles   bool — 자막 포함 (있으면 같이 다운)
+        """
         url = (body.get("url") or "").strip()
         project_id = (body.get("projectId") or "").strip()
+        fmt = (body.get("format") or "mp4").strip().lower()
+        quality = str(body.get("quality") or "best").strip().lower()
+        audio_only = bool(body.get("audioOnly"))
+        subtitles = bool(body.get("subtitles"))
+        if fmt not in ("mp4", "webm", "best"): fmt = "mp4"
+        if quality not in ("best", "1080", "720", "480", "360"): quality = "best"
         if not url:
             return {"ok": False, "error": "URL이 필요합니다"}
 
-        # 프로젝트 work_dir 조회 (없으면 /workspace fallback)
+        # 프로젝트 work_dir 조회 — 미저장 프로젝트는 거부 (파일 미아 방지)
         work_dir = None
         if project_id:
             try:
@@ -2240,7 +2629,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             except Exception:
                 pass
         if not work_dir:
-            work_dir = "/workspace"
+            return {"ok": False, "error": "프로젝트를 먼저 저장해주세요 (다운로드 파일은 프로젝트 폴더에 저장됩니다)",
+                    "errorKind": "no_project"}
         try:
             os.makedirs(work_dir, exist_ok=True)
         except Exception as e:
@@ -2254,17 +2644,43 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             return {"ok": False, "error": f"임시 폴더 생성 실패: {e}"}
 
-        # yt-dlp 실행 (최대 10분)
+        # yt-dlp 명령 구성
         output_template = os.path.join(temp_dir, "%(title).80s.%(ext)s")
         cmd = [
             "yt-dlp",
             "-o", output_template,
             "--no-playlist-reverse",
             "--no-warnings",
-            "--ignore-errors",  # 캐러셀 중 일부 실패해도 나머지 계속
-            url,
+            "--ignore-errors",
         ]
-        log(f"[DL] {url} → {temp_dir}")
+        if audio_only:
+            cmd += ["-x", "--audio-format", "mp3", "--audio-quality", "0"]
+        else:
+            # 해상도 제한 구성
+            res_cap = "" if quality == "best" else f"[height<={quality}]"
+            if fmt == "mp4":
+                # mp4 우선, m4a 오디오 → 머지해서 mp4 로
+                cmd += [
+                    "-f", f"bv*[ext=mp4]{res_cap}+ba[ext=m4a]/b[ext=mp4]{res_cap}/bv*{res_cap}+ba/b{res_cap}",
+                    "--merge-output-format", "mp4",
+                ]
+            elif fmt == "webm":
+                cmd += [
+                    "-f", f"bv*[ext=webm]{res_cap}+ba[ext=webm]/b[ext=webm]{res_cap}/bv*{res_cap}+ba/b{res_cap}",
+                    "--merge-output-format", "webm",
+                ]
+            else:  # best
+                if res_cap:
+                    cmd += ["-f", f"bv*{res_cap}+ba/b{res_cap}"]
+            # 해상도 정렬 우선순위
+            if quality != "best":
+                cmd += ["-S", f"res:{quality},codec:h264,ext:mp4:m4a"]
+            else:
+                cmd += ["-S", "res,codec:h264,ext:mp4:m4a"]
+        if subtitles:
+            cmd += ["--write-subs", "--write-auto-subs", "--sub-langs", "ko,en", "--convert-subs", "srt"]
+        cmd.append(url)
+        log(f"[DL] {url} → {temp_dir}  fmt={fmt} quality={quality} audio={audio_only}")
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
@@ -2739,6 +3155,182 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _trash_empty(self, body):
         db_exec("DELETE FROM trash")
         return {"ok": True}
+
+    # ── 임시 프로젝트 폴더 (저장 안 한 작업물) ──
+
+    def _temp_folder_list(self):
+        """임시 폴더(살아있는 것) + 휴지통 폴더(유예 중) 목록."""
+        def _scan(root, kind):
+            items = []
+            if not os.path.isdir(root):
+                return items
+            try:
+                for name in sorted(os.listdir(root)):
+                    full = os.path.join(root, name)
+                    if not os.path.isdir(full) or name.startswith("."):
+                        continue
+                    try:
+                        mt = os.path.getmtime(full)
+                        size_bytes = 0
+                        file_count = 0
+                        for dirpath, _dirs, files in os.walk(full):
+                            for fn in files:
+                                try:
+                                    size_bytes += os.path.getsize(os.path.join(dirpath, fn))
+                                    file_count += 1
+                                except Exception: pass
+                        snap = None
+                        snap_path = os.path.join(full, "snapshot.json")
+                        if os.path.exists(snap_path):
+                            try:
+                                with open(snap_path, "r", encoding="utf-8") as f:
+                                    j = json.load(f)
+                                c = j.get("canvas") or {}
+                                snap = {
+                                    "hasSnapshot": True,
+                                    "nodeCount": len((c.get("nodes") or [])),
+                                    "connectionCount": len((c.get("connections") or [])),
+                                    "savedAt": j.get("savedAt"),
+                                    "name": c.get("wfName") or c.get("name"),
+                                }
+                            except Exception:
+                                snap = {"hasSnapshot": True, "error": "스냅샷 파싱 실패"}
+                        items.append({
+                            "kind": kind,
+                            "name": name,
+                            "path": full,
+                            "mtime": datetime.fromtimestamp(mt).isoformat(),
+                            "ageHours": round((time.time() - mt) / 3600, 1),
+                            "sizeBytes": size_bytes,
+                            "fileCount": file_count,
+                            "snapshot": snap,
+                        })
+                    except Exception:
+                        continue
+            except PermissionError:
+                pass
+            return items
+        alive = _scan(TEMP_ROOT, "temp")
+        trashed = _scan(TRASH_ROOT, "trash")
+        return {"ok": True, "alive": alive, "trashed": trashed,
+                "tempTtlDays": TEMP_TTL_DAYS, "trashTtlDays": TRASH_TTL_DAYS}
+
+    def _temp_folder_snapshot(self, params):
+        """임시/휴지통 폴더의 snapshot.json 원본 반환 (복원 미리보기)."""
+        path = (params.get("path", [""])[0] or "").strip()
+        if not path or not os.path.isdir(path):
+            return {"ok": False, "error": "경로 없음"}
+        # 보안: TEMP_ROOT 또는 TRASH_ROOT 하위만 허용
+        norm = os.path.abspath(path)
+        if not (norm.startswith(os.path.abspath(TEMP_ROOT)) or
+                norm.startswith(os.path.abspath(TRASH_ROOT))):
+            return {"ok": False, "error": "접근 거부"}
+        snap_path = os.path.join(path, "snapshot.json")
+        if not os.path.exists(snap_path):
+            return {"ok": False, "error": "snapshot.json 없음"}
+        try:
+            with open(snap_path, "r", encoding="utf-8") as f:
+                j = json.load(f)
+            return {"ok": True, "snapshot": j}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _temp_folder_restore(self, body):
+        """휴지통의 임시 폴더를 살아있는 임시 폴더로 되살림."""
+        path = (body.get("path") or "").strip()
+        if not path or not os.path.isdir(path):
+            return {"ok": False, "error": "경로 없음"}
+        norm = os.path.abspath(path)
+        if not norm.startswith(os.path.abspath(TRASH_ROOT)):
+            return {"ok": False, "error": "휴지통 항목이 아님"}
+        # __trashed-xxx 접미사 제거한 원래 이름으로 복원
+        base = os.path.basename(path)
+        orig = re.sub(r"__trashed-\d{8}_\d{6}$", "", base)
+        target = os.path.join(TEMP_ROOT, orig)
+        if os.path.exists(target):
+            target = os.path.join(TEMP_ROOT, f"{orig}__restored-{datetime.now().strftime('%H%M%S')}")
+        try:
+            os.makedirs(TEMP_ROOT, exist_ok=True)
+            shutil.move(path, target)
+            # DB 휴지통 레코드 제거
+            try:
+                db_exec("DELETE FROM trash WHERE original_table='temps_folder' AND data LIKE ?",
+                        (f'%"path": "{path}"%',))
+            except Exception: pass
+            # mtime 새로고침 (TTL 재시작)
+            os.utime(target, None)
+            log(f"[TRASH→TEMP] {path} → {target}")
+            return {"ok": True, "path": target}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _temp_folder_promote(self, body):
+        """임시/휴지통 폴더를 정식 프로젝트로 승격.
+        body: {path, name?, date?}
+        """
+        path = (body.get("path") or "").strip()
+        if not path or not os.path.isdir(path):
+            return {"ok": False, "error": "경로 없음"}
+        norm = os.path.abspath(path)
+        if not (norm.startswith(os.path.abspath(TEMP_ROOT)) or
+                norm.startswith(os.path.abspath(TRASH_ROOT))):
+            return {"ok": False, "error": "접근 거부"}
+        # snapshot.json 에서 캔버스 state 복원
+        canvas_state = None
+        snap_path = os.path.join(path, "snapshot.json")
+        if os.path.exists(snap_path):
+            try:
+                with open(snap_path, "r", encoding="utf-8") as f:
+                    j = json.load(f)
+                canvas_state = j.get("canvas")
+            except Exception: pass
+        # 이름 / 날짜 결정
+        name = (body.get("name") or "").strip()
+        if not name and canvas_state:
+            name = canvas_state.get("wfName") or canvas_state.get("name") or ""
+        if not name:
+            base = os.path.basename(path)
+            base = re.sub(r"__trashed-\d{8}_\d{6}$", "", base)
+            base = re.sub(r"__[a-zA-Z0-9]{1,8}$", "", base)
+            name = base or "Untitled"
+        date_override = None
+        date_str = (body.get("date") or "").strip()
+        if date_str:
+            for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
+                try:
+                    date_override = datetime.strptime(date_str, fmt); break
+                except ValueError: continue
+        target = compute_work_dir(name, date_override=date_override)
+        # 최종 저장 (이동 + DB 레코드 + project.json)
+        payload = dict(canvas_state or {})
+        payload["name"] = name
+        save_body = {"name": name, "saveDate": date_str or None,
+                     "promoteFromTemp": path, **payload}
+        return self._project_save(save_body)
+
+    def _temp_folder_delete_now(self, body):
+        """임시/휴지통 폴더 즉시 영구 삭제."""
+        path = (body.get("path") or "").strip()
+        if not path or not os.path.isdir(path):
+            return {"ok": False, "error": "경로 없음"}
+        norm = os.path.abspath(path)
+        if not (norm.startswith(os.path.abspath(TEMP_ROOT)) or
+                norm.startswith(os.path.abspath(TRASH_ROOT))):
+            return {"ok": False, "error": "접근 거부"}
+        try:
+            shutil.rmtree(path)
+            try:
+                db_exec("DELETE FROM trash WHERE original_table='temps_folder' AND data LIKE ?",
+                        (f'%"path": "{path}"%',))
+            except Exception: pass
+            log(f"[TEMP_DELETE] {path}")
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _temp_cleanup_now(self, body):
+        """수동으로 자동정리 한 번 돌림."""
+        return {"ok": True, **cleanup_temp_and_trash()}
 
     # ── File Upload (이미지/시스템프롬프트 파일) ──
 
@@ -3499,6 +4091,170 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": True, "authenticated": False, "msg": "❌ gemini CLI 미설치"}
         except Exception as e:
             return {"ok": True, "authenticated": False, "msg": f"❌ 오류: {e}"}
+
+    # ═══════════════════════════════════════
+    # Auth health check — 로그인 후 자동 점검 + 상단 배지용
+    # ═══════════════════════════════════════
+    def _auth_health(self, params=None):
+        """등록된 모든 Claude/Gemini 계정에 대해 짧은 인증 테스트를 병렬 실행.
+        파라미터: ?quick=1 → credentials 파싱만 (CLI 호출 X, 매우 빠름).
+        기본: CLI 호출 (30초 timeout, 계정별 병렬)."""
+        quick = bool((params or {}).get("quick", ["0"])[0] == "1") if params else False
+
+        def _check_claude(acc):
+            aid = acc.get("id")
+            name = acc.get("name") or f"claude#{aid}"
+            # 1) credentials JSON 파싱 가능?
+            try:
+                row = db_exec("SELECT credentials FROM claude_accounts WHERE id=?", (int(aid),), fetchone=True)
+                if not row or not row.get("credentials"):
+                    return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                            "reason": "credentials 없음"}
+                try:
+                    data = json.loads(row["credentials"])
+                except Exception:
+                    return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                            "reason": "credentials JSON 파싱 실패"}
+                oauth = data.get("claudeAiOauth") or {}
+                expires_at = oauth.get("expiresAt") or 0
+                has_refresh = bool(oauth.get("refreshToken"))
+                has_access = bool(oauth.get("accessToken"))
+                if not has_access:
+                    return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                            "reason": "accessToken 없음"}
+                expired = False
+                if expires_at:
+                    try:
+                        expired = (expires_at/1000 if expires_at > 1e12 else expires_at) < time.time()
+                    except Exception:
+                        pass
+                # rate-limited 체크
+                rl = acc.get("rate_limited_until")
+                rate_limited = False
+                if rl:
+                    try:
+                        rate_limited = datetime.fromisoformat(rl) > datetime.now()
+                    except Exception: pass
+            except Exception as e:
+                return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                        "reason": f"체크 오류: {e}"}
+            # quick 모드는 여기까지
+            if quick:
+                if rate_limited:
+                    return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                            "reason": "rate-limited 쿨다운 중", "rateLimited": True}
+                if expired and not has_refresh:
+                    return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                            "reason": "토큰 만료 (refresh 없음)"}
+                return {"provider": "claude", "id": aid, "name": name, "ok": True,
+                        "reason": "credentials OK (CLI 호출 생략)", "rateLimited": rate_limited}
+            # 실제 CLI 호출 (짧게)
+            try:
+                env = get_claude_env_for_account(int(aid))
+                result = subprocess.run(
+                    ["claude", "-p", "--dangerously-skip-permissions"],
+                    input="OK", capture_output=True, text=True, timeout=25, env=env,
+                )
+                out = (result.stdout or "").strip()
+                err = (result.stderr or "").strip()
+                if result.returncode == 0 and out and "Not logged in" not in out and "Please run" not in out:
+                    return {"provider": "claude", "id": aid, "name": name, "ok": True,
+                            "reason": "OK", "rateLimited": rate_limited}
+                return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                        "reason": (out or err or "응답 없음")[:160]}
+            except subprocess.TimeoutExpired:
+                return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                        "reason": "타임아웃 (25초)"}
+            except Exception as e:
+                return {"provider": "claude", "id": aid, "name": name, "ok": False,
+                        "reason": f"{e}"}
+
+        def _check_gemini(acc):
+            aid = acc.get("id")
+            name = acc.get("name") or f"gemini#{aid}"
+            try:
+                row = db_exec("SELECT auth_type, credentials FROM gemini_accounts WHERE id=?",
+                              (int(aid),), fetchone=True)
+                if not row or not row.get("credentials"):
+                    return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                            "reason": "credentials 없음"}
+                if row.get("auth_type") == "apikey":
+                    key_ok = bool((row.get("credentials") or "").strip())
+                else:
+                    try:
+                        json.loads(row["credentials"]); key_ok = True
+                    except Exception:
+                        return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                                "reason": "OAuth credentials JSON 파싱 실패"}
+            except Exception as e:
+                return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                        "reason": f"체크 오류: {e}"}
+            if quick:
+                return {"provider": "gemini", "id": aid, "name": name, "ok": bool(key_ok),
+                        "reason": "credentials OK (CLI 호출 생략)" if key_ok else "credentials 비어있음"}
+            try:
+                env = get_gemini_env_for_account(int(aid))
+                result = subprocess.run(
+                    ["gemini", "-m", "gemini-2.5-flash", "-p", "OK"],
+                    capture_output=True, text=True, timeout=25, env=env,
+                    encoding="utf-8", errors="replace",
+                )
+                out = (result.stdout or "").strip()
+                err = (result.stderr or "").strip()
+                if result.returncode == 0 and out:
+                    return {"provider": "gemini", "id": aid, "name": name, "ok": True, "reason": "OK"}
+                return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                        "reason": (err or out or "응답 없음")[:160]}
+            except subprocess.TimeoutExpired:
+                return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                        "reason": "타임아웃 (25초)"}
+            except FileNotFoundError:
+                return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                        "reason": "gemini CLI 미설치"}
+            except Exception as e:
+                return {"provider": "gemini", "id": aid, "name": name, "ok": False,
+                        "reason": f"{e}"}
+
+        try:
+            claude_rows = db_exec(
+                "SELECT id, name, rate_limited_until FROM claude_accounts ORDER BY priority ASC, id ASC",
+                fetch=True) or []
+        except Exception: claude_rows = []
+        try:
+            gemini_rows = db_exec(
+                "SELECT id, name FROM gemini_accounts ORDER BY priority ASC, id ASC",
+                fetch=True) or []
+        except Exception: gemini_rows = []
+
+        # 병렬 실행 (계정마다 thread)
+        from concurrent.futures import ThreadPoolExecutor
+        results = []
+        pool_size = max(1, len(claude_rows) + len(gemini_rows))
+        with ThreadPoolExecutor(max_workers=min(pool_size, 8)) as ex:
+            futs = [ex.submit(_check_claude, dict(a)) for a in claude_rows]
+            futs += [ex.submit(_check_gemini, dict(a)) for a in gemini_rows]
+            for f in futs:
+                try:
+                    results.append(f.result(timeout=35))
+                except Exception as e:
+                    results.append({"provider": "?", "ok": False, "reason": f"{e}"})
+
+        claude_results = [r for r in results if r.get("provider") == "claude"]
+        gemini_results = [r for r in results if r.get("provider") == "gemini"]
+        # 전체 요약 — 각 provider 최소 1개 계정이 OK 면 provider OK
+        claude_ok = any(r.get("ok") for r in claude_results)
+        gemini_ok = any(r.get("ok") for r in gemini_results)
+        return {
+            "ok": True,
+            "checkedAt": datetime.now().isoformat(),
+            "quick": quick,
+            "claude": {"ok": claude_ok, "count": len(claude_results),
+                       "okCount": sum(1 for r in claude_results if r.get("ok")),
+                       "accounts": claude_results},
+            "gemini": {"ok": gemini_ok, "count": len(gemini_results),
+                       "okCount": sum(1 for r in gemini_results if r.get("ok")),
+                       "accounts": gemini_results},
+        }
 
     def _claude_next_account(self, body):
         """회전 전략에 따라 다음 account_id 반환."""

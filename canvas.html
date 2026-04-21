@@ -238,6 +238,19 @@ body > nav.nav, body > div.tb{display:none!important}
 .nd-st{width:7px;height:7px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
 .nd-st.running{background:var(--blue);animation:pulse 1s infinite}.nd-st.complete{background:var(--accent)}.nd-st.error{background:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+/* 실행 중 스피너 — 노드 헤더/접힘/사이드바 공통 */
+.nd-spin{display:none;width:13px;height:13px;border-radius:50%;border:2px solid rgba(59,130,246,.25);border-top-color:#3B82F6;flex-shrink:0;margin-left:2px}
+.nd.running .nd-spin{display:inline-block;animation:ndSpin .7s linear infinite}
+/* 접힘 뷰: coll-body 안 스피너는 살짝 크게 */
+.coll-spin{display:none;width:14px;height:14px;border-radius:50%;border:2px solid rgba(59,130,246,.25);border-top-color:#3B82F6;flex-shrink:0}
+.nd.collapsed.running .coll-spin{display:inline-block;animation:ndSpin .7s linear infinite}
+/* 사이드바 스피너 — 큰 사이즈 */
+.sb-spin{display:none;width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(59,130,246,.2);border-top-color:#3B82F6;flex-shrink:0;margin-left:6px;vertical-align:middle}
+.sb-spin.show{display:inline-block;animation:ndSpin .7s linear infinite}
+@keyframes ndSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+/* provider 별 스피너 색상 — Gemini 보라 */
+.nd[data-type="agent-gemini"] .nd-spin,
+.nd[data-type="agent-gemini"] .coll-spin{border-color:rgba(167,139,250,.25);border-top-color:#A78BFA}
 /* BODY */
 .nd-body{display:flex;flex-direction:column;flex:1;overflow:hidden}
 .sec-lbl{font-size:9px;color:var(--text-muted);padding:3px 8px 1px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
@@ -753,6 +766,72 @@ body.focus-mode #app-layout{background:var(--bg-0)}
 .ts-project-chip .dot{width:6px;height:6px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:ahPulse 2s ease-in-out infinite;flex-shrink:0}
 .ts-project-chip .status{font-size:10.5px;color:var(--text-muted);font-weight:500;flex-shrink:0;letter-spacing:.2px}
 @keyframes ahPulse{0%,100%{opacity:.55}50%{opacity:1}}
+/* ═══ 인증 헬스체크 배지 ═══ */
+.auth-badge{
+  display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 11px;
+  border-radius:13px;font-size:11px;font-weight:700;letter-spacing:.2px;
+  cursor:pointer;transition:.15s;flex-shrink:0;
+  border:1.5px solid transparent;user-select:none;
+}
+.auth-badge:hover{filter:brightness(1.15)}
+.auth-badge .auth-badge-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.auth-badge.auth-loading{background:rgba(107,114,128,.18);color:#d1d5db;border-color:rgba(107,114,128,.45)}
+.auth-badge.auth-loading .auth-badge-dot{background:#9ca3af;animation:authSpin 1s linear infinite}
+.auth-badge.auth-ok{background:rgba(34,197,94,.15);color:#a3e635;border-color:rgba(34,197,94,.5);box-shadow:0 0 10px rgba(34,197,94,.18)}
+.auth-badge.auth-ok .auth-badge-dot{background:#22c55e;box-shadow:0 0 6px #22c55e;animation:authPulse 2s ease-in-out infinite}
+.auth-badge.auth-warn{background:rgba(245,158,11,.18);color:#fbbf24;border-color:rgba(245,158,11,.5);box-shadow:0 0 10px rgba(245,158,11,.2)}
+.auth-badge.auth-warn .auth-badge-dot{background:#f59e0b;box-shadow:0 0 6px #f59e0b;animation:authPulse 1.2s ease-in-out infinite}
+.auth-badge.auth-fail{background:rgba(239,68,68,.2);color:#fca5a5;border-color:rgba(239,68,68,.6);box-shadow:0 0 14px rgba(239,68,68,.3)}
+.auth-badge.auth-fail .auth-badge-dot{background:#ef4444;box-shadow:0 0 8px #ef4444;animation:authBlink .8s ease-in-out infinite}
+@keyframes authSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes authPulse{0%,100%{opacity:.75}50%{opacity:1}}
+@keyframes authBlink{0%,100%{opacity:.4}50%{opacity:1}}
+/* ═══ 단축키 허브 & 게임 ═══ */
+.sh-tab{padding:6px 14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);color:var(--text-dim);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:.15s}
+.sh-tab:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.sh-tab.active{background:linear-gradient(135deg,rgba(34,197,94,.2),rgba(22,163,74,.15));color:#a7f3d0;border-color:rgba(34,197,94,.45);box-shadow:0 0 10px rgba(34,197,94,.15)}
+.sh-group{margin-bottom:22px}
+.sh-group-hd{font-size:11px;font-weight:800;color:#a7f3d0;text-transform:uppercase;letter-spacing:1px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:10px}
+.sh-row{display:grid;grid-template-columns:160px 1fr auto;gap:16px;padding:7px 0;align-items:center;border-bottom:1px dashed rgba(255,255,255,.05);font-size:12px}
+.sh-row:hover{background:rgba(255,255,255,.02);border-radius:4px;padding-left:6px}
+.sh-keys{font-family:var(--mono);font-size:11px;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.sh-kbd{padding:2px 7px;background:linear-gradient(180deg,#2a2a3e,#1a1a2e);border:1px solid rgba(255,255,255,.12);border-radius:4px;color:#a7f3d0;font-weight:700;box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 1px 2px rgba(0,0,0,.4);min-width:22px;text-align:center}
+.sh-kbd.mod{background:linear-gradient(180deg,#1e2a4a,#0f1a30);color:#7ecfff;border-color:rgba(126,207,255,.3)}
+.sh-kbd.shift{background:linear-gradient(180deg,#2a1e4a,#1a0f30);color:#c4b5fd;border-color:rgba(196,181,253,.3)}
+.sh-row .sh-label{color:var(--text);font-weight:500}
+.sh-row .sh-cat{color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:right;min-width:60px}
+/* 게임 카드 */
+.sh-card{
+  position:absolute;left:50%;top:-60px;
+  transform:translateX(-50%);
+  padding:10px 16px;border-radius:10px;
+  background:linear-gradient(180deg,rgba(14,24,44,.95),rgba(7,13,26,.95));
+  border:1.5px solid rgba(126,207,255,.5);
+  box-shadow:0 4px 20px rgba(33,150,243,.35),0 0 0 1px rgba(255,255,255,.04) inset;
+  font-size:13px;font-weight:700;color:#e0e0e0;
+  white-space:nowrap;pointer-events:none;
+  transition:transform .08s;
+  will-change:top;
+}
+.sh-card.shiftcard{border-color:rgba(196,181,253,.5);box-shadow:0 4px 20px rgba(167,139,250,.35),0 0 0 1px rgba(255,255,255,.04) inset}
+.sh-card .sh-card-hint{display:block;font-size:10px;color:#7ecfff;font-family:var(--mono);font-weight:400;margin-top:3px;letter-spacing:.3px;opacity:.75}
+.sh-card.shiftcard .sh-card-hint{color:#c4b5fd}
+.sh-card.danger{animation:shCardDanger .5s ease-in-out infinite;border-color:#ef4444;box-shadow:0 4px 25px rgba(239,68,68,.5)}
+.sh-card.hit{animation:shCardHit .4s ease-out forwards}
+@keyframes shCardDanger{0%,100%{filter:brightness(1)}50%{filter:brightness(1.3) drop-shadow(0 0 12px #ef4444)}}
+@keyframes shCardHit{0%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.3);filter:brightness(2) saturate(2)}100%{transform:translateX(-50%) scale(0);opacity:0}}
+/* 파티클 */
+.sh-particle{position:absolute;width:6px;height:6px;border-radius:50%;background:#a3e635;box-shadow:0 0 8px #a3e635;pointer-events:none;will-change:transform}
+/* 필드 쉐이크 */
+.sh-shake{animation:shShake .25s}
+@keyframes shShake{0%,100%{transform:translate(0,0)}25%{transform:translate(-6px,2px)}50%{transform:translate(5px,-2px)}75%{transform:translate(-3px,3px)}}
+/* 플로팅 텍스트 (+10 / COMBO! / MISS) */
+.sh-float{position:absolute;pointer-events:none;font-weight:800;font-size:20px;text-shadow:0 2px 10px rgba(0,0,0,.7);animation:shFloat 1.1s ease-out forwards;will-change:transform,opacity}
+@keyframes shFloat{0%{transform:translateY(0) scale(.7);opacity:0}15%{transform:translateY(-10px) scale(1.15);opacity:1}100%{transform:translateY(-70px) scale(1);opacity:0}}
+.sh-heart{font-size:18px;filter:drop-shadow(0 0 6px rgba(239,68,68,.4))}
+.sh-heart.lost{filter:grayscale(1);opacity:.3}
+.sh-combo-boom{animation:shComboBoom .4s}
+@keyframes shComboBoom{0%{transform:scale(1)}40%{transform:scale(1.6);color:#a3e635}100%{transform:scale(1)}}
 .ts-spacer{flex:1;min-width:12px}
 .ts-fav-wrap{display:flex;align-items:center;gap:6px;max-width:380px;min-width:0;padding:0 4px;overflow:hidden;flex-shrink:1}
 .ts-fav-label{font-size:14px;color:#fbbf24;opacity:.75;flex-shrink:0}
@@ -959,6 +1038,7 @@ body.focus-mode #canvas-controls{display:none}
       <button class="rail-btn" onclick="document.getElementById('appearance-modal').classList.add('show')" data-tip="외관 (배경/그리드)">🎨</button>
       <button class="rail-btn" onclick="openAttachments()" data-tip="프로젝트 첨부">📎</button>
       <button class="rail-btn" onclick="openTrash()" data-tip="휴지통">🗑</button>
+      <button class="rail-btn" onclick="openShortcutsHub()" data-tip="단축키 가이드 + 연습게임 ⌨">⌨</button>
       <button class="rail-btn rail-btn-danger" onclick="resetSession()" data-tip="세션 리셋">↻</button>
     </div>
 
@@ -988,6 +1068,11 @@ body.focus-mode #canvas-controls{display:none}
         <span class="status">자동저장</span>
       </div>
       <button class="ts-btn icon" onclick="openInDsm((window._currentWorkDir||document.getElementById('wf-cwd').value||'').trim())" title="현재 프로젝트 폴더를 DSM 파일스테이션(새 탭)에서 열기" style="color:#c4b5fd">🌐</button>
+      <!-- 인증 헬스체크 배지 (로그인 후 자동 점검) -->
+      <div id="auth-health-badge" class="auth-badge auth-loading" onclick="runAuthHealthCheck(false)" title="클릭해 인증 재점검">
+        <span class="auth-badge-dot"></span>
+        <span class="auth-badge-text" id="auth-health-text">인증 점검 중…</span>
+      </div>
       <div class="ts-spacer"></div>
       <div class="ts-fav-wrap">
         <span class="ts-fav-label">⭐</span>
@@ -1038,6 +1123,72 @@ body.focus-mode #canvas-controls{display:none}
   </div>
 </div>
 
+<!-- ⌨ 단축키 허브 (가이드 + 연습게임) -->
+<div id="sh-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:400;align-items:center;justify-content:center;backdrop-filter:blur(8px)">
+  <div style="width:min(92vw,1100px);height:min(88vh,780px);background:linear-gradient(180deg,#0f0f1a,#0a0a14);border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 0 1px rgba(34,197,94,.1);display:flex;flex-direction:column;overflow:hidden">
+    <!-- 헤더 -->
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.06);background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)">
+      <span style="font-size:22px;filter:drop-shadow(0 0 8px rgba(34,197,94,.5))">⌨</span>
+      <div style="flex:1">
+        <h2 style="margin:0;font-size:17px;font-weight:800;letter-spacing:-.3px;color:#a7f3d0">단축키 허브</h2>
+        <div style="font-size:10.5px;color:var(--text-muted);margin-top:1px">가이드로 외우고 · 게임으로 연습해서 · 손에 붙이자</div>
+      </div>
+      <div id="sh-tabs" style="display:flex;gap:4px;margin-right:12px">
+        <button class="sh-tab active" data-tab="guide" onclick="shSwitchTab('guide')">📘 가이드</button>
+        <button class="sh-tab" data-tab="game" onclick="shSwitchTab('game')">🎮 연습게임</button>
+      </div>
+      <button onclick="closeShortcutsHub()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:20px;padding:0 6px">×</button>
+    </div>
+    <!-- 가이드 탭 -->
+    <div id="sh-pane-guide" class="sh-pane" style="flex:1;overflow-y:auto;padding:16px 20px"></div>
+    <!-- 게임 탭 -->
+    <div id="sh-pane-game" class="sh-pane" style="display:none;flex:1;overflow:hidden;position:relative;flex-direction:column">
+      <!-- 게임 HUD -->
+      <div id="sh-game-hud" style="display:flex;align-items:center;gap:16px;padding:10px 20px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;gap:4px" id="sh-lives"></div>
+        <div style="font-size:11.5px;color:var(--text-dim)">점수</div>
+        <div id="sh-score" style="font-size:22px;font-weight:800;color:#a7f3d0;min-width:60px;letter-spacing:-.5px">0</div>
+        <div style="font-size:11.5px;color:var(--text-dim);margin-left:12px">콤보</div>
+        <div id="sh-combo" style="font-size:17px;font-weight:700;color:#fbbd2c;min-width:44px">×1</div>
+        <div id="sh-multiplier" style="font-size:11px;color:#fbbd2c;padding:2px 8px;background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:10px;display:none">BONUS!</div>
+        <div style="flex:1"></div>
+        <select id="sh-diff" onchange="shSetDifficulty(this.value)" style="height:28px;padding:0 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:var(--text);border-radius:5px;font-size:11.5px;cursor:pointer;outline:none">
+          <option value="easy">🟢 쉬움 (핵심 6개)</option>
+          <option value="medium" selected>🟡 보통 (Alt+ 15개)</option>
+          <option value="hard">🔴 어려움 (전체 22개)</option>
+        </select>
+        <button id="sh-game-start" onclick="shStartGame()" style="padding:6px 14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#0a0a0a;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700">▶ 시작</button>
+        <button id="sh-game-stop" onclick="shStopGame()" style="padding:6px 12px;background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.4);border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700;display:none">■ 종료</button>
+        <div id="sh-hiscore" style="font-size:10.5px;color:var(--text-muted);min-width:90px;text-align:right"></div>
+      </div>
+      <!-- 게임 필드 -->
+      <div id="sh-game-field" style="flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at top,rgba(34,197,94,.04),transparent 60%),linear-gradient(180deg,#0a0a14,#050510)">
+        <div id="sh-game-intro" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:30px">
+          <div style="font-size:50px;margin-bottom:12px;filter:drop-shadow(0 0 20px rgba(34,197,94,.4))">⌨</div>
+          <h3 style="font-size:22px;color:#a7f3d0;margin-bottom:8px;letter-spacing:-.5px">Shortcut Rain</h3>
+          <div style="font-size:13px;color:var(--text-dim);line-height:1.7;max-width:520px;margin-bottom:20px">
+            위에서 내려오는 <span style="color:#7ecfff;font-weight:700">명령 카드</span>를 정확한 <span style="color:#fbbd2c;font-weight:700">단축키</span>로 쏴서 제거하세요.<br>
+            바닥에 닿으면 <span style="color:#fca5a5">생명 -1</span>. 연속 성공하면 <span style="color:#fbbd2c">콤보 배수</span>가 붙어요.
+          </div>
+          <div style="display:flex;gap:18px;font-size:12px;color:var(--text-dim);margin-bottom:20px">
+            <div><span style="color:#a3e635">✓ 정답</span> +10 × 배수</div>
+            <div><span style="color:#fca5a5">✗ 오답</span> -5, 콤보 초기화</div>
+            <div><span style="color:#ef4444">💔 놓침</span> 생명 -1, -10</div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted)">난이도 선택 후 <b style="color:#a3e635">▶ 시작</b> 클릭 · 게임 중엔 <kbd style="padding:1px 5px;background:var(--bg-3);border-radius:3px">ESC</kbd> 일시정지</div>
+        </div>
+        <div id="sh-game-pause" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center;flex-direction:column;z-index:5">
+          <div style="font-size:40px;margin-bottom:10px">⏸</div>
+          <div style="font-size:18px;color:#a7f3d0;margin-bottom:14px">일시정지</div>
+          <button onclick="shResumeGame()" style="padding:8px 22px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#0a0a0a;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700">▶ 재개 (ESC)</button>
+        </div>
+      </div>
+      <!-- 최근 입력 피드백 바 -->
+      <div id="sh-feedback" style="padding:8px 20px;background:rgba(0,0,0,.3);border-top:1px solid rgba(255,255,255,.06);font-size:11.5px;color:var(--text-dim);min-height:30px;display:flex;align-items:center;gap:10px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 💾 저장 모달 (하이브리드: 이름 파싱 + 날짜 picker + 경로 편집) -->
 <div id="save-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
   <div style="width:560px;max-width:92vw;background:linear-gradient(180deg,#14141f,#0e0e18);border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.04);padding:22px">
@@ -1062,19 +1213,16 @@ body.focus-mode #canvas-controls{display:none}
         </div>
         <button onclick="svSetToday()" style="padding:9px 14px;background:rgba(34,197,94,.14);color:#86efac;border:1px solid rgba(34,197,94,.3);border-radius:8px;cursor:pointer;font-size:11.5px;font-weight:600;white-space:nowrap">📅 오늘</button>
       </div>
-      <!-- 미리보기 경로 (편집 가능) -->
+      <!-- 미리보기 경로 (읽기전용 — 정책 하드 고정) -->
       <div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:5px;font-weight:600;letter-spacing:.3px">작업 폴더 경로 <span style="font-weight:400;color:var(--text-muted);margin-left:6px">(직접 편집 가능)</span></div>
-        <div style="display:flex;gap:6px">
-          <input id="sv-path" type="text" oninput="svPathManualEdit=true" style="flex:1;padding:10px 12px;background:rgba(0,0,0,.3);color:#a7f3d0;border:1px solid rgba(76,175,80,.25);border-radius:8px;font-size:12px;outline:none;font-family:var(--mono);box-sizing:border-box">
-          <button onclick="svResetPath()" title="이름+날짜로 다시 계산" style="padding:9px 12px;background:rgba(255,255,255,.05);color:var(--text-dim);border:1px solid rgba(255,255,255,.12);border-radius:8px;cursor:pointer;font-size:13px">↻</button>
-        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:5px;font-weight:600;letter-spacing:.3px">저장 위치 <span style="font-weight:400;color:var(--text-muted);margin-left:6px">자동 결정 · <code style="color:#7ecfff">/synology/{년도}/{YYYYMMDD}_이름</code></span></div>
+        <input id="sv-path" type="text" readonly style="width:100%;padding:10px 12px;background:rgba(0,0,0,.25);color:#a7f3d0;border:1px solid rgba(76,175,80,.2);border-radius:8px;font-size:12px;outline:none;font-family:var(--mono);box-sizing:border-box;cursor:default">
         <div id="sv-path-warn" style="font-size:10.5px;color:var(--text-muted);margin-top:5px;line-height:1.5"></div>
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
       <button onclick="svCancel()" style="padding:9px 18px;background:rgba(255,255,255,.05);color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:600">취소</button>
-      <button onclick="svConfirm()" style="padding:9px 22px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1a14;border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:700;box-shadow:0 3px 10px rgba(245,158,11,.3)">💾 저장</button>
+      <button id="sv-confirm" onclick="svConfirm()" style="padding:9px 22px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#1a1a14;border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:700;box-shadow:0 3px 10px rgba(245,158,11,.3)">💾 저장</button>
     </div>
   </div>
 </div>
@@ -1116,7 +1264,7 @@ body.focus-mode #canvas-controls{display:none}
   </div>
   <div class="sb hid" id="sb">
     <div class="sb-resize" id="sb-resize"></div>
-    <div class="sb-hd"><h3 id="sb-title">노드</h3><button onclick="deleteSelectedNode()" title="이 노드 삭제" style="color:#bf616a;font-size:12px">🗑</button><button onclick="closeSb()">&#x2715;</button></div>
+    <div class="sb-hd"><h3 id="sb-title">노드</h3><span id="sb-spin" class="sb-spin" title="실행 중"></span><button onclick="deleteSelectedNode()" title="이 노드 삭제" style="color:#bf616a;font-size:12px">🗑</button><button onclick="closeSb()">&#x2715;</button></div>
     <div class="sb-ct" style="display:flex;flex-direction:column">
       <div class="sb-row"><button class="r" onclick="engine.execSelected()" style="background:#2d6a2d;color:#a3be8c;font-weight:700;padding:3px 10px" title="실행">▶</button><button class="s" onclick="engine.stopNode(selectedNode)" style="background:#6a2d2d;color:#bf616a;font-weight:700;padding:3px 8px" title="정지">■</button><input type="text" id="sb-name" onchange="sbName(this.value)" placeholder="이름" style="flex:1;min-width:0"><label style="font-size:10px;cursor:pointer;display:flex;align-items:center;gap:2px;color:var(--text-muted);white-space:nowrap"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)" style="margin:0"> 💬대화전용</label></div>
       <div class="sb-row" style="gap:3px;flex-wrap:wrap" id="sb-mode-sec">
@@ -1133,6 +1281,50 @@ body.focus-mode #canvas-controls{display:none}
       </div>
       <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="clearInput()" title="입력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('resolved')" title="{{노드명}}이 실제 내용으로 바뀐 완성본 복사" style="color:#88c0d0">📋완성본</button><button onclick="copyText('input')" title="입력 원문 복사" style="color:#d8dee9">📋원문</button><button onclick="openHtmlTab('input')" title="마크다운·텍스트를 HTML 페이지로 렌더 (일반)" style="color:#88c0d0">📄일반HTML</button><button onclick="openStandaloneHtml('input')" title="단독 HTML 블록만 파싱해 새 탭으로 렌더 (DOCTYPE/html/```html 감지)" style="color:#A78BFA">🌐단독HTML</button><button onclick="downloadStandaloneHtml('input')" title="단독 HTML 블록만 .html 파일로 다운로드" style="color:#A78BFA">⬇단독</button><button onclick="openModal('input')" title="전체화면 확대 (Shift+Space+I)" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="변수 치환 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value);handleAtTrigger(this,selectedNode)" onkeydown="handleAtPickerKeydown(event,this,selectedNode)" placeholder="@ 누르면 메모 삽입 / {{노드명}} 으로 다른 노드 출력 참조" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
+      <!-- ⬇️ 다운로더 전용 섹션 (다운로더 노드 선택 시만) -->
+      <div id="sb-dl-sec" style="display:none;flex-direction:column;flex:1;min-height:0;padding:6px 8px;gap:8px;overflow:hidden">
+        <!-- 옵션 -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:6px">
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px">포맷
+            <select id="dl-opt-format" onchange="dlOptsChange()" style="font-size:11px;padding:3px 6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px">
+              <option value="mp4">🎬 MP4 (권장)</option>
+              <option value="webm">WebM</option>
+              <option value="best">최고 (원본)</option>
+            </select>
+          </label>
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px">해상도
+            <select id="dl-opt-quality" onchange="dlOptsChange()" style="font-size:11px;padding:3px 6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px">
+              <option value="best">최고</option>
+              <option value="1080">1080p</option>
+              <option value="720">720p</option>
+              <option value="480">480p</option>
+              <option value="360">360p</option>
+            </select>
+          </label>
+          <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;color:var(--text-dim)"><input type="checkbox" id="dl-opt-audio" onchange="dlOptsChange()" style="margin:0">🎵 오디오만 (.mp3)</label>
+          <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;color:var(--text-dim)"><input type="checkbox" id="dl-opt-subs" onchange="dlOptsChange()" style="margin:0">📝 자막</label>
+        </div>
+        <!-- URL 테이블 -->
+        <div style="display:flex;flex-direction:column;flex:1;min-height:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:32px 1fr 68px 30px;gap:0;background:var(--bg-2);font-size:10px;color:var(--text-muted);padding:4px 6px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;border-bottom:1px solid var(--border)">
+            <div>#</div><div>URL</div><div>상태</div><div></div>
+          </div>
+          <div id="dl-rows" style="flex:1;overflow-y:auto"></div>
+          <div style="display:flex;gap:4px;padding:6px;background:var(--bg-2);border-top:1px solid var(--border)">
+            <button onclick="dlAddRow()" style="font-size:11px;padding:4px 10px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:3px;cursor:pointer">＋ URL 추가</button>
+            <button onclick="dlPasteFromClipboard()" style="font-size:11px;padding:4px 10px;background:rgba(6,182,212,.12);color:#88c0d0;border:1px solid rgba(6,182,212,.3);border-radius:3px;cursor:pointer" title="클립보드의 텍스트를 여러 줄로 분리해 추가">📋 붙여넣기</button>
+            <span style="flex:1"></span>
+            <button onclick="dlClearAll()" style="font-size:11px;padding:4px 10px;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer">🗑 비우기</button>
+          </div>
+        </div>
+        <!-- 실행 버튼 + 요약 -->
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="dl-run-btn" onclick="dlRunAll()" style="flex:1;padding:8px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700">▶ 전체 다운로드</button>
+          <button id="dl-stop-btn" onclick="dlStopAll()" style="padding:8px 14px;background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.4);border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;display:none">■ 정지</button>
+          <button onclick="dlOpenFolder()" title="이 프로젝트 폴더를 DSM 파일스테이션에서 열기" style="padding:8px 12px;background:rgba(139,92,246,.15);color:#c4b5fd;border:1px solid rgba(139,92,246,.3);border-radius:5px;cursor:pointer;font-size:11px">📁 폴더</button>
+        </div>
+        <div id="dl-summary" style="font-size:10.5px;color:var(--text-dim);padding:4px 2px;line-height:1.5"></div>
+      </div>
       <div class="sb-sec" id="sb-output-sec" style="display:flex;flex-direction:column;flex:2;min-height:60px"><label>출력 (Output) <span><button onclick="outputToMemo()" title="이 출력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="toggleOutputEdit()" title="출력 내용 직접 수정" style="color:#5e81ac">✏️수정</button><button onclick="clearOutput()" title="출력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('output')" title="출력 텍스트 복사" style="color:#d8dee9">📋복사</button><button onclick="openHtmlTab('output')" title="마크다운·텍스트를 HTML 페이지로 렌더 (일반)" style="color:#88c0d0">📄일반HTML</button><button onclick="openStandaloneHtml('output')" title="단독 HTML 블록만 파싱해 새 탭으로 렌더 (DOCTYPE/html/```html 감지)" style="color:#A78BFA">🌐단독HTML</button><button onclick="downloadStandaloneHtml('output')" title="단독 HTML 블록만 .html 파일로 다운로드" style="color:#A78BFA">⬇단독</button><button onclick="openModal('output')" title="전체화면 확대 (Shift+Space+O)" style="color:#a3be8c">⤢확대</button></span></label><div class="ov" id="sb-output" style="flex:1">대기 중</div></div>
       <div class="sb-row" style="flex-wrap:wrap;gap:2px;font-size:10px;color:var(--text-muted);padding:2px 0">
         <button onclick="sbTsz(-.1)" style="font-size:9px;padding:1px 4px">A-</button><button onclick="sbTsz(.1)" style="font-size:9px;padding:1px 4px">A+</button>
@@ -1306,9 +1498,13 @@ body.focus-mode #canvas-controls{display:none}
 <div id="ce-color-pop" style="position:fixed;display:none;background:var(--bg-2);border:1px solid var(--border-light);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.5);z-index:1001;padding:10px"></div>
 <div id="arr-pop" onclick="event.stopPropagation()">
   <div class="arr-title">정렬 간격 조정</div>
-  <label>좌우 <input type="range" id="arr-gx" min="10" max="200" value="60" oninput="arrLive()"><span class="arr-val" id="arr-gx-v">60</span></label>
-  <label>상하 <input type="range" id="arr-gy" min="5" max="150" value="30" oninput="arrLive()"><span class="arr-val" id="arr-gy-v">30</span></label>
-  <label style="margin-top:4px;cursor:pointer"><input type="checkbox" id="arr-vcenter" onchange="arrLive()"> 세로 중앙 정렬</label>
+  <div style="display:flex;gap:4px;margin-bottom:6px">
+    <button id="arr-dir-h" onclick="setArrDir('h');arrSyncDirUI()" style="flex:1;padding:5px;background:rgba(76,175,80,.2);color:#a3be8c;border:1px solid rgba(76,175,80,.4);border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">▶ 가로 흐름</button>
+    <button id="arr-dir-v" onclick="setArrDir('v');arrSyncDirUI()" style="flex:1;padding:5px;background:rgba(255,255,255,.05);color:var(--text-dim);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">▼ 세로 흐름</button>
+  </div>
+  <label>좌우 <input type="range" id="arr-gx" min="10" max="300" value="90" oninput="arrLive()"><span class="arr-val" id="arr-gx-v">90</span></label>
+  <label>상하 <input type="range" id="arr-gy" min="5" max="200" value="30" oninput="arrLive()"><span class="arr-val" id="arr-gy-v">30</span></label>
+  <label style="margin-top:4px;cursor:pointer"><input type="checkbox" id="arr-vcenter" onchange="arrLive()"> 가운데 정렬</label>
 </div>
 <div class="mo" id="modal" onclick="if(event.target===this)closeModal()">
   <button class="mo-arrow mo-arrow-l" onclick="modalNav(-1)">&#x276E;</button>
@@ -1379,62 +1575,25 @@ body.focus-mode #canvas-controls{display:none}
 
       <!-- 프로젝트 작업 폴더 설정 -->
       <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
-        <div style="font-weight:600;color:#7ecfff;margin-bottom:6px">💼 프로젝트 작업 폴더 (Project = Folder)</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.5">
-          새 프로젝트 저장 시 자동으로 여기에 실제 폴더를 만들어 Claude/Gemini가 작업할 공간으로 사용합니다. 기존 폴더는 "📂 기존 폴더 불러오기"로 편입 가능.
+        <div style="font-weight:600;color:#7ecfff;margin-bottom:6px">💼 프로젝트 작업 폴더 정책 <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(시스템 고정)</span></div>
+        <div style="font-size:11.5px;color:var(--text-dim);margin-bottom:10px;line-height:1.6">
+          모든 프로젝트는 아래 구조로 자동 저장됩니다. 사용자가 경로를 잘못 입력해 폴더가 꼬이지 않도록 코드 레벨에서 고정되어 있습니다.
         </div>
-
-        <!-- Root 경로 -->
-        <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">기본 작업 루트</div>
-          <div style="display:flex;gap:6px">
-            <input type="text" id="s-wf-root" placeholder="/synology" oninput="saveWfSetting('project_work_root',this.value);updateWfPreview()" style="flex:1;padding:6px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--mono)">
-            <button onclick="openSystemBrowser('s-wf-root')" style="padding:6px 12px;background:rgba(139,92,246,.15);color:#b48ead;border:1px solid rgba(139,92,246,.3);border-radius:5px;cursor:pointer;font-size:11px">📁 선택</button>
-          </div>
+        <!-- 정책 표시 (읽기전용) -->
+        <div style="padding:10px 12px;background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.25);border-radius:6px;font-size:12px;color:var(--text);font-family:var(--mono);line-height:1.8;margin-bottom:8px">
+          📁 <code style="color:#a7f3d0">/synology/{년도}/{YYYYMMDD}_이름</code>
         </div>
-
-        <!-- 중간 폴더 패턴 -->
-        <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">중간 폴더 패턴 (선택)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px">
-            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
-              <input type="radio" name="s-wf-sub" value="{year}" onchange="saveWfSetting('project_sub_pattern',this.value);updateWfPreview()">
-              <span>년도별 <code style="color:#88c0d0">{year}</code> (권장)</span>
-            </label>
-            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
-              <input type="radio" name="s-wf-sub" value="{year}-{month}" onchange="saveWfSetting('project_sub_pattern',this.value);updateWfPreview()">
-              <span>월별 <code style="color:#88c0d0">{year}-{month}</code></span>
-            </label>
-            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
-              <input type="radio" name="s-wf-sub" value="" onchange="saveWfSetting('project_sub_pattern',this.value);updateWfPreview()">
-              <span>없음 (루트 바로 밑)</span>
-            </label>
-          </div>
+        <div style="padding:8px 12px;background:rgba(76,175,80,.05);border:1px dashed rgba(76,175,80,.25);border-radius:5px;font-size:11px;color:var(--text-dim);line-height:1.6">
+          <div>예: 프로젝트명 <code style="color:#fbbf24">신약검토</code> → <code style="color:#a7f3d0" id="s-wf-preview">/synology/2026/20260421_신약검토</code></div>
+          <div style="margin-top:4px">저장 안 한 임시 작업물은 <code style="color:#ebcb8b">/synology/_temp/</code> 에 두었다가 2일 후 휴지통, 5일 후 영구 삭제됩니다.</div>
+          <div style="margin-top:4px;color:var(--text-muted)">💡 <code>/synology</code> = <code>/volume1/00_Gils_Project</code> (시놀로지 호스트)</div>
         </div>
-
-        <!-- 프로젝트 폴더 패턴 -->
-        <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">프로젝트 폴더 이름 규칙</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px">
-            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
-              <input type="radio" name="s-wf-folder" value="{date}_{name}" onchange="saveWfSetting('project_folder_pattern',this.value);updateWfPreview()">
-              <span><code style="color:#a3e635">{date}_{name}</code> (권장)</span>
-            </label>
-            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
-              <input type="radio" name="s-wf-folder" value="{name}_{date}" onchange="saveWfSetting('project_folder_pattern',this.value);updateWfPreview()">
-              <span><code style="color:#a3e635">{name}_{date}</code></span>
-            </label>
-            <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--bg-0);border:1px solid var(--border);border-radius:5px;cursor:pointer">
-              <input type="radio" name="s-wf-folder" value="{name}" onchange="saveWfSetting('project_folder_pattern',this.value);updateWfPreview()">
-              <span><code style="color:#a3e635">{name}</code> (날짜 없이)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- 미리보기 -->
-        <div style="padding:8px 12px;background:rgba(76,175,80,.07);border:1px solid rgba(76,175,80,.2);border-radius:5px;font-size:11px;color:var(--text-dim)">
-          <b style="color:#a7f3d0">미리보기:</b> 프로젝트명 <code id="s-wf-sample-name">오늘작업</code> 저장 시 →
-          <code id="s-wf-preview" style="color:#a7f3d0;font-family:var(--mono);word-break:break-all">/synology/2026/20260420_오늘작업</code>
+        <!-- 숨겨진 호환용 인풋 — 기존 JS (updateWfPreview/loadWfSettings) 깨지지 않게 DOM 유지 -->
+        <div style="display:none">
+          <input type="text" id="s-wf-root" value="/synology" readonly>
+          <input type="radio" name="s-wf-sub" value="{year}" checked>
+          <input type="radio" name="s-wf-folder" value="{date}_{name}" checked>
+          <code id="s-wf-sample-name">신약검토</code>
         </div>
       </div>
 
@@ -1654,7 +1813,7 @@ body.focus-mode #canvas-controls{display:none}
 </div>
 
 <!-- System Browser: workspace_root 선택용 (전체 파일 시스템 탐색) -->
-<div id="sysfs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:160;align-items:center;justify-content:center">
+<div id="sysfs-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center">
   <div style="width:560px;max-height:80vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-2)">
       <span style="font-weight:600;flex:1">🌳 시스템 폴더 탐색</span>
@@ -2219,7 +2378,11 @@ function mkNode(opts={}){
     inputTemplate:opts.inputTemplate||'',inputResolved:'',outputCapture:opts.outputCapture||'',
     accountId:opts.accountId||null,
     provider,model:opts.model||'',
-    status:opts.status||'idle',history:opts.history||[],el:null};
+    status:opts.status||'idle',history:opts.history||[],
+    // 다운로더 전용
+    urls:Array.isArray(opts.urls)?opts.urls:[],
+    dlOptions:opts.dlOptions||{format:'mp4',quality:'best',audioOnly:false,subtitles:false},
+    el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
 }
 function buildDom(n){
@@ -2231,8 +2394,8 @@ function buildDom(n){
   const showOut=isAgentType(n.type);const showBody=n.type!=='trigger';
   const modeIcon=isAgentType(n.type)?(n.chatOnly?'💬':'🔧'):'';
   d.innerHTML=`
-    <div class="coll-body"><span class="coll-icon">${ti.icon}</span><span class="coll-badge">${n.name}</span></div>
-    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${isAgentType(n.type)?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button><button data-act="delete" title="노드 삭제" style="color:#bf616a">🗑</button></div><div class="nd-st ${n.status}"></div></div>
+    <div class="coll-body"><span class="coll-spin" title="실행 중"></span><span class="coll-icon">${ti.icon}</span><span class="coll-badge">${n.name}</span></div>
+    <div class="nd-hd"><span class="nd-icon">${ti.icon}</span><span class="nd-name" data-role="name">${escapeHtml(n.name)}</span><input class="nd-name-edit" value="${escapeHtml(n.name)}" spellcheck="false" style="display:none"><div class="nd-ctrls"><button data-act="rename" title="이름 변경">✏️</button>${isAgentType(n.type)?`<button data-act="mode" title="대화/CLI 전환" class="mode-btn">${modeIcon}</button>`:''} <button data-act="bgimg" title="외형 이미지 변경">🎨</button><button data-act="clone" title="노드 분할 (클론 N개)">⎘</button>${ti.hasExec?'<button class="run-btn" data-act="run">▶</button>':''}<button data-act="tog">▼</button><button data-act="delete" title="노드 삭제" style="color:#bf616a">🗑</button></div><span class="nd-spin" title="실행 중"></span><div class="nd-st ${n.status}"></div></div>
     ${showBody?`<div class="nd-body"><div class="sec-lbl">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':n.type==='agent-gemini'?'INPUT ✨':'INPUT'}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`:''}
     <div class="port port-l" data-node="${n.id}" data-side="left"></div>
     <div class="port port-r" data-node="${n.id}" data-side="right"></div>
@@ -2348,9 +2511,13 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item" onclick="arrangeAll()">🔲 정렬 즉시 적용</div>
       <div style="padding:8px 14px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
         <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase">정렬 간격 (즉시 반영)</div>
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          <button onclick="setArrDir('h')" style="flex:1;padding:5px;background:${arrDir==='h'?'rgba(76,175,80,.25)':'rgba(255,255,255,.05)'};color:${arrDir==='h'?'#a3be8c':'var(--text-dim)'};border:1px solid ${arrDir==='h'?'rgba(76,175,80,.45)':'var(--border)'};border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">▶ 가로 흐름</button>
+          <button onclick="setArrDir('v')" style="flex:1;padding:5px;background:${arrDir==='v'?'rgba(76,175,80,.25)':'rgba(255,255,255,.05)'};color:${arrDir==='v'?'#a3be8c':'var(--text-dim)'};border:1px solid ${arrDir==='v'?'rgba(76,175,80,.45)':'var(--border)'};border-radius:4px;cursor:pointer;font-size:11px;font-weight:600">▼ 세로 흐름</button>
+        </div>
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:6px">가로 <input type="range" id="ctx-gx" min="10" max="600" value="${arrGapX}" oninput="ctxArrLive()" style="flex:1;accent-color:var(--accent)"><span id="ctx-gx-v" style="font-size:10px;color:var(--accent);min-width:30px;text-align:right">${arrGapX}</span></label>
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:6px">세로 <input type="range" id="ctx-gy" min="5" max="300" value="${arrGapY}" oninput="ctxArrLive()" style="flex:1;accent-color:var(--accent)"><span id="ctx-gy-v" style="font-size:10px;color:var(--accent);min-width:30px;text-align:right">${arrGapY}</span></label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="ctx-vc" ${arrVCenter?'checked':''} onchange="arrVCenter=this.checked;arrangeAll()"> 세로 중앙</label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer"><input type="checkbox" id="ctx-vc" ${arrVCenter?'checked':''} onchange="arrVCenter=this.checked;arrangeAll()"> 가운데 정렬</label>
       </div>
       <div class="ctx-item" onclick="collapseAll(true)">▶ 전체 접기</div>
       <div class="ctx-item" onclick="collapseAll(false)">▼ 전체 펼치기</div>`;
@@ -2375,11 +2542,16 @@ function showCtx(x,y,mode,nd){
     m.style.left=lx+'px';m.style.top=ty+'px';
   });
 }
-let arrGapX=60,arrGapY=30,arrVCenter=false; // 저장되는 간격값
+// 정렬 간격 기본값 — 가로 90 (이전 60 대비 1.5배). 방향: 'h'=좌→우 기본, 'v'=위→아래 세로 흐름
+let arrGapX=90,arrGapY=30,arrVCenter=false,arrDir='h';
 function ctxArrLive(){
   const gx=document.getElementById('ctx-gx'),gy=document.getElementById('ctx-gy');
   if(gx){arrGapX=parseInt(gx.value);document.getElementById('ctx-gx-v').textContent=arrGapX}
   if(gy){arrGapY=parseInt(gy.value);document.getElementById('ctx-gy-v').textContent=arrGapY}
+  arrangeAll();
+}
+function setArrDir(dir){
+  arrDir=(dir==='v')?'v':'h';
   arrangeAll();
 }
 
@@ -2387,8 +2559,8 @@ function arrangeAll(){
   // 이미지 노드도 포함하여 통합 정렬 (type==='image' 캔버스 요소 + 일반 노드)
   const items=[...nodes,...canvasEls.filter(c=>c.type==='image')];
   if(items.length===0)return;
-  const gx=arrGapX,gy=arrGapY,padX=40;
-  // BFS 레벨 계산 (이미지 포함)
+  const gx=arrGapX,gy=arrGapY,pad=40;
+  // BFS 레벨 계산 (연결 방향 따라)
   const levels=new Map();const roots=items.filter(n=>!conns.find(c=>c.tid===n.id));
   if(roots.length===0)roots.push(items[0]);
   roots.forEach(n=>levels.set(n.id,0));
@@ -2398,42 +2570,72 @@ function arrangeAll(){
   items.forEach(n=>{if(!levels.has(n.id))levels.set(n.id,0)});
   const byLevel=new Map();items.forEach(n=>{const lv=levels.get(n.id);if(!byLevel.has(lv))byLevel.set(lv,[]);byLevel.get(lv).push(n)});
 
-  // 크기 계산 헬퍼 (이미지/노드 공통)
-  const itemW=n=>{
-    if(n.type==='image')return n.w||200;
-    return n.collapsed?100:(n.w||280);
-  };
-  const itemH=n=>{
-    if(n.type==='image')return n.h||150;
-    return n.collapsed?36:(n.h||240);
-  };
+  // 크기 헬퍼
+  const itemW=n=>{if(n.type==='image')return n.w||200;return n.collapsed?100:(n.w||280)};
+  const itemH=n=>{if(n.type==='image')return n.h||150;return n.collapsed?36:(n.h||240)};
 
-  // 1차: 각 레벨의 총 세로 높이 계산
-  const levelInfo=[];let curX=padX;let maxTotalH=0;
   const sortedLevels=[...byLevel.keys()].sort((a,b)=>a-b);
-  sortedLevels.forEach(lv=>{
-    const group=byLevel.get(lv);let maxW=0,totalH=0;
-    group.forEach(n=>{const w=itemW(n);const h=itemH(n);totalH+=h;if(w>maxW)maxW=w});
-    totalH+=(group.length-1)*gy;
-    if(totalH>maxTotalH)maxTotalH=totalH;
-    levelInfo.push({lv,group,maxW,totalH,x:curX});
-    curX+=maxW+gx;
-  });
+  const center=arrVCenter;
 
-  // 2차: 배치 (세로 중앙 옵션 반영)
-  const vcenter=arrVCenter;
-  const centerY=maxTotalH/2;
-  levelInfo.forEach(li=>{
-    const startY=vcenter?(centerY-li.totalH/2):30;
-    let curY=startY;
-    li.group.forEach(n=>{const h=itemH(n);
-      n.x=li.x;n.y=curY;
-      if(n.el){n.el.style.left=n.x+'px';n.el.style.top=n.y+'px'}
-      curY+=h+gy});
-  });
+  if(arrDir==='v'){
+    // 세로 흐름: 각 레벨이 한 "행" — 위에서 아래로 쌓임, 한 레벨 내 노드는 좌→우 나열
+    const rowInfo=[];let curY=pad;let maxTotalW=0;
+    sortedLevels.forEach(lv=>{
+      const group=byLevel.get(lv);let maxH=0,totalW=0;
+      group.forEach(n=>{const w=itemW(n);const h=itemH(n);totalW+=w;if(h>maxH)maxH=h});
+      totalW+=(group.length-1)*gx;
+      if(totalW>maxTotalW)maxTotalW=totalW;
+      rowInfo.push({lv,group,maxH,totalW,y:curY});
+      curY+=maxH+gy;
+    });
+    const centerX=maxTotalW/2;
+    rowInfo.forEach(ri=>{
+      const startX=center?(centerX-ri.totalW/2+pad):pad;
+      let curX=startX;
+      ri.group.forEach(n=>{const w=itemW(n);
+        n.x=curX;n.y=ri.y;
+        if(n.el){n.el.style.left=n.x+'px';n.el.style.top=n.y+'px'}
+        curX+=w+gx;
+      });
+    });
+  } else {
+    // 가로 흐름 (기본): 각 레벨이 한 "열" — 좌→우, 한 레벨 내 노드는 위→아래 쌓임
+    const colInfo=[];let curX=pad;let maxTotalH=0;
+    sortedLevels.forEach(lv=>{
+      const group=byLevel.get(lv);let maxW=0,totalH=0;
+      group.forEach(n=>{const w=itemW(n);const h=itemH(n);totalH+=h;if(w>maxW)maxW=w});
+      totalH+=(group.length-1)*gy;
+      if(totalH>maxTotalH)maxTotalH=totalH;
+      colInfo.push({lv,group,maxW,totalH,x:curX});
+      curX+=maxW+gx;
+    });
+    const centerY=maxTotalH/2;
+    colInfo.forEach(ci=>{
+      const startY=center?(centerY-ci.totalH/2+pad):pad;
+      let curY=startY;
+      ci.group.forEach(n=>{const h=itemH(n);
+        n.x=ci.x;n.y=curY;
+        if(n.el){n.el.style.left=n.x+'px';n.el.style.top=n.y+'px'}
+        curY+=h+gy;
+      });
+    });
+  }
   drawConns();autoSave();
 }
 
+function arrSyncDirUI(){
+  const h=document.getElementById('arr-dir-h'),v=document.getElementById('arr-dir-v');
+  if(!h||!v)return;
+  const active='rgba(76,175,80,.2)',activeColor='#a3be8c',activeBorder='rgba(76,175,80,.4)';
+  const off='rgba(255,255,255,.05)',offColor='var(--text-dim)',offBorder='var(--border)';
+  if(arrDir==='v'){
+    v.style.background=active;v.style.color=activeColor;v.style.borderColor=activeBorder;
+    h.style.background=off;h.style.color=offColor;h.style.borderColor=offBorder;
+  } else {
+    h.style.background=active;h.style.color=activeColor;h.style.borderColor=activeBorder;
+    v.style.background=off;v.style.color=offColor;v.style.borderColor=offBorder;
+  }
+}
 function showArrPop(e){
   e.stopPropagation();
   document.getElementById('ctx').classList.remove('show');
@@ -2442,6 +2644,8 @@ function showArrPop(e){
   document.getElementById('arr-gy').value=arrGapY;
   document.getElementById('arr-gx-v').textContent=arrGapX;
   document.getElementById('arr-gy-v').textContent=arrGapY;
+  const vc=document.getElementById('arr-vcenter');if(vc)vc.checked=arrVCenter;
+  arrSyncDirUI();
   pop.style.left=(e.clientX||200)+'px';pop.style.top=(e.clientY||200)+'px';
   pop.classList.add('show');
   arrangeAll(); // 즉시 1차 정렬
@@ -3350,10 +3554,22 @@ function showCopyToast(msg){
 }
 
 // ═══ SIDEBAR ═══
-function openSb(n){const ti=TYPES[n.type];const isAgent=isAgentType(n.type);document.getElementById('sb').classList.remove('hid');
+function openSb(n){const ti=TYPES[n.type];const isAgent=isAgentType(n.type);const isDl=n.type==='downloader';document.getElementById('sb').classList.remove('hid');
   // ce 영역 숨기고 노드 영역 다시 표시
   const ceArea=document.getElementById('ce-area');if(ceArea)ceArea.style.display='none';
   document.getElementById('sb-title').textContent=`${ti.icon} ${n.name}`;document.getElementById('sb-name').value=n.name;document.getElementById('sb-input').value=n.inputTemplate;document.getElementById('sb-output').textContent=n.outputCapture||'대기 중';updateCharCount();
+  // 사이드바 스피너 — 현재 노드 상태에 맞춰 초기 표시
+  const _sp=document.getElementById('sb-spin');if(_sp)_sp.classList.toggle('show',n.status==='running');
+  // 다운로더 노드 — 전용 섹션 표시, 일반 input/output 숨김
+  const dlSec=document.getElementById('sb-dl-sec');
+  const inSec=document.getElementById('sb-input-sec');
+  const outSec=document.getElementById('sb-output-sec');
+  const divEl=document.getElementById('sb-div');
+  if(dlSec){dlSec.style.display=isDl?'flex':'none'}
+  if(inSec)inSec.style.display=isDl?'none':'';
+  if(outSec)outSec.style.display=isDl?'none':'';
+  if(divEl)divEl.style.display=isDl?'none':'';
+  if(isDl){dlLoadNodeToUI(n)}
   // compact toolbar: show/hide agent-only elements
   document.getElementById('sb-mode-sec').style.display=isAgent?'':'none';
   if(isAgent){
@@ -3615,35 +3831,68 @@ const engine={
     this.running=true;
     if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
     if(nd.type==='downloader'){
-      // URL이 인풋 (resolved)
-      const url = (await this.resolve(nd)).trim();
-      if(!url){this.setSt(nd,'error');nd.outputCapture='❌ URL이 비어있습니다';const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;autoSave();return}
-      this.setSt(nd,'running');
-      console.log(`[DL] ${nd.name} → ${url}`);
-      try{
-        const r = await api('POST','/api/media/download',{url, projectId:workflowId||'', nodeId:nd.id});
-        if(r&&r.ok){
-          const lines = r.files.map(f=>{
-            const ic = f.kind==='video'?'🎬':(f.kind==='image'?'🖼️':'🎵');
-            const kb = Math.round((f.size||0)/1024);
-            return `${ic} ${f.name}  (${kb.toLocaleString()} KB)\n   └ ${f.path}`;
-          }).join('\n\n');
-          nd.outputCapture = `✅ ${r.count}개 다운로드 완료\n`
-            + `🎬 영상 ${r.videoCount||0} · 🖼️ 이미지 ${r.imageCount||0} · 🎵 오디오 ${r.audioCount||0}\n`
-            + `📂 저장 폴더: ${r.workDir}\n\n${lines}`;
-          this.setSt(nd,'complete');
-          this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
-        } else {
-          nd.outputCapture = '❌ ' + (r&&r.error||'알 수 없는 오류');
-          this.setSt(nd,'error');
-        }
-      }catch(e){
-        nd.outputCapture = '❌ 네트워크 오류: '+e.message;
+      // 프로젝트 미저장 차단 (파일 미아 방지)
+      if(!workflowId){
+        nd.outputCapture='❌ 프로젝트를 먼저 저장해주세요 (Alt+S)\n다운로드 파일은 프로젝트 폴더에 저장됩니다.';
         this.setSt(nd,'error');
+        const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+        autoSave();
+        alert('⚠ 프로젝트를 먼저 저장해주세요.\n\n다운로드 파일은 프로젝트 폴더 하위 videos/ images/ audio/ 에 저장됩니다.');
+        return;
       }
-      // 노드 출력 UI 갱신
+      // inputTemplate 에 있는 URL들을 nd.urls 와 동기화 (호환성)
+      dlSyncFromInput(nd);
+      const urls=(nd.urls||[]).filter(u=>u.url&&u.url.trim());
+      if(urls.length===0){
+        nd.outputCapture='❌ URL이 비어있습니다. 사이드바에서 URL을 추가하세요.';
+        this.setSt(nd,'error');
+        const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+        autoSave();return;
+      }
+      this.setSt(nd,'running');
+      console.log(`[DL] ${nd.name} → ${urls.length} URLs`);
+      const opts=nd.dlOptions||{format:'mp4',quality:'best',audioOnly:false,subtitles:false};
+      nd._dlAbort=false;
+      let allFiles=[];let okCount=0;let errCount=0;
+      for(let i=0;i<urls.length;i++){
+        if(nd._dlAbort){console.log('[DL] 사용자 정지');break;}
+        const item=urls[i];
+        if(item.status==='complete')continue; // 이미 완료는 건너뜀
+        item.status='running';item.error='';item.files=[];
+        if(selectedNode===nd)dlRenderRows(nd);
+        try{
+          const r=await api('POST','/api/media/download',{
+            url:item.url.trim(), projectId:workflowId||'', nodeId:nd.id,
+            format:opts.format, quality:opts.quality,
+            audioOnly:opts.audioOnly, subtitles:opts.subtitles,
+          });
+          if(r&&r.ok){
+            item.status='complete';item.files=r.files||[];
+            item.result=`${r.count}개 · ${(r.videoCount||0)}🎬 ${(r.imageCount||0)}🖼 ${(r.audioCount||0)}🎵`;
+            allFiles=allFiles.concat((r.files||[]).map(f=>({...f,_url:item.url})));
+            okCount++;
+          } else {
+            item.status='error';item.error=(r&&r.error)||'알 수 없는 오류';
+            errCount++;
+          }
+        }catch(e){item.status='error';item.error=e.message;errCount++;}
+        if(selectedNode===nd)dlRenderRows(nd);
+      }
+      // 요약 output
+      const lines=allFiles.map(f=>{
+        const ic=f.kind==='video'?'🎬':(f.kind==='image'?'🖼️':'🎵');
+        const kb=Math.round((f.size||0)/1024);
+        return `${ic} ${f.name}  (${kb.toLocaleString()} KB)\n   └ ${f.path}`;
+      }).join('\n\n');
+      nd.outputCapture=`📥 다운로드 ${okCount}/${urls.length} 성공 · ${errCount} 실패 · ${allFiles.length}개 파일\n`
+        +`🎬 영상 ${allFiles.filter(f=>f.kind==='video').length} · 🖼️ 이미지 ${allFiles.filter(f=>f.kind==='image').length} · 🎵 오디오 ${allFiles.filter(f=>f.kind==='audio').length}\n`
+        +(allFiles.length?`\n${lines}`:'');
+      if(errCount && !okCount)this.setSt(nd,'error');
+      else this.setSt(nd,'complete');
       const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
       autoSave();
+      if(selectedNode===nd)dlRenderRows(nd);
+      if(!errCount)this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
       return;
     }
     if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
@@ -3677,7 +3926,12 @@ const engine={
 
     const cwd=document.getElementById('wf-cwd').value.trim()||undefined;
     const chatOnly=nd.chatOnly!==undefined?nd.chatOnly:true;
-    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null,provider:providerOfType(nd.type),model:nd.model||''});
+    // 저장 안 한 프로젝트면 /synology/_temp/ 에서 작업. tempKey 로 세션 내내 같은 폴더 유지.
+    // canvasState 전달 → 서버가 snapshot.json 저장 → 휴지통에서 복원 가능.
+    if(!workflowId && !window._tempKey)window._tempKey='tk_'+(TAB_ID||'')+'_'+Date.now().toString(36);
+    const tempKey = workflowId ? '' : window._tempKey;
+    const canvasState = workflowId ? null : getState();
+    const exec=await api('POST','/api/node-exec',{nodeId:nd.id,nodeName:nd.name,prompt:input||'(이미지를 분석/설명해주세요)',inputRaw:nd.inputTemplate,cwd,chatOnly,systemPrompt:nd.systemPrompt||'',images:mergedImages,projectId:workflowId||'',projectName:wfName||'',accountId:nd.accountId||null,provider:providerOfType(nd.type),model:nd.model||'',tempKey,canvasState});
 
     if(!exec.ok){
       console.log(`[${nd.name}] API 실패`);
@@ -3726,15 +3980,39 @@ const engine={
     console.log(`[${nd.name}] 1.5초 후 재시도 ${retryCount+1}/5`);
     setTimeout(()=>this.executeNode(nd,retryCount+1),1500);
   },
-  setSt(nd,st){nd.status=st;nd.el.classList.remove('running','complete','error');if(st!=='idle')nd.el.classList.add(st);const dot=nd.el.querySelector('.nd-st');if(dot)dot.className='nd-st '+st;drawConns()}
+  setSt(nd,st){nd.status=st;nd.el.classList.remove('running','complete','error');if(st!=='idle')nd.el.classList.add(st);const dot=nd.el.querySelector('.nd-st');if(dot)dot.className='nd-st '+st;
+    // 사이드바 스피너 — 선택된 노드면 동기화
+    if(selectedNode===nd){const sp=document.getElementById('sb-spin');if(sp)sp.classList.toggle('show',st==='running');}
+    drawConns()}
 };
 
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,workDir:window._currentWorkDir||'',tabId:TAB_ID,appearance:{...appearance},
-  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history})),
+  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history,
+    // 다운로더 전용 — URL 리스트 + 옵션 (상태는 저장 시 대기/완료만 유지, 진행중은 대기로 되돌림)
+    urls:n.type==='downloader'?(n.urls||[]).map(u=>({url:u.url||'',status:u.status==='running'?'pending':(u.status||'pending'),files:u.files||[],error:u.error||'',result:u.result||''})):undefined,
+    dlOptions:n.type==='downloader'?(n.dlOptions||{format:'mp4',quality:'best',audioOnly:false,subtitles:false}):undefined,
+  })),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5})),
-  canvasElements:canvasEls.map(c=>({id:c.id,type:c.type,x:c.x,y:c.y,w:c.w,h:c.h,color:c.color,label:c.label,content:c.content,fontSize:c.fontSize,src:c.src}))}}
+  canvasElements:canvasEls.map(c=>{
+    // text 요소는 크기가 auto 라 DOM 에서 실측
+    let w=c.w,h=c.h;
+    if(c.type==='text'&&c.el){
+      const r=c.el.getBoundingClientRect();
+      if(r&&r.width)w=Math.round(r.width/zoom);
+      if(r&&r.height)h=Math.round(r.height/zoom);
+      c.w=w;c.h=h;
+    }
+    // text 는 contentEditable DOM 의 현재 내용 반영
+    let content=c.content;
+    if(c.type==='text'&&c.el)content=c.el.innerText||c.el.textContent||c.content||'';
+    return {id:c.id,type:c.type,x:c.x,y:c.y,w:w,h:h,color:c.color,label:c.label,content:content,fontSize:c.fontSize,src:c.src,
+            // 이미지에 노드모드 부여한 경우의 전체 속성
+            nodeType:c.nodeType||null,nodeName:c.nodeName||'',
+            inputTemplate:c.inputTemplate||'',outputCapture:c.outputCapture||'',
+            chatOnly:c.chatOnly??true,paneIndex:c.paneIndex||null,status:c.status==='running'?'idle':(c.status||'idle')};
+  })}}
 let _saveTimer=null;
 let undoStack=[],redoStack=[],lastSavedState=null;
 const MAX_UNDO=50;
@@ -3852,6 +4130,25 @@ async function svRefresh(dateJustChanged){
   const name=document.getElementById('sv-name').value;
   const dateInp=document.getElementById('sv-date');
   const hintEl=document.getElementById('sv-date-hint');
+  const nameInp=document.getElementById('sv-name');
+  const warn=document.getElementById('sv-path-warn');
+  const confirmBtn=document.getElementById('sv-confirm');
+  // 이름 검증 — 실패 시 저장 버튼 비활성화 + 경고 표시
+  const vres=validateProjectName(name);
+  if(nameInp){
+    if(!vres.ok && name.trim()){
+      nameInp.style.borderColor='rgba(239,68,68,.5)';
+      nameInp.style.boxShadow='0 0 0 2px rgba(239,68,68,.12)';
+    } else {
+      nameInp.style.borderColor='rgba(255,255,255,.12)';
+      nameInp.style.boxShadow='';
+    }
+  }
+  if(confirmBtn){
+    confirmBtn.disabled=!vres.ok;
+    confirmBtn.style.opacity=vres.ok?'1':'.45';
+    confirmBtn.style.cursor=vres.ok?'pointer':'not-allowed';
+  }
   // 이름에서 날짜 감지 (날짜 picker 수동 변경 직후가 아닐 때만 자동 반영)
   if(!dateJustChanged){
     const parsed=_svParseDateFromName(name);
@@ -3866,18 +4163,31 @@ async function svRefresh(dateJustChanged){
     hintEl.innerHTML='📅 수동 지정';
     hintEl.style.color='#88c0d0';
   }
-  // 서버에 경로 미리보기 요청
-  if(!name.trim())return;
+  // 이름 유효하지 않으면 경고 표시 후 미리보기 스킵
+  if(!name.trim()){
+    document.getElementById('sv-path').value='';
+    if(warn){warn.innerHTML='';warn.style.color='var(--text-muted)';}
+    return;
+  }
+  if(!vres.ok){
+    document.getElementById('sv-path').value='';
+    if(warn){
+      warn.innerHTML='🚫 저장 불가 — '+vres.error.replace(/\n/g,'<br>');
+      warn.style.color='#fca5a5';
+    }
+    return;
+  }
+  // 서버 미리보기 요청
   try{
     const r=await api('GET',`/api/project/preview-work-dir?name=${encodeURIComponent(name)}&date=${encodeURIComponent(dateInp.value)}`);
     if(r&&r.ok){
-      // 사용자가 수동 편집 중이면 덮어쓰지 않음
-      if(!svPathManualEdit){
-        document.getElementById('sv-path').value=r.path;
-      }
-      const warn=document.getElementById('sv-path-warn');
-      if(r.exists){
-        warn.innerHTML='⚠ 이 폴더가 이미 존재합니다 — 그대로 사용하면 기존 파일과 합쳐집니다';
+      document.getElementById('sv-path').value=r.path;
+      if(!warn)return;
+      if(r.nameValid===false){
+        warn.innerHTML='🚫 저장 불가 — '+(r.nameError||'이름이 유효하지 않습니다').replace(/\n/g,'<br>');
+        warn.style.color='#fca5a5';
+      } else if(r.exists){
+        warn.innerHTML='⚠ 이 폴더가 이미 존재합니다 — 그대로 저장하면 기존 파일과 합쳐집니다';
         warn.style.color='#ebcb8b';
       } else {
         warn.innerHTML='';
@@ -3886,22 +4196,55 @@ async function svRefresh(dateJustChanged){
   }catch(e){}
 }
 
-function svResetPath(){
-  svPathManualEdit=false;
-  svRefresh();
-}
-
 function svCancel(){
   document.getElementById('save-modal').style.display='none';
   if(_svResolver){_svResolver(null);_svResolver=null;}
 }
+
+// 프로젝트 이름 검증 (서버의 validate_project_name 과 동일 규칙) — {ok, error}
+function validateProjectName(name){
+  if(name===null||name===undefined)return {ok:false,error:'이름이 비어있습니다.'};
+  const raw=String(name);
+  const trimmed=raw.trim();
+  if(!trimmed)return {ok:false,error:'이름이 비어있거나 공백만 있습니다.'};
+  // 제어문자
+  for(const ch of trimmed){
+    if(ch.charCodeAt(0)<32)return {ok:false,error:'탭·개행 등 제어문자는 사용할 수 없습니다.'};
+  }
+  // 앞뒤 점·공백
+  if(raw!==raw.replace(/^[\s.]+|[\s.]+$/g,''))return {ok:false,error:'이름의 맨 앞이나 맨 뒤에 점(.) 또는 공백은 사용할 수 없습니다.\n(Windows·시놀로지 SMB 에서 폴더명이 %2E 로 깨집니다)'};
+  // 금지 문자
+  const bad=[...new Set([...trimmed].filter(c=>'\\/:*?"<>|'.includes(c)))];
+  if(bad.length)return {ok:false,error:`다음 문자는 폴더명에 쓸 수 없습니다: ${bad.join(' ')}\n(허용 안 되는 기호: \\ / : * ? " < > | )`};
+  // %
+  if(trimmed.includes('%'))return {ok:false,error:"'%' 문자는 사용할 수 없습니다 (Windows 탐색기에서 URL 인코딩과 혼동)."};
+  // Windows 예약 이름
+  const RESERVED=new Set(['CON','PRN','AUX','NUL',
+    ...Array.from({length:10},(_,i)=>'COM'+i),
+    ...Array.from({length:10},(_,i)=>'LPT'+i)]);
+  const baseNoDate=trimmed.replace(/^\s*\d{4}[-/.]?\d{2}[-/.]?\d{2}[\s_\-]+/,'');
+  for(const cand of [trimmed,baseNoDate]){
+    const root=cand.split('.')[0].toUpperCase().trim();
+    if(RESERVED.has(root))return {ok:false,error:`'${cand}' 은(는) Windows 예약 이름이라 사용할 수 없습니다.`};
+  }
+  // 길이
+  if(trimmed.length>150)return {ok:false,error:'이름이 너무 깁니다. 150자 이하로 줄여주세요.'};
+  return {ok:true,error:null};
+}
+
 function svConfirm(){
   const name=document.getElementById('sv-name').value.trim();
-  if(!name){alert('이름을 입력하세요');return;}
+  // 강제 검증 — 통과 못 하면 저장 자체를 막음
+  const v=validateProjectName(name);
+  if(!v.ok){
+    alert('⚠ 저장할 수 없는 이름입니다\n\n'+v.error+'\n\n다른 이름으로 다시 입력해주세요.');
+    const n=document.getElementById('sv-name');if(n){n.focus();n.select();}
+    return;
+  }
   const date=document.getElementById('sv-date').value;
-  const path=document.getElementById('sv-path').value.trim();
   document.getElementById('save-modal').style.display='none';
-  const res={name,date,path,manualPath:svPathManualEdit};
+  // 경로는 서버가 이름+날짜로 재계산 — 프론트에서 넘기지 않음
+  const res={name,date};
   if(_svResolver){_svResolver(res);_svResolver=null;}
 }
 
@@ -3921,18 +4264,27 @@ async function saveWorkflow(){
       return;
     } else {
       const def=`${dateStamp()}_`;
-      const name=prompt(`새 프로젝트 이름:\n(💡 디폴트로 오늘 날짜 접두사가 붙습니다. 지워도 됩니다)`,def);
-      if(!name||!name.trim())return;
-      wfName=name.trim();workflowId=null;
+      let newNm=null;
+      while(true){
+        newNm=prompt(`새 프로젝트 이름:\n(💡 디폴트로 오늘 날짜 접두사가 붙습니다. 지워도 됩니다)`,def);
+        if(newNm===null)return;  // 취소
+        newNm=newNm.trim();
+        if(!newNm)return;
+        const v=validateProjectName(newNm);
+        if(v.ok)break;
+        alert('⚠ 저장할 수 없는 이름입니다\n\n'+v.error+'\n\n다른 이름으로 다시 입력해주세요.');
+      }
+      wfName=newNm;workflowId=null;
     }
   } else {
-    // 새 프로젝트 — 저장 모달 (이름 + 날짜 + 경로 하이브리드)
+    // 새 프로젝트 — 저장 모달 (이름 + 날짜만, 경로는 서버 자동 결정)
     const defName = wfName || '';
     const res = await svOpen(defName);
     if(!res)return;  // 취소
     wfName = res.name;
     var _saveDate = res.date;
-    var _explicitPath = res.manualPath ? res.path : null;
+    // 신규 프로젝트는 workDir 잔상 차단 (이전 프로젝트의 _currentWorkDir 덮어쓰기 방지)
+    window._currentWorkDir='';
   }
   // 오늘 날짜 폴더 자동 생성/확보 (사용자가 매일 쌓이는 프로젝트를 자동 분류)
   try{
@@ -3941,14 +4293,19 @@ async function saveWorkflow(){
   }catch(e){}
 
   const d=getState();d.id=workflowId||undefined;d.name=wfName;
-  // 모달에서 받은 날짜/경로 반영
+  // 모달에서 받은 날짜 반영 (경로는 서버에서 이름+날짜로 재계산)
   if(typeof _saveDate!=='undefined'&&_saveDate)d.saveDate=_saveDate;
-  if(typeof _explicitPath!=='undefined'&&_explicitPath)d.workDir=_explicitPath;
+  // 신규 프로젝트 저장 시 workDir 잔상 완전 제거 — 서버가 이름+날짜로 재계산
+  if(!workflowId)delete d.workDir;
+  // 신규 저장인데 임시 폴더에서 작업 중이었다면 tempKey 전달 → 서버가 정식 폴더로 이동
+  if(!workflowId && window._tempKey)d.tempKey=window._tempKey;
   const r=await api('POST','/api/project/save',d);
   if(r.ok&&r.id){
     workflowId=r.id;
     location.hash='wf='+workflowId;
     if(typeof syncProjectNameUi==='function')syncProjectNameUi();
+    // 정식 프로젝트가 되었으니 임시 세션 키 폐기
+    window._tempKey='';
     // 서버가 실제 적용한 work_dir을 캔버스 CWD 입력창에 반영
     if(r.workDir){
       window._currentWorkDir=r.workDir;
@@ -3965,7 +4322,11 @@ async function saveWorkflow(){
     const wdMsg = r.workDir?`\n📁 작업 폴더: ${r.workDir}${r.folderCreated===false?'\n⚠ 폴더 생성은 실패 (권한 확인 필요)':''}`:'';
     alert(`✅ 저장 완료\n이름: ${wfName}${wdMsg}`);
   }else{
-    alert('❌ 저장 실패\n'+(r.error||''));
+    if(r&&r.errorKind==='invalid_name'){
+      alert('⚠ 저장할 수 없는 이름입니다\n\n'+(r.error||'')+'\n\n다른 이름으로 다시 시도해주세요.');
+    } else {
+      alert('❌ 저장 실패\n'+((r&&r.error)||''));
+    }
   }
 }
 async function loadWorkflow(id){
@@ -3988,6 +4349,618 @@ async function loadWorkflow(id){
   }catch(e){}
 }
 async function refreshWfList(){const r=await api('GET','/api/project/list');const s=document.getElementById('wf-sel');s.innerHTML='<option value="">불러오기</option>';if(r.ok)r.projects.forEach(w=>s.innerHTML+=`<option value="${w.id}">${w.name}</option>`)}
+
+// ═══════════════════════════════════════════════
+// ⬇️ 다운로더 노드 — URL 리스트 / 옵션 / 순차 실행
+// ═══════════════════════════════════════════════
+function _dlDefaultOpts(){return {format:'mp4',quality:'best',audioOnly:false,subtitles:false}}
+function dlEnsureNodeData(n){
+  if(!n)return;
+  if(!Array.isArray(n.urls))n.urls=[];
+  if(!n.dlOptions)n.dlOptions=_dlDefaultOpts();
+}
+function dlSyncFromInput(n){
+  // inputTemplate 에서 줄별로 URL 뽑아 nd.urls 와 병합
+  dlEnsureNodeData(n);
+  const lines=(n.inputTemplate||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  const existing=new Map(n.urls.map(u=>[u.url,u]));
+  const merged=[];
+  lines.forEach(u=>{
+    if(existing.has(u))merged.push(existing.get(u));
+    else merged.push({url:u,status:'pending',files:[],error:'',result:''});
+  });
+  // inputTemplate 에 없어도 이미 결과가 있으면 남김
+  n.urls.forEach(u=>{
+    if(!lines.includes(u.url)&&(u.status==='complete'||u.files?.length))merged.push(u);
+  });
+  n.urls=merged;
+}
+function dlSyncToInput(n){
+  if(!n)return;
+  n.inputTemplate=(n.urls||[]).map(u=>u.url).filter(Boolean).join('\n');
+}
+function dlLoadNodeToUI(n){
+  dlEnsureNodeData(n);
+  const o=n.dlOptions;
+  const elF=document.getElementById('dl-opt-format');if(elF)elF.value=o.format||'mp4';
+  const elQ=document.getElementById('dl-opt-quality');if(elQ)elQ.value=o.quality||'best';
+  const elA=document.getElementById('dl-opt-audio');if(elA)elA.checked=!!o.audioOnly;
+  const elS=document.getElementById('dl-opt-subs');if(elS)elS.checked=!!o.subtitles;
+  // inputTemplate 우선 동기화 (구버전 호환)
+  if(n.urls.length===0 && (n.inputTemplate||'').trim())dlSyncFromInput(n);
+  dlRenderRows(n);
+}
+function dlOptsChange(){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  dlEnsureNodeData(selectedNode);
+  selectedNode.dlOptions={
+    format:document.getElementById('dl-opt-format').value,
+    quality:document.getElementById('dl-opt-quality').value,
+    audioOnly:document.getElementById('dl-opt-audio').checked,
+    subtitles:document.getElementById('dl-opt-subs').checked,
+  };
+  autoSave();
+}
+function dlRenderRows(n){
+  const container=document.getElementById('dl-rows');
+  if(!container||!n)return;
+  dlEnsureNodeData(n);
+  const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const statusBadge=(s)=>{
+    if(s==='running')return '<span style="color:#7ecfff">⏳ 다운중</span>';
+    if(s==='complete')return '<span style="color:#a3e635">✅ 완료</span>';
+    if(s==='error')return '<span style="color:#fca5a5">❌ 실패</span>';
+    return '<span style="color:var(--text-muted)">⚪ 대기</span>';
+  };
+  container.innerHTML=n.urls.map((u,i)=>{
+    const domain=(u.url||'').replace(/^https?:\/\/(www\.)?/,'').split('/')[0]||'';
+    const hint=u.error?`<div style="font-size:9.5px;color:#fca5a5;padding:2px 4px;line-height:1.3;word-break:break-all">${esc(u.error.substring(0,200))}</div>`
+             :(u.result?`<div style="font-size:9.5px;color:#a3e635;padding:2px 4px">${esc(u.result)}</div>`:'');
+    return `<div style="display:grid;grid-template-columns:32px 1fr 68px 30px;gap:0;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;font-size:11px">
+      <div style="color:var(--text-muted);font-family:var(--mono)">${i+1}</div>
+      <div>
+        <input type="text" value="${esc(u.url)}" oninput="dlEditUrl(${i},this.value)" placeholder="https://..." style="width:100%;padding:3px 5px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:11px;font-family:var(--mono)">
+        ${domain?`<div style="font-size:9px;color:var(--text-muted);margin-top:1px">🌐 ${esc(domain)}</div>`:''}
+        ${hint}
+      </div>
+      <div>${statusBadge(u.status)}</div>
+      <div><button onclick="dlRemoveRow(${i})" title="삭제" style="background:none;border:none;color:#bf616a;cursor:pointer;font-size:14px">×</button></div>
+    </div>`;
+  }).join('');
+  if(n.urls.length===0){
+    container.innerHTML=`<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:11.5px;line-height:1.6">URL을 추가하세요.<br>한 줄에 하나씩 — 여러 사이트 섞어도 OK</div>`;
+  }
+  // 요약
+  const sum=document.getElementById('dl-summary');
+  if(sum){
+    const total=n.urls.length;
+    const ok=n.urls.filter(u=>u.status==='complete').length;
+    const err=n.urls.filter(u=>u.status==='error').length;
+    sum.textContent=total?`📋 총 ${total}개 · ✅ ${ok} 완료 · ❌ ${err} 실패 · ⚪ ${total-ok-err} 대기`:'URL을 추가하면 요약이 표시됩니다';
+  }
+  // 실행 버튼 상태
+  const running=selectedNode&&selectedNode.status==='running';
+  const runBtn=document.getElementById('dl-run-btn');const stopBtn=document.getElementById('dl-stop-btn');
+  if(runBtn)runBtn.style.display=running?'none':'';
+  if(stopBtn)stopBtn.style.display=running?'':'none';
+}
+function dlEditUrl(i,val){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  dlEnsureNodeData(selectedNode);
+  // 여러 줄이 붙여진 경우 — 분리
+  const lines=val.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(lines.length>1){
+    // 현재 행을 첫 줄로, 나머지를 뒤에 삽입
+    selectedNode.urls[i].url=lines[0];
+    const rest=lines.slice(1).map(u=>({url:u,status:'pending',files:[],error:'',result:''}));
+    selectedNode.urls.splice(i+1,0,...rest);
+    dlSyncToInput(selectedNode);
+    dlRenderRows(selectedNode);
+    autoSave();return;
+  }
+  selectedNode.urls[i].url=val;
+  if(val&&!selectedNode.urls[i].status)selectedNode.urls[i].status='pending';
+  dlSyncToInput(selectedNode);
+  autoSave();
+}
+function dlAddRow(){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  dlEnsureNodeData(selectedNode);
+  selectedNode.urls.push({url:'',status:'pending',files:[],error:'',result:''});
+  dlRenderRows(selectedNode);
+  // 마지막 input 에 포커스
+  setTimeout(()=>{
+    const inputs=document.querySelectorAll('#dl-rows input[type="text"]');
+    if(inputs.length)inputs[inputs.length-1].focus();
+  },30);
+  autoSave();
+}
+function dlRemoveRow(i){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  selectedNode.urls.splice(i,1);
+  dlSyncToInput(selectedNode);
+  dlRenderRows(selectedNode);
+  autoSave();
+}
+function dlClearAll(){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  if(!confirm('URL 목록과 결과를 모두 비울까요?'))return;
+  selectedNode.urls=[];
+  dlSyncToInput(selectedNode);
+  dlRenderRows(selectedNode);
+  autoSave();
+}
+async function dlPasteFromClipboard(){
+  try{
+    const txt=await navigator.clipboard.readText();
+    if(!txt||!txt.trim()){alert('클립보드가 비어있어요');return;}
+    const lines=txt.split(/\r?\n/).map(s=>s.trim()).filter(s=>s&&/^https?:\/\//i.test(s));
+    if(!lines.length){alert('유효한 URL이 없어요 (http:// 또는 https:// 로 시작해야 함)');return;}
+    dlEnsureNodeData(selectedNode);
+    lines.forEach(u=>selectedNode.urls.push({url:u,status:'pending',files:[],error:'',result:''}));
+    dlSyncToInput(selectedNode);
+    dlRenderRows(selectedNode);
+    autoSave();
+  }catch(e){alert('클립보드 읽기 실패: '+e.message+'\n브라우저가 차단했을 수 있습니다. URL 추가 후 붙여넣어주세요.');}
+}
+function dlRunAll(){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  engine.executeNode(selectedNode);
+}
+function dlStopAll(){
+  if(!selectedNode||selectedNode.type!=='downloader')return;
+  selectedNode._dlAbort=true;
+  engine.setSt(selectedNode,'idle');
+  dlRenderRows(selectedNode);
+}
+function dlOpenFolder(){
+  const wd=window._currentWorkDir||document.getElementById('wf-cwd').value||'';
+  if(!wd){alert('프로젝트를 먼저 저장해주세요');return;}
+  openInDsm(wd);
+}
+
+// ═══════════════════════════════════════════════
+// ⌨ 단축키 허브 (가이드 + 연습게임 Shortcut Rain)
+// ═══════════════════════════════════════════════
+const SH_KEY_LABELS = {
+  KeyQ:'Q', KeyW:'W', KeyE:'E', KeyR:'R', KeyT:'T', KeyY:'Y',
+  KeyA:'A', KeyS:'S', KeyD:'D', KeyF:'F',
+  KeyZ:'Z', KeyX:'X', KeyC:'C', KeyV:'V',
+  Backquote:'`',
+};
+const SHORTCUTS = [
+  // 노드 생성 — 핵심 (easy)
+  {g:'생성', code:'KeyQ', mod:'alt',      label:'🤖 Claude 노드', tier:1},
+  {g:'생성', code:'KeyT', mod:'alt',      label:'✨ Gemini 노드', tier:2},
+  {g:'생성', code:'KeyW', mod:'alt',      label:'📝 메모 노드',    tier:1},
+  {g:'생성', code:'KeyE', mod:'alt',      label:'📎 Input 노드',   tier:1},
+  {g:'생성', code:'KeyR', mod:'alt',      label:'⚡ Trigger 노드', tier:2},
+  {g:'생성', code:'KeyY', mod:'alt',      label:'⬇️ 다운로더 노드', tier:2},
+  // 실행/파일
+  {g:'실행', code:'KeyA', mod:'alt',      label:'▶ 전체 실행',      tier:1},
+  {g:'실행', code:'KeyX', mod:'alt',      label:'▶ 선택 실행',      tier:2},
+  {g:'파일', code:'KeyS', mod:'alt',      label:'💾 저장',           tier:1},
+  {g:'편집', code:'KeyD', mod:'alt',      label:'🗑 선택 삭제',      tier:2},
+  {g:'파일', code:'KeyF', mod:'alt',      label:'📁 파일 탐색',      tier:2},
+  {g:'편집', code:'KeyZ', mod:'alt',      label:'↶ 되돌리기',        tier:2},
+  // 뷰
+  {g:'뷰',  code:'KeyC', mod:'alt',      label:'🔽 전체 접기',      tier:2},
+  {g:'뷰',  code:'KeyV', mod:'alt',      label:'🔼 전체 펼치기',    tier:2},
+  {g:'뷰',  code:'Backquote', mod:'alt', label:'🔲 집중 모드',      tier:2},
+  // Alt+Shift 보조
+  {g:'요소', code:'KeyQ', mod:'altshift', label:'🟦 영역 그리기',   tier:3},
+  {g:'요소', code:'KeyW', mod:'altshift', label:'📝 캔버스 텍스트', tier:3},
+  {g:'요소', code:'KeyE', mod:'altshift', label:'🖼 이미지 추가',    tier:3},
+  {g:'요소', code:'KeyR', mod:'altshift', label:'📐 즉시 정렬',      tier:3},
+  {g:'패널', code:'KeyA', mod:'altshift', label:'📂 메모 폴더',      tier:3},
+  {g:'패널', code:'KeyS', mod:'altshift', label:'📝 새 메모 탭',     tier:3},
+  {g:'패널', code:'KeyD', mod:'altshift', label:'🗑 휴지통',         tier:3},
+];
+
+function openShortcutsHub(){
+  document.getElementById('sh-modal').style.display='flex';
+  shSwitchTab('guide');
+}
+function closeShortcutsHub(){
+  shStopGame();
+  document.getElementById('sh-modal').style.display='none';
+}
+function shSwitchTab(tab){
+  document.querySelectorAll('#sh-tabs .sh-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.getElementById('sh-pane-guide').style.display=(tab==='guide')?'block':'none';
+  document.getElementById('sh-pane-game').style.display=(tab==='game')?'flex':'none';
+  if(tab==='guide')shRenderGuide();
+  if(tab==='game'){shRenderHud();shRenderHiScore();}
+}
+function _shKbdHtml(mod,code){
+  const key=SH_KEY_LABELS[code]||code;
+  const parts=[`<span class="sh-kbd mod">Alt</span>`];
+  if(mod==='altshift')parts.push(`<span class="sh-kbd shift">Shift</span>`);
+  parts.push(`<span class="sh-kbd">${key}</span>`);
+  return `<span class="sh-keys">${parts.join('+')}</span>`;
+}
+function shRenderGuide(){
+  const pane=document.getElementById('sh-pane-guide');
+  // 그룹별 섹션
+  const groups=[
+    {title:'🎯 Alt + 한 글자 — 주요 액션', mod:'alt'},
+    {title:'🎨 Alt + Shift + 한 글자 — 캔버스/패널', mod:'altshift'},
+  ];
+  let html='';
+  html+=`<div style="padding:10px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;font-size:12px;color:var(--text);margin-bottom:16px;line-height:1.7">
+    💡 <b style="color:#a7f3d0">Alt 한 손으로 모두 잡을 수 있도록</b> 왼손 영역(QWER/ASDF/ZXCV)에만 배치되어 있어요.<br>
+    캔버스를 클릭해서 입력 포커스를 빼고 눌러야 동작합니다. (텍스트 입력창에 포커스가 있으면 무시)
+  </div>`;
+  groups.forEach(grp=>{
+    const rows=SHORTCUTS.filter(s=>s.mod===grp.mod);
+    html+=`<div class="sh-group"><div class="sh-group-hd">${grp.title}</div>`;
+    rows.forEach(r=>{
+      html+=`<div class="sh-row">
+        ${_shKbdHtml(r.mod,r.code)}
+        <span class="sh-label">${r.label}</span>
+        <span class="sh-cat">${r.g}</span>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`<div style="padding:10px 14px;background:rgba(251,189,44,.06);border:1px solid rgba(251,189,44,.2);border-radius:8px;font-size:11.5px;color:var(--text-dim);line-height:1.7;margin-top:20px">
+    🎮 위 단축키들을 <b style="color:#fbbd2c">🎮 연습게임</b> 탭에서 게임으로 외울 수 있습니다. 쉬움 → 보통 → 어려움 순서로 연습해보세요.
+  </div>`;
+  pane.innerHTML=html;
+}
+
+// ═══ 게임 엔진 ═══
+const SH_STATE={
+  running:false, paused:false, raf:null, cards:[], spawnAt:0,
+  score:0, combo:0, lives:3, difficulty:'medium',
+  startAt:0, lastPressedAt:0,
+  // 배수: 3연속 1.5x / 10연속 2x / 20연속 3x / 40연속 5x
+  multiplier(){ const c=this.combo; return c>=40?5:c>=20?3:c>=10?2:c>=3?1.5:1 },
+  fallMs(){ return this.difficulty==='easy'?4200:this.difficulty==='medium'?3000:2100 },
+  spawnMs(){ return this.difficulty==='easy'?2000:this.difficulty==='medium'?1400:900 },
+  pool(){
+    if(this.difficulty==='easy')return SHORTCUTS.filter(s=>s.tier===1);
+    if(this.difficulty==='medium')return SHORTCUTS.filter(s=>s.mod==='alt');
+    return SHORTCUTS.slice();
+  },
+};
+function shSetDifficulty(v){
+  SH_STATE.difficulty=v;
+  shRenderHiScore();
+  if(!SH_STATE.running){
+    // intro 재표시
+    document.getElementById('sh-game-intro').style.display='flex';
+  }
+}
+function shHiKey(){return 'sh_hiscore_'+SH_STATE.difficulty}
+function shRenderHiScore(){
+  try{
+    const hi=parseInt(localStorage.getItem(shHiKey())||'0');
+    document.getElementById('sh-hiscore').textContent=hi?`🏆 최고 ${hi}`:'🏆 최고 —';
+  }catch{}
+}
+function shRenderHud(){
+  const el=document.getElementById('sh-lives');
+  if(!el)return;
+  let h='';for(let i=0;i<3;i++) h+=`<span class="sh-heart ${i<SH_STATE.lives?'':'lost'}">❤</span>`;
+  el.innerHTML=h;
+  document.getElementById('sh-score').textContent=SH_STATE.score;
+  document.getElementById('sh-combo').textContent='×'+SH_STATE.multiplier();
+  const mb=document.getElementById('sh-multiplier');
+  if(mb){
+    const m=SH_STATE.multiplier();
+    if(m>1){mb.style.display='';mb.textContent=`COMBO ${m.toString().replace('.5','½')}× · ${SH_STATE.combo}연속`}
+    else mb.style.display='none';
+  }
+}
+function shStartGame(){
+  if(SH_STATE.running)return;
+  SH_STATE.running=true;SH_STATE.paused=false;
+  SH_STATE.cards=[];SH_STATE.score=0;SH_STATE.combo=0;SH_STATE.lives=3;
+  SH_STATE.startAt=performance.now();SH_STATE.spawnAt=SH_STATE.startAt+300;
+  document.getElementById('sh-game-intro').style.display='none';
+  document.getElementById('sh-game-pause').style.display='none';
+  document.getElementById('sh-game-start').style.display='none';
+  document.getElementById('sh-game-stop').style.display='';
+  document.getElementById('sh-diff').disabled=true;
+  clearShField();
+  shRenderHud();
+  shSetFeedback('🎮 게임 시작! 단축키로 명령을 쏴 제거하세요');
+  SH_STATE.raf=requestAnimationFrame(shLoop);
+}
+function shStopGame(){
+  if(!SH_STATE.running && !SH_STATE.paused)return;
+  const wasRunning=SH_STATE.running;
+  SH_STATE.running=false;SH_STATE.paused=false;
+  if(SH_STATE.raf){cancelAnimationFrame(SH_STATE.raf);SH_STATE.raf=null;}
+  clearShField();
+  document.getElementById('sh-game-pause').style.display='none';
+  document.getElementById('sh-game-start').style.display='';
+  document.getElementById('sh-game-stop').style.display='none';
+  document.getElementById('sh-diff').disabled=false;
+  if(wasRunning){
+    const final=SH_STATE.score;
+    try{
+      const prev=parseInt(localStorage.getItem(shHiKey())||'0');
+      if(final>prev){localStorage.setItem(shHiKey(),String(final));shSetFeedback(`🏆 신기록! ${final}점 (이전 ${prev})`);}
+      else shSetFeedback(`게임 종료 · 점수 ${final} (최고 ${prev})`);
+    }catch{}
+    shRenderHiScore();
+  }
+  document.getElementById('sh-game-intro').style.display='flex';
+}
+function shTogglePause(){
+  if(!SH_STATE.running)return;
+  SH_STATE.paused=!SH_STATE.paused;
+  document.getElementById('sh-game-pause').style.display=SH_STATE.paused?'flex':'none';
+  if(!SH_STATE.paused){SH_STATE.spawnAt=performance.now()+500;SH_STATE.raf=requestAnimationFrame(shLoop);}
+}
+function shResumeGame(){shTogglePause()}
+function shSetFeedback(t,color){
+  const el=document.getElementById('sh-feedback');if(!el)return;
+  el.innerHTML=t;el.style.color=color||'var(--text-dim)';
+}
+function clearShField(){
+  const f=document.getElementById('sh-game-field');
+  if(!f)return;
+  f.querySelectorAll('.sh-card,.sh-particle,.sh-float').forEach(e=>e.remove());
+}
+function shSpawn(){
+  const pool=SH_STATE.pool();
+  if(!pool.length)return;
+  const s=pool[Math.floor(Math.random()*pool.length)];
+  const f=document.getElementById('sh-game-field');
+  const c=document.createElement('div');
+  c.className='sh-card'+(s.mod==='altshift'?' shiftcard':'');
+  const keys=_shKbdHtml(s.mod,s.code);
+  c.innerHTML=`<div>${s.label}</div><div class="sh-card-hint">Alt${s.mod==='altshift'?' + Shift':''} + ${SH_KEY_LABELS[s.code]||s.code}</div>`;
+  // 좌우 random 위치
+  const fw=f.clientWidth;
+  const lx=60+Math.random()*(fw-200);
+  c.style.left=lx+'px';c.style.transform='translateX(0)';
+  c.dataset.code=s.code;c.dataset.mod=s.mod;
+  c.dataset.spawn=performance.now();
+  f.appendChild(c);
+  SH_STATE.cards.push(c);
+}
+function shLoop(ts){
+  if(!SH_STATE.running||SH_STATE.paused){SH_STATE.raf=null;return;}
+  const f=document.getElementById('sh-game-field');
+  const fh=f.clientHeight;
+  // spawn
+  if(ts>=SH_STATE.spawnAt){
+    const maxSim=SH_STATE.difficulty==='easy'?1:SH_STATE.difficulty==='medium'?2:3;
+    if(SH_STATE.cards.length<maxSim){shSpawn();}
+    SH_STATE.spawnAt=ts+SH_STATE.spawnMs()*(0.7+Math.random()*0.6);
+  }
+  // move cards
+  const fallMs=SH_STATE.fallMs();
+  SH_STATE.cards.forEach(c=>{
+    const age=ts-parseFloat(c.dataset.spawn);
+    const progress=age/fallMs;
+    const y=progress*(fh+40)-60;
+    c.style.top=y+'px';
+    if(progress>0.82)c.classList.add('danger');
+    if(progress>=1 && !c._missed){
+      c._missed=true;
+      shMiss(c);
+    }
+  });
+  SH_STATE.raf=requestAnimationFrame(shLoop);
+}
+function shMiss(c){
+  // 카드 제거 + 점수 감산 + 생명 -1
+  SH_STATE.combo=0;
+  SH_STATE.score=Math.max(0,SH_STATE.score-10);
+  SH_STATE.lives--;
+  shSpawnFloat(c.offsetLeft+c.offsetWidth/2, c.offsetTop+c.offsetHeight, '💔 MISS -10', '#fca5a5');
+  c.remove();
+  SH_STATE.cards=SH_STATE.cards.filter(x=>x!==c);
+  const f=document.getElementById('sh-game-field');f.classList.add('sh-shake');setTimeout(()=>f.classList.remove('sh-shake'),260);
+  shRenderHud();
+  shSetFeedback('💔 놓쳤어요 — 콤보 초기화',  '#fca5a5');
+  shBeep(180,0.08);
+  if(SH_STATE.lives<=0){shSetFeedback(`💀 GAME OVER · 최종 ${SH_STATE.score}점`, '#fbbd2c');setTimeout(shStopGame,1200);}
+}
+function shTryHit(mod, code){
+  if(!SH_STATE.running||SH_STATE.paused)return false;
+  // 가장 아래쪽(가장 위험한) 일치 카드를 찾음
+  let hit=null;let bestY=-1;
+  SH_STATE.cards.forEach(c=>{
+    if(c._missed)return;
+    if(c.dataset.code!==code||c.dataset.mod!==mod)return;
+    const y=parseFloat(c.style.top)||0;
+    if(y>bestY){bestY=y;hit=c;}
+  });
+  if(hit){
+    SH_STATE.combo++;
+    const mult=SH_STATE.multiplier();
+    const gain=Math.round(10*mult);
+    SH_STATE.score+=gain;
+    const cx=hit.offsetLeft+hit.offsetWidth/2, cy=hit.offsetTop+hit.offsetHeight/2;
+    shSpawnFloat(cx, cy, `+${gain}${mult>1?' ×'+mult:''}`, '#a3e635');
+    shBurst(cx, cy);
+    hit.classList.add('hit');
+    setTimeout(()=>hit.remove(),400);
+    SH_STATE.cards=SH_STATE.cards.filter(x=>x!==hit);
+    shRenderHud();
+    const cb=document.getElementById('sh-combo');if(cb){cb.classList.remove('sh-combo-boom');void cb.offsetWidth;cb.classList.add('sh-combo-boom')}
+    shSetFeedback(`✓ 정답! +${gain}점 · 콤보 ${SH_STATE.combo}`, '#a3e635');
+    shBeep(660, 0.05); if(mult>=2)setTimeout(()=>shBeep(880,0.04),50);
+    return true;
+  } else {
+    // 오답 감점
+    SH_STATE.combo=0;
+    SH_STATE.score=Math.max(0,SH_STATE.score-5);
+    shRenderHud();
+    shSetFeedback(`✗ 해당 단축키의 카드가 없어요 — 콤보 초기화, -5`, '#fca5a5');
+    shBeep(200,0.05);
+    return false;
+  }
+}
+function shSpawnFloat(x,y,text,color){
+  const f=document.getElementById('sh-game-field');
+  const el=document.createElement('div');
+  el.className='sh-float';el.textContent=text;
+  el.style.left=(x-30)+'px';el.style.top=y+'px';el.style.color=color||'#a3e635';
+  f.appendChild(el);
+  setTimeout(()=>el.remove(),1150);
+}
+function shBurst(x,y){
+  const f=document.getElementById('sh-game-field');
+  for(let i=0;i<10;i++){
+    const p=document.createElement('div');
+    p.className='sh-particle';
+    const ang=Math.random()*Math.PI*2;
+    const spd=40+Math.random()*80;
+    const dx=Math.cos(ang)*spd, dy=Math.sin(ang)*spd;
+    p.style.left=x+'px';p.style.top=y+'px';
+    p.style.transition='transform .6s ease-out, opacity .6s ease-out';
+    f.appendChild(p);
+    requestAnimationFrame(()=>{p.style.transform=`translate(${dx}px,${dy}px)`;p.style.opacity='0';});
+    setTimeout(()=>p.remove(),700);
+  }
+}
+// 간단 Web Audio 비프
+let _shAC=null;
+function shBeep(freq, dur){
+  try{
+    if(!_shAC)_shAC=new (window.AudioContext||window.webkitAudioContext)();
+    const o=_shAC.createOscillator();const g=_shAC.createGain();
+    o.type='sine';o.frequency.value=freq;
+    g.gain.setValueAtTime(.06, _shAC.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, _shAC.currentTime+dur);
+    o.connect(g);g.connect(_shAC.destination);
+    o.start();o.stop(_shAC.currentTime+dur);
+  }catch{}
+}
+// 키보드 훅 — 모달 열려있고 게임 탭일 때만 가로챔.
+// capture 단계에서 stopImmediatePropagation 으로 실제 단축키 핸들러(저장·실행 등) 차단.
+document.addEventListener('keydown',(e)=>{
+  const modal=document.getElementById('sh-modal');
+  if(!modal||modal.style.display==='none')return;
+  const gamePane=document.getElementById('sh-pane-game');
+  if(!gamePane||gamePane.style.display==='none')return;
+  // ESC 일시정지
+  if(e.key==='Escape'){
+    if(SH_STATE.running){e.preventDefault();e.stopImmediatePropagation();shTogglePause();}
+    return;
+  }
+  if(!SH_STATE.running||SH_STATE.paused)return;
+  if(!e.altKey)return;
+  const mod=e.shiftKey?'altshift':'alt';
+  const code=e.code;
+  if(!SH_KEY_LABELS[code])return;
+  // 실제 단축키 핸들러 동시 동작 방지
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  shTryHit(mod, code);
+}, true);
+
+// ═══ 인증 헬스체크 배지 ═══
+let _authHealthTimer=null;
+async function runAuthHealthCheck(quick){
+  const badge=document.getElementById('auth-health-badge');
+  const txt=document.getElementById('auth-health-text');
+  if(!badge||!txt)return;
+  if(!quick){
+    badge.className='auth-badge auth-loading';
+    txt.textContent='🔄 인증 점검 중…';
+  }
+  try{
+    const r=await api('GET',`/api/auth/health${quick?'?quick=1':''}`);
+    if(!r||!r.ok){
+      badge.className='auth-badge auth-fail';
+      txt.textContent='⚠ 점검 실패';
+      badge.title='인증 점검 API 오류 · 클릭해 재시도';
+      return;
+    }
+    window._authHealth=r;
+    const c=r.claude||{}, g=r.gemini||{};
+    const cTotal=c.count||0, gTotal=g.count||0;
+    const cOk=c.okCount||0, gOk=g.okCount||0;
+    const anyProvider = cTotal||gTotal;
+    if(!anyProvider){
+      badge.className='auth-badge auth-warn';
+      txt.textContent='⚠ 계정 없음';
+      badge.title='Claude/Gemini 계정 미등록 — 설정에서 추가하세요';
+      return;
+    }
+    // 모든 provider 중 사용 가능 계정이 1개라도 있고 실패 계정이 없으면 ok
+    const claudeBad = cTotal>0 && cOk===0;
+    const geminiBad = gTotal>0 && gOk===0;
+    const someBad = cTotal>0 && cOk<cTotal || gTotal>0 && gOk<gTotal;
+    if(claudeBad && geminiBad){
+      badge.className='auth-badge auth-fail';
+      txt.textContent=`🔴 모든 인증 실패 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
+    } else if(claudeBad || geminiBad){
+      badge.className='auth-badge auth-fail';
+      txt.textContent=`🔴 ${claudeBad?'Claude':'Gemini'} 인증 실패`;
+    } else if(someBad){
+      badge.className='auth-badge auth-warn';
+      txt.textContent=`🟡 일부 계정 문제 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
+    } else {
+      badge.className='auth-badge auth-ok';
+      txt.textContent=`✅ 인증 OK (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
+    }
+    badge.title=`마지막 점검: ${(r.checkedAt||'').substring(11,19)}${quick?' (빠른 체크)':''}\n클릭해 상세 보기 · 우클릭해 재점검`;
+    badge.oncontextmenu=(e)=>{e.preventDefault();runAuthHealthCheck(false);};
+    badge.onclick=showAuthHealthDetails;
+  }catch(e){
+    badge.className='auth-badge auth-fail';
+    txt.textContent='⚠ 점검 오류';
+    badge.title=String(e);
+  }
+}
+
+function showAuthHealthDetails(){
+  const h=window._authHealth;
+  if(!h){runAuthHealthCheck(false);return;}
+  let popup=document.getElementById('auth-health-popup');
+  if(popup){popup.remove();return;}
+  popup=document.createElement('div');
+  popup.id='auth-health-popup';
+  popup.style.cssText='position:fixed;top:60px;right:20px;z-index:500;width:420px;max-height:70vh;overflow-y:auto;background:var(--bg-1);border:1px solid var(--border);border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.7);padding:14px;font-size:12px';
+  const esc=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const rowHtml=(a)=>{
+    const icon=a.ok?'✅':'❌';
+    const color=a.ok?'#a3e635':'#fca5a5';
+    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:14px">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;color:${color}">${esc(a.name)}</div>
+        <div style="font-size:10.5px;color:var(--text-dim);line-height:1.5;margin-top:2px;word-break:break-word">${esc(a.reason||'')}</div>
+      </div>
+    </div>`;
+  };
+  const c=h.claude||{}, g=h.gemini||{};
+  popup.innerHTML=`
+    <div style="display:flex;align-items:center;margin-bottom:10px">
+      <span style="font-weight:700;font-size:13px;flex:1">🔐 인증 상태 상세</span>
+      <button onclick="runAuthHealthCheck(false)" style="font-size:10px;padding:3px 10px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:4px;cursor:pointer;margin-right:6px">🔄 재점검</button>
+      <button onclick="document.getElementById('auth-health-popup').remove()" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:10px">마지막 점검: ${esc(h.checkedAt||'')} · ${h.quick?'빠른 체크':'실제 CLI 호출'}</div>
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:#fbbd2c;margin-bottom:4px">Claude · ${c.okCount||0}/${c.count||0} OK</div>
+      ${(c.accounts||[]).length?(c.accounts||[]).map(rowHtml).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:4px 0">(계정 없음)</div>'}
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#88c0d0;margin-bottom:4px">Gemini · ${g.okCount||0}/${g.count||0} OK</div>
+      ${(g.accounts||[]).length?(g.accounts||[]).map(rowHtml).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:4px 0">(계정 없음)</div>'}
+    </div>`;
+  document.body.appendChild(popup);
+  // 바깥 클릭 시 닫기
+  setTimeout(()=>{
+    const closeOnOutside=(e)=>{
+      if(!popup.contains(e.target) && e.target.id!=='auth-health-badge' && !e.target.closest('#auth-health-badge')){
+        popup.remove();
+        document.removeEventListener('click',closeOnOutside);
+      }
+    };
+    document.addEventListener('click',closeOnOutside);
+  },50);
+}
 function newProject(){
   if(nodes.length>0&&!confirm('현재 작업을 지우고 새 빈 프로젝트를 시작합니다. 계속?'))return;
   nodes.forEach(n=>n.el.remove());nodes=[];
@@ -3995,6 +4968,10 @@ function newProject(){
   canvasEls.forEach(c=>c.el.remove());canvasEls=[];
   selectedNode=null;selectedConn=null;selectedCe=null;multiSel=[];
   workflowId=null;wfName='';if(typeof syncProjectNameUi==='function')syncProjectNameUi();
+  // 이전 프로젝트의 work_dir 잔상 제거 — 새 저장에서 잘못된 폴더로 덮어쓰기 방지
+  window._currentWorkDir='';
+  window._tempKey='';  // 새 임시 세션 키는 다음 node-exec 때 새로 생성됨
+  const _cw=document.getElementById('wf-cwd');if(_cw)_cw.value='';
   closeSb();drawConns();
   cx=0;cy=0;zoom=1;applyTx();
   undoStack=[];redoStack=[];lastSavedState=null;
@@ -4794,9 +5771,17 @@ async function adoptExistingFolder(){
     document.body.removeChild(temp);
     if(!folder)return;
     const suggested=folder.split('/').filter(Boolean).pop()||'Imported';
-    const name=prompt('프로젝트 이름 (편입 후 FlowDesk에서 사용할 이름):',suggested);
-    if(!name||!name.trim())return;
-    const r=await api('POST','/api/project/adopt',{folderPath:folder,name:name.trim()});
+    let name=null;
+    while(true){
+      name=prompt('프로젝트 이름 (편입 후 FlowDesk에서 사용할 이름):',suggested);
+      if(name===null)return;  // 취소
+      name=name.trim();
+      if(!name)return;
+      const v=validateProjectName(name);
+      if(v.ok)break;
+      alert('⚠ 사용할 수 없는 이름입니다\n\n'+v.error+'\n\n다른 이름으로 다시 입력해주세요.');
+    }
+    const r=await api('POST','/api/project/adopt',{folderPath:folder,name});
     if(r.ok){
       if(r.already){
         if(confirm(`이미 "${r.name}" 프로젝트로 편입된 폴더입니다.\n그 프로젝트를 열까요?`)){
@@ -4804,7 +5789,10 @@ async function adoptExistingFolder(){
           document.getElementById('landing').classList.remove('show');
         }
       } else {
-        alert(`✅ 편입 완료\n프로젝트: ${r.name}\n폴더: ${r.workDir}`);
+        const restoredMsg = r.restored
+          ? `\n\n🔄 이전 작업 상태 복원됨\n   노드 ${r.nodeCount||0}개 · 연결 ${r.connCount||0}개 · 캔버스 요소 포함`
+          : '\n\n(빈 플로우로 시작 — project.json 없음)';
+        alert(`✅ 편입 완료\n프로젝트: ${r.name}\n폴더: ${r.workDir}${restoredMsg}`);
         loadLandingLists();
         if(confirm('이 프로젝트를 지금 열까요?')){
           await loadWorkflow(r.id);
@@ -4854,18 +5842,70 @@ function toggleSelectAll(column){
 }
 
 async function openTrash(){
-  const r = await api('GET', '/api/trash/list');
+  const [r, tr] = await Promise.all([
+    api('GET', '/api/trash/list'),
+    api('GET', '/api/temp/folder-list').catch(()=>({ok:false,alive:[],trashed:[]})),
+  ]);
   if(!r.ok) return;
   const items = r.items || [];
-  let html = '<div style="max-height:60vh;overflow-y:auto;padding:8px">';
-  if(!items.length){
+  const alive = (tr && tr.alive) || [];
+  const trashed = (tr && tr.trashed) || [];
+  const tempTtl = (tr && tr.tempTtlDays) || 2;
+  const trashTtl = (tr && tr.trashTtlDays) || 5;
+
+  const fmtSize = b => b<1024 ? `${b}B` : b<1024*1024 ? `${(b/1024).toFixed(1)}KB` : `${(b/1024/1024).toFixed(1)}MB`;
+  const escHtml = s => (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const renderTempItem = (it, kind) => {
+    const snap = it.snapshot || {};
+    const nodeInfo = snap.hasSnapshot
+      ? `<span style="color:#a3e635">📦 ${snap.nodeCount||0}노드 · ${snap.connectionCount||0}연결</span>`
+      : `<span style="color:var(--text-muted)">스냅샷 없음</span>`;
+    const ageWarn = kind==='alive'
+      ? `<span style="color:#ebcb8b;font-size:9px">${Math.max(0, tempTtl*24 - it.ageHours).toFixed(0)}h 뒤 휴지통</span>`
+      : `<span style="color:#bf616a;font-size:9px">${Math.max(0, trashTtl*24 - it.ageHours).toFixed(0)}h 뒤 영구삭제</span>`;
+    const encPath = encodeURIComponent(it.path);
+    return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="flex:1;color:var(--text);font-weight:600">${escHtml(snap.name || it.name)}</span>
+        ${ageWarn}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text-dim)">
+        ${nodeInfo}
+        <span>📄 ${it.fileCount}파일 · ${fmtSize(it.sizeBytes)}</span>
+        <span style="flex:1;text-align:right;color:var(--text-muted)">${(it.mtime||'').substring(5,16)}</span>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
+        <button onclick="tempPromote('${encPath}','${escHtml(snap.name||it.name)}')" style="font-size:10px;padding:3px 8px;background:rgba(76,175,80,.2);border:1px solid rgba(76,175,80,.4);color:#a3be8c;border-radius:3px;cursor:pointer">💾 정식 저장으로 승격</button>
+        ${kind==='trash' ? `<button onclick="tempRestore('${encPath}')" style="font-size:10px;padding:3px 8px;background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);color:#b48ead;border-radius:3px;cursor:pointer">↩ 임시로 복원</button>` : ''}
+        <button onclick="tempDeleteNow('${encPath}')" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#bf616a;border-radius:3px;cursor:pointer">✕ 즉시 삭제</button>
+        <span style="flex:1"></span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:var(--mono);align-self:center">${escHtml(it.path)}</span>
+      </div>
+    </div>`;
+  };
+
+  const tempSection = (alive.length || trashed.length)
+    ? `<div style="border-bottom:2px solid var(--border)">
+        ${alive.length ? `<div style="padding:6px 12px;background:rgba(245,158,11,.1);font-size:11px;color:#fbbd2c;font-weight:600">💾 임시 작업물 · ${alive.length}개 (${tempTtl}일 후 자동 휴지통)</div>
+        ${alive.map(it=>renderTempItem(it,'alive')).join('')}` : ''}
+        ${trashed.length ? `<div style="padding:6px 12px;background:rgba(139,92,246,.1);font-size:11px;color:#b48ead;font-weight:600">♻️ 유예 중 · ${trashed.length}개 (${trashTtl}일 후 영구삭제)</div>
+        ${trashed.map(it=>renderTempItem(it,'trash')).join('')}` : ''}
+      </div>`
+    : '';
+
+  let html = tempSection + '<div style="max-height:60vh;overflow-y:auto;padding:8px">';
+  if(!items.length && !alive.length && !trashed.length){
     html += '<div style="padding:20px;text-align:center;color:var(--text-dim)">휴지통이 비어있습니다</div>';
+  } else if(!items.length){
+    html += '<div style="padding:10px 12px;color:var(--text-muted);font-size:11px">📂 프로젝트·메모 휴지통은 비어있음</div>';
   } else {
-    const typeLabels = {projects:'📂 프로젝트', temps:'📋 임시저장', memos:'📝 메모'};
+    html += '<div style="padding:6px 12px;background:rgba(244,67,54,.06);font-size:11px;color:#bf616a;font-weight:600">📂 프로젝트/메모 휴지통</div>';
+    const typeLabels = {projects:'📂 프로젝트', temps:'📋 임시저장', memos:'📝 메모', temps_folder:'💾 임시폴더'};
     items.forEach(item => {
+      if(item.original_table==='temps_folder')return; // 위에서 이미 표시
       html += `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">
         <span style="color:var(--text-dim);font-size:10px">${typeLabels[item.original_table]||item.original_table}</span>
-        <span style="flex:1;color:var(--text)">${item.name||'무제'}</span>
+        <span style="flex:1;color:var(--text)">${escHtml(item.name||'무제')}</span>
         <span style="color:var(--text-dim);font-size:9px">${(item.deleted_at||'').substring(0,16)}</span>
         <button onclick="restoreTrash(${item.id})" style="font-size:10px;padding:2px 6px;background:rgba(76,175,80,.15);border:1px solid rgba(76,175,80,.3);color:#a3be8c;border-radius:3px;cursor:pointer">↩ 복원</button>
         <button onclick="permanentDelete(${item.id})" style="font-size:10px;padding:2px 6px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#bf616a;border-radius:3px;cursor:pointer">✕</button>
@@ -4877,17 +5917,54 @@ async function openTrash(){
   if(!popup){
     popup = document.createElement('div');
     popup.id = 'trash-popup';
-    popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:500px;max-height:70vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:100;display:flex;flex-direction:column;overflow:hidden';
+    popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:640px;max-width:94vw;max-height:80vh;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:100;display:flex;flex-direction:column;overflow:hidden';
     document.body.appendChild(popup);
   }
   popup.innerHTML = `
     <div style="display:flex;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg-2)">
-      <span style="font-weight:600;font-size:.85em;flex:1">🗑️ 휴지통 (${items.length})</span>
-      <button onclick="emptyTrash()" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#bf616a;border-radius:3px;cursor:pointer;margin-right:8px">전체 비우기</button>
+      <span style="font-weight:600;font-size:.85em;flex:1">🗑️ 휴지통 · 임시작업 ${alive.length} / 유예 ${trashed.length} / 기타 ${items.length}</span>
+      <button onclick="tempCleanupNow()" title="지금 정리 실행" style="font-size:10px;padding:3px 8px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);color:#b48ead;border-radius:3px;cursor:pointer;margin-right:8px">🧹 지금 정리</button>
+      <button onclick="emptyTrash()" style="font-size:10px;padding:3px 8px;background:rgba(244,67,54,.1);border:1px solid rgba(244,67,54,.3);color:#bf616a;border-radius:3px;cursor:pointer;margin-right:8px">DB 휴지통 비우기</button>
       <button onclick="document.getElementById('trash-popup').remove()" style="background:none;border:none;color:var(--text);cursor:pointer;font-size:16px">×</button>
     </div>
     ${html}`;
   popup.style.display = 'flex';
+}
+
+async function tempPromote(encPath, name){
+  const path = decodeURIComponent(encPath);
+  const defName = name || path.split('/').pop();
+  const input = prompt(`정식 프로젝트로 저장합니다.\n프로젝트 이름을 확인/수정해주세요.`, defName);
+  if(!input || !input.trim())return;
+  const r = await api('POST','/api/temp/folder-promote',{path, name: input.trim()});
+  if(r.ok){
+    alert(`✅ 정식 프로젝트로 저장 완료\n📁 ${r.workDir||''}`);
+    openTrash();
+    if(typeof refreshWfList==='function') refreshWfList();
+    if(typeof loadLandingLists==='function') loadLandingLists().catch(()=>{});
+  } else {
+    alert('❌ 승격 실패: '+(r.error||''));
+  }
+}
+async function tempRestore(encPath){
+  const path = decodeURIComponent(encPath);
+  const r = await api('POST','/api/temp/folder-restore',{path});
+  if(r.ok){openTrash();}
+  else alert('❌ 복원 실패: '+(r.error||''));
+}
+async function tempDeleteNow(encPath){
+  if(!confirm('즉시 영구 삭제합니다. 되돌릴 수 없습니다.'))return;
+  const path = decodeURIComponent(encPath);
+  const r = await api('POST','/api/temp/folder-delete',{path});
+  if(r.ok){openTrash();}
+  else alert('❌ 삭제 실패: '+(r.error||''));
+}
+async function tempCleanupNow(){
+  const r = await api('POST','/api/temp/cleanup-now',{});
+  if(r.ok){
+    alert(`🧹 정리 완료\n임시→휴지통: ${r.moved}개\n휴지통→삭제: ${r.purged}개`);
+    openTrash();
+  }
 }
 
 async function restoreTrash(id){
@@ -6036,6 +7113,10 @@ async function init(){
   undoStack=[];redoStack=[];
   loadFolders();loadMemoTabs();loadPinnedMemos();
   setupJsonDragDrop();
+  // 인증 헬스체크 — 빠른(credentials 파싱) 먼저, 이어서 실제 CLI 호출
+  runAuthHealthCheck(true).then(()=>{
+    setTimeout(()=>runAuthHealthCheck(false),1500);
+  });
   // 시스템 기본 대화모드 + 외부 DSM 경로 매핑 로드
   try{
     const sr=await api('GET','/api/settings/get');

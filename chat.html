@@ -578,7 +578,11 @@ async function sendChat(key){
   const cwd=document.getElementById('chat-cwd').value.trim()||undefined;
   // 패널별 chatOnly 사용 (전역이 아님 — 각 패널이 독립 모드)
   state._lastSentChatOnly=state.chatOnly;
-  const r=await api('POST','/api/chat',{convId:state.convId||'',nodeId:state.nodeId,nodeName:state.nodeName,message:msg,cwd,chatOnly:state.chatOnly});
+  // 현재 캔버스 탭에 열린 프로젝트 id 같이 전달 → 서버가 프로젝트 work_dir 로 cwd 폴백
+  const _proj = (typeof loadProjectInfo==='function') ? loadProjectInfo() : {};
+  const projectId = _proj && _proj.id ? _proj.id : '';
+  const projectName = _proj && _proj.name ? _proj.name : '';
+  const r=await api('POST','/api/chat',{convId:state.convId||'',nodeId:state.nodeId,nodeName:state.nodeName,message:msg,cwd,chatOnly:state.chatOnly,projectId,projectName});
 
   if(r.ok&&r.convId){
     // 새 대화면 진짜 convId로 키 교체
@@ -771,7 +775,9 @@ async function chatFork(){
   if(!ctxNodeId)return;
   const r=await api('GET',`/api/exec/list?nodeId=${ctxNodeId}`);
   const execs=(r.ok&&r.executions)||[];
-  const res=await api('POST','/api/chat/fork',{execId:execs[0]?execs[0].id:'',nodeId:ctxNodeId,nodeName:ctxNodeName});
+  const _proj = (typeof loadProjectInfo==='function') ? loadProjectInfo() : {};
+  const projectId = _proj && _proj.id ? _proj.id : '';
+  const res=await api('POST','/api/chat/fork',{execId:execs[0]?execs[0].id:'',nodeId:ctxNodeId,nodeName:ctxNodeName,projectId});
   if(res.ok){
     await renderSidePanel();
     openChat(res.convId,ctxNodeId,ctxNodeName);
