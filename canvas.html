@@ -4456,6 +4456,10 @@ async function cropImageCe(ce){
   if(!ce || ce.type!=='image' || !ce.src){ alert('이미지 소스 없음'); return; }
   try{ await _ensureCropper(); }catch(e){ alert('Cropper 라이브러리 로드 실패: '+e.message); return; }
 
+  // 원본 보존 — 첫 crop 시 현재 src 를 originalSrc 로 저장, 이후 crop 은 항상 원본 기준
+  if(!ce.originalSrc){ ce.originalSrc = ce.src; }
+  const sourceSrc = ce.originalSrc;  // 자르기 모드에서는 항상 원본으로 시작
+
   // 모달 컨테이너
   let modal = document.getElementById('image-crop-modal');
   if(modal) modal.remove();
@@ -4464,7 +4468,7 @@ async function cropImageCe(ce){
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;display:flex;flex-direction:column';
   modal.innerHTML = `
     <div style="padding:10px 16px;background:var(--bg-1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-      <span style="font-weight:700;color:var(--accent);font-size:14px">✂ 이미지 자르기</span>
+      <span style="font-weight:700;color:var(--accent);font-size:14px">✂ 이미지 자르기${ce.originalSrc!==ce.src?' <span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:8px">원본 기준으로 열림</span>':''}</span>
       <span style="flex:1"></span>
       <button data-crop-aspect="free" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">자유</button>
       <button data-crop-aspect="1" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">1:1</button>
@@ -4476,11 +4480,12 @@ async function cropImageCe(ce){
       <button data-crop-flip="h" title="좌우 반전" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">↔</button>
       <button data-crop-flip="v" title="상하 반전" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">↕</button>
       <span style="width:1px;height:22px;background:var(--border);margin:0 4px"></span>
+      ${ce.originalSrc && ce.originalSrc!==ce.src ? `<button data-crop-revert style="padding:6px 14px;background:rgba(255,200,80,.15);color:#fbbd2c;border:1px solid rgba(255,200,80,.35);border-radius:4px;cursor:pointer;font-size:12px" title="원본 이미지 그대로 복원 (자르기 취소)">↺ 원본 복원</button>`:''}
       <button data-crop-cancel style="padding:6px 14px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
       <button data-crop-apply style="padding:6px 16px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">✂ 적용</button>
     </div>
     <div style="flex:1;overflow:hidden;position:relative;background:#1a1a20">
-      <img id="crop-target" src="${ce.src}" style="max-width:100%;display:block">
+      <img id="crop-target" src="${sourceSrc}" style="max-width:100%;display:block">
     </div>`;
   document.body.appendChild(modal);
 
@@ -4506,6 +4511,26 @@ async function cropImageCe(ce){
   }));
   const close = ()=>{ try{cropper.destroy()}catch(e){} modal.remove(); };
   modal.querySelector('[data-crop-cancel]').addEventListener('click', close);
+  const revertBtn = modal.querySelector('[data-crop-revert]');
+  if(revertBtn) revertBtn.addEventListener('click', ()=>{
+    if(!confirm('자르기를 전부 취소하고 원본 이미지로 복원합니다. 계속할까요?')) return;
+    ce.src = ce.originalSrc;
+    const imgEl = ce.el.querySelector('img');
+    if(imgEl) imgEl.src = ce.src;
+    // 크기는 원본 이미지 자연 크기 가져와서 재설정
+    const probe = new Image();
+    probe.onload = ()=>{
+      ce.w = probe.naturalWidth; ce.h = probe.naturalHeight;
+      // 너무 크면 캔버스에 보이는 적당한 크기로 — max 800x600
+      if(ce.w>800){ const r=800/ce.w; ce.w=Math.round(ce.w*r); ce.h=Math.round(ce.h*r); }
+      if(ce.h>600){ const r=600/ce.h; ce.w=Math.round(ce.w*r); ce.h=Math.round(ce.h*r); }
+      ce.el.style.width=ce.w+'px'; ce.el.style.height=ce.h+'px';
+      drawConns(); autoSave();
+    };
+    probe.src = ce.src;
+    showCopyToast('↺ 원본 이미지로 복원됨');
+    close();
+  });
 
   modal.querySelector('[data-crop-apply]').addEventListener('click', async ()=>{
     const canvas = cropper.getCroppedCanvas({maxWidth:4096, maxHeight:4096, imageSmoothingQuality:'high'});
@@ -5087,6 +5112,7 @@ function mkCe(opts={}){
     content:opts.content||'',
     fontSize:opts.fontSize||16,
     src:opts.src||'',
+    originalSrc:opts.originalSrc||'',  // 이미지 원본 (crop 이전) — 자르기 모드에서 복원용
     nodeType:opts.nodeType||null,  // null|agent|memo|input|trigger
     nodeName:opts.nodeName||opts.label||'Image',
     inputTemplate:opts.inputTemplate||'',
@@ -5758,12 +5784,16 @@ function addCeText(x,y){
   },50);
 }
 
-// 캔버스 빈 곳 더블클릭 → 해당 위치에 텍스트 메모 즉시 생성
+// 캔버스 빈 곳 + 이미지 CE 위 더블클릭 → 해당 위치에 텍스트 메모 즉시 생성
+// (이미지 CE 는 별도 dblclick 기능 없어서 안전하게 텍스트 생성으로 활용)
 cw.addEventListener('dblclick', e=>{
-  // 진짜 빈 영역(캔버스 배경/cvs/svg)인지 확인
+  // 텍스트 편집 요소는 제외
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.contentEditable==='true') return;
+  // 진짜 빈 영역 OR 이미지 CE(내부 <img>까지 포함) 일 때만
+  const ceEl = e.target.closest ? e.target.closest('.ce') : null;
   const onBg = e.target===cw || e.target===cvs || e.target.tagName==='svg' || e.target.id==='svg' || e.target.id==='canvas';
-  if(!onBg) return;
-  // 선택된 연결선의 dblclick → 웨이포인트 추가 핸들러가 이미 등록됨 (그건 hit path 에서 처리)
+  const onImageCe = ceEl && ceEl.classList.contains('image');
+  if(!onBg && !onImageCe) return;
   e.preventDefault(); e.stopPropagation();
   const cp = s2c(e.clientX, e.clientY);
   addCeText(cp.x, cp.y);
@@ -6468,7 +6498,7 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
     // text 는 contentEditable DOM 의 현재 내용 반영
     let content=c.content;
     if(c.type==='text'&&c.el)content=c.el.innerText||c.el.textContent||c.content||'';
-    return {id:c.id,type:c.type,x:c.x,y:c.y,w:w,h:h,color:c.color,label:c.label,content:content,fontSize:c.fontSize,src:c.src,
+    return {id:c.id,type:c.type,x:c.x,y:c.y,w:w,h:h,color:c.color,label:c.label,content:content,fontSize:c.fontSize,src:c.src,originalSrc:c.originalSrc||undefined,
             // 이미지에 노드모드 부여한 경우의 전체 속성
             nodeType:c.nodeType||null,nodeName:c.nodeName||'',
             inputTemplate:c.inputTemplate||'',outputCapture:c.outputCapture||'',
@@ -9796,18 +9826,30 @@ async function _docRenderPdf(state, holder){
   const pageInp = holder.querySelector('[data-pdf-page]');
   const singleChk = holder.querySelector('[data-pdf-single]');
 
+  // PDF 렌더 스케일 — Ctrl+휠로 조정 (웹 줌 아닌 PDF.js 렌더 해상도 직접 조정)
+  state._pdfScale = state._pdfScale || 1.5;
+
   // 렌더 함수
   const renderPage = async (pageNum) => {
     const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({scale: 1.5});
+    const viewport = page.getViewport({scale: state._pdfScale});
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width; canvas.height = viewport.height;
-    canvas.style.cssText='background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5);max-width:100%;height:auto;display:block';
+    canvas.style.cssText='background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5);display:block;max-width:none';
     canvas.dataset.pageNum = pageNum;
     const ctx = canvas.getContext('2d');
     await page.render({canvasContext:ctx, viewport}).promise;
     return canvas;
   };
+
+  // Ctrl+휠 → PDF 자체 확대/축소 재렌더 (브라우저 웹 줌 아님)
+  pagesEl.addEventListener('wheel', ev=>{
+    if(!ev.ctrlKey) return;
+    ev.preventDefault();
+    const delta = ev.deltaY>0 ? -0.15 : 0.15;
+    state._pdfScale = Math.max(0.5, Math.min(5.0, state._pdfScale + delta));
+    doRender();
+  }, {passive:false});
 
   const doRender = async () => {
     pagesEl.innerHTML = '<div class="doc-loading" style="color:#ccc">페이지 렌더 중…</div>';
