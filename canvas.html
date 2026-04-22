@@ -12655,11 +12655,11 @@ function sheetTryParseText(text){
 // ⌨ 단축키 허브 (가이드 + 연습게임 Shortcut Rain)
 // ═══════════════════════════════════════════════
 const SH_KEY_LABELS = {
-  KeyQ:'Q', KeyW:'W', KeyE:'E', KeyR:'R', KeyT:'T',
+  KeyQ:'Q', KeyW:'W', KeyE:'E', KeyT:'T',
   KeyA:'A', KeyS:'S', KeyD:'D', KeyF:'F',
   KeyZ:'Z', KeyX:'X', KeyC:'C', KeyV:'V',
   Digit1:'1', Digit2:'2', Digit3:'3', Digit4:'4',
-  Backquote:'`',
+  Space:'Space', Backquote:'`',
 };
 // Shift+Alt + [왼손 키] 단일 2-수식자 조합 — 브라우저 충돌 최소화
 const SHORTCUTS = [
@@ -12667,7 +12667,7 @@ const SHORTCUTS = [
   {g:'생성', code:'KeyQ', mod:'shiftalt', label:'🤖 Claude 노드',   tier:1},
   {g:'생성', code:'KeyW', mod:'shiftalt', label:'📝 메모 노드',      tier:1},
   {g:'생성', code:'KeyE', mod:'shiftalt', label:'📎 Input 노드',     tier:1},
-  {g:'생성', code:'KeyR', mod:'shiftalt', label:'⚡ Trigger 노드',   tier:2},
+  {g:'생성', code:'Space',mod:'shiftalt', label:'⚡ Trigger 노드',   tier:2},
   {g:'생성', code:'KeyT', mod:'shiftalt', label:'✨ Gemini 노드',    tier:2},
   // 실행/파일 — ASDF
   {g:'실행', code:'KeyA', mod:'shiftalt', label:'▶ 전체 실행',       tier:1},
@@ -12718,7 +12718,7 @@ function shRenderGuide(){
   const pane=document.getElementById('sh-pane-guide');
   // 그룹별 섹션 — 그룹 필드(g) 로 나눔
   const groupDefs = [
-    {title:'🎯 노드 생성 — QWERT', filter:s=>s.g==='생성'},
+    {title:'🎯 노드 생성 — QWET · Space(Trigger)', filter:s=>s.g==='생성'},
     {title:'▶ 실행 · 저장 — ASDF', filter:s=>['실행','파일','편집'].includes(s.g) && ['KeyA','KeyS','KeyD','KeyF'].includes(s.code)},
     {title:'✂ 편집/뷰 — ZXCV', filter:s=>['KeyZ','KeyX','KeyC','KeyV'].includes(s.code)},
     {title:'🎨 캔버스 요소 — 1234', filter:s=>s.code.startsWith('Digit')},
@@ -12727,7 +12727,7 @@ function shRenderGuide(){
   let html='';
   html+=`<div style="padding:10px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;font-size:12px;color:var(--text);margin-bottom:16px;line-height:1.7">
     💡 <b style="color:#a7f3d0">Shift + Alt</b> 2-수식자 조합으로 브라우저 충돌 최소화.<br>
-    왼손 영역(QWERT · ASDF · ZXCV · 1234 · <code>\`</code>) 한 손으로 모두 조작 가능. 입력창 포커스 시 무시.
+    왼손 영역(QWET · ASDF · ZXCV · 1234 · Space · <code>\`</code>) 한 손으로 모두 조작 가능. 입력창 포커스 시 무시.
   </div>`;
   groupDefs.forEach(grp=>{
     const rows=SHORTCUTS.filter(grp.filter);
@@ -15249,8 +15249,8 @@ async function applySysPromptMemo(id){
 // Shift+Space 상태 추적 (Shift+Space+I / Shift+Space+O 확대 단축키용 — 텍스트 입력 방해 없음)
 let _spaceDown=false;
 document.addEventListener('keydown',function(e){
-  // Shift+Space 조합만 modifier로 인정 (단독 Space는 타이핑이므로 무시)
-  if(e.code==='Space'&&e.shiftKey)_spaceDown=true;
+  // Shift+Space 조합만 modifier로 인정 (단독 Space는 타이핑, Shift+Alt+Space 는 Trigger 단축키이므로 제외)
+  if(e.code==='Space'&&e.shiftKey&&!e.altKey&&!e.ctrlKey)_spaceDown=true;
 });
 document.addEventListener('keyup',function(e){
   if(e.code==='Space'||e.key==='Shift')_spaceDown=false;
@@ -15325,7 +15325,7 @@ document.addEventListener('keydown',function(e){
     'KeyQ':()=>addNode&&addNode('agent'),                                   // 🤖 Claude
     'KeyW':()=>addNode&&addNode('memo'),                                    // 📝 메모 노드
     'KeyE':()=>addNode&&addNode('input'),                                   // 📎 Input
-    'KeyR':()=>addNode&&addNode('trigger'),                                 // ⚡ Trigger
+    'Space':()=>addNode&&addNode('trigger'),                                // ⚡ Trigger (R은 브라우저 충돌로 Space 로 이동)
     'KeyT':()=>addNode&&addNode('agent-gemini'),                            // ✨ Gemini
     // 실행 · 저장 — ASDF
     'KeyA':()=>engine&&engine.startAll&&engine.startAll(),                  // ▶ 전체 실행
