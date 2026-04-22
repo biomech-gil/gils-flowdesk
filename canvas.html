@@ -1772,6 +1772,7 @@ body.focus-mode #canvas-controls{display:none}
         </label>
         <span style="flex:1"></span>
         <span id="pr-progress" style="font-size:11.5px;color:var(--text-dim)">0 / 0</span>
+        <button onclick="prSkip()" title="이 단축키 건너뛰기 (브라우저/OS 가 막는 키 테스트용)" style="padding:6px 14px;background:rgba(251,189,44,.15);color:#fbbd2c;border:1px solid rgba(251,189,44,.3);border-radius:5px;cursor:pointer;font-size:11.5px">⏭ 스킵</button>
         <button onclick="prRestart()" style="padding:6px 14px;background:rgba(76,175,80,.15);color:#a3be8c;border:1px solid rgba(76,175,80,.3);border-radius:5px;cursor:pointer;font-size:11.5px">🔄 다시</button>
       </div>
       <!-- 프로그레스 바 -->
@@ -13142,6 +13143,20 @@ function prHandleKey(e){
 function prActionForKey(mod, code){
   const s=SHORTCUTS.find(x=>x.mod===mod&&x.code===code);
   return s?s.label:'';
+}
+function prSkip(){
+  // 현재 카드를 건너뛰어 다음 단축키로 — 브라우저/OS 가 막는 키를 파악하기 위함
+  if(!PR_STATE.queue.length) return;
+  if(PR_STATE.idx>=PR_STATE.queue.length) return;
+  const cur=PR_STATE.queue[PR_STATE.idx];
+  // mistakes 에 기록해 완료 화면에서 "막힌 키" 로 노출
+  if(cur && !PR_STATE.mistakes.find(m=>m.code===cur.code&&m.mod===cur.mod)){
+    PR_STATE.mistakes.push(cur);
+  }
+  PR_STATE.currentMistakeCount=0;
+  PR_STATE.idx++;
+  try{shBeep(330,0.06);}catch{}
+  prRender();
 }
 function prFinish(){
   document.getElementById('pr-card-area').style.display='none';
