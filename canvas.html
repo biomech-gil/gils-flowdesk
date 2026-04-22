@@ -7474,9 +7474,30 @@ async function fpPreview(fpItemEl){
   const name = fpItemEl.dataset.name;
   const ext = (name.split('.').pop()||'').toLowerCase();
   if(!workflowId){ alert('프로젝트를 먼저 저장해주세요'); return; }
-  // 현재 리스트의 모든 fp-item (prev/next 용)
-  const allItems = [...document.querySelectorAll('.fp-item')];
+  // 같은 종류(그룹) 파일만 prev/next 대상으로
+  //  - 이미지/비디오/오디오/문서/텍스트/기타 그룹 분류
+  const _groupOf = (ex)=>{
+    ex = (ex||'').toLowerCase();
+    if(['jpg','jpeg','png','gif','webp','bmp','svg','ico','heic'].includes(ex)) return 'image';
+    if(['mp4','webm','mov','m4v','mkv','avi'].includes(ex)) return 'video';
+    if(['mp3','wav','m4a','ogg','flac','aac','opus'].includes(ex)) return 'audio';
+    if(['pdf','docx','doc','odt','rtf','hwp','hwpx','xlsx','xls','pptx'].includes(ex)) return 'document';
+    if(['txt','md','json','xml','csv','tsv','yaml','yml','log','py','js','ts','html','css','sh','sql','ini','toml'].includes(ex)) return 'text';
+    return 'other';
+  };
+  const curGroup = _groupOf(ext);
+  // 현재 리스트에서 같은 그룹만 추출 (mtime 최신순 기존 정렬 유지됨)
+  const allItemsAll = [...document.querySelectorAll('.fp-item')];
+  const allItems = allItemsAll.filter(el=>{
+    const e = (el.dataset.name||'').split('.').pop().toLowerCase();
+    return _groupOf(e) === curGroup;
+  });
   let curIdx = allItems.indexOf(fpItemEl);
+  if(curIdx < 0){
+    // 같은 그룹 아니거나 못찾으면 → 폴백으로 해당 아이템만
+    allItems.push(fpItemEl);
+    curIdx = 0;
+  }
 
   let modal = document.getElementById('fp-preview-modal');
   if(modal) modal.remove();
@@ -7505,7 +7526,8 @@ async function fpPreview(fpItemEl){
     const iPath = ie.dataset.path;
     const iExt = (iName.split('.').pop()||'').toLowerCase();
     modal.querySelector('#fpp-title').textContent = iName;
-    modal.querySelector('#fpp-pos').textContent = `${idx+1} / ${allItems.length}`;
+    const groupIcon = {image:'🖼',video:'🎬',audio:'🎵',document:'📄',text:'📃',other:'📎'}[curGroup]||'📎';
+    modal.querySelector('#fpp-pos').textContent = `${groupIcon} ${idx+1} / ${allItems.length}`;
     const body = modal.querySelector('#fpp-body');
     body.innerHTML = '<div style="color:#ccc;font-size:13px">📄 로딩 중…</div>';
     const url = `/api/project/file?projectId=${encodeURIComponent(workflowId)}&path=${encodeURIComponent(iPath)}`;
