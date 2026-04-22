@@ -733,6 +733,31 @@ body.focus-mode #app-layout{background:var(--bg-0)}
   border-right:1px solid rgba(255,255,255,.05);
   position:relative;z-index:50;
   box-shadow:2px 0 12px rgba(0,0,0,.4);
+  overflow-y:auto; overflow-x:hidden;
+  height:100vh; max-height:100vh;
+}
+#rail::-webkit-scrollbar{width:3px}
+#rail::-webkit-scrollbar-track{background:transparent}
+#rail::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+#rail::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.25)}
+/* 화면 높이 줄어들면 버튼 강제 축소 — 어떤 해상도에서도 모든 버튼 보이게 */
+@media (max-height: 920px){
+  :root{ --rail-btn: 34px; }
+  .rail-btn{font-size:15px}
+  .rail-divider{margin:3px 0}
+  #rail{padding:6px 0 8px}
+}
+@media (max-height: 780px){
+  :root{ --rail-btn: 30px; }
+  .rail-btn{font-size:14px;border-radius:8px}
+  .rail-divider{margin:2px 0}
+  .rail-group{gap:1px}
+  #rail{padding:4px 0 6px}
+}
+@media (max-height: 660px){
+  :root{ --rail-btn: 27px; }
+  .rail-btn{font-size:12.5px;border-radius:6px}
+  .rail-divider{margin:1px 0}
 }
 #rail::before{content:'';position:absolute;inset:0;background:radial-gradient(90% 50% at 0% 35%,rgba(76,175,80,.06),transparent 75%),radial-gradient(90% 50% at 0% 85%,rgba(139,92,246,.05),transparent 75%);pointer-events:none}
 #rail > *{position:relative;z-index:1}
@@ -2717,7 +2742,9 @@ cw.addEventListener('wheel',e=>{
         if((n.y + (n.h||240)) > maxY) maxY = n.y + (n.h||240);
       });
       if(!isFinite(minY)){ minY = ry; maxY = rB; }
-      const maxOff = Math.max(0, (maxY - ry) - hit.h);
+      // 확대해서 일부만 보이는 경우도 전체 내용을 스크롤 할 수 있도록
+      // maxOff = 마지막 멤버 top이 region top 근처까지 올라갈 수 있음 (80px 여유)
+      const maxOff = Math.max(0, maxY - ry - 80);
       const minOff = Math.min(0, (minY - ry));
       // 줌 수준에 따라 스크롤 속도 조정 (줌 아웃되면 더 빠르게, 인되면 더 느리게 자연스러움)
       const delta = e.deltaY / Math.max(zoom, 0.3);
@@ -7242,7 +7269,8 @@ function _regionOnWheel(e){
   if(!isFinite(minY)){ minY = ry; maxY = rB; }
   // 스크롤 범위: 0 ~ (멤버 영역 하단까지 볼 수 있도록)
   // offset=0 일 때 첫 멤버가 원래 자리. 최대 offset은 멤버 하단이 region 하단과 맞도록
-  const maxOff = Math.max(0, (maxY - ry) - ce.h);
+  // 확대해서 일부만 보이는 경우도 전체 내용을 스크롤 할 수 있도록
+  const maxOff = Math.max(0, maxY - ry - 80);
   const minOff = Math.min(0, (minY - ry)); // 음수 스크롤 허용 (멤버 상단이 region 위에 있으면)
   const delta = e.deltaY;
   const newOff = Math.max(minOff, Math.min(maxOff, (ce.scrollOffsetY||0) + delta));
