@@ -371,7 +371,7 @@ body > nav.nav, body > div.tb{display:none!important}
 #yt-tabs .yt-tab-new{padding:4px 10px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:4px;cursor:pointer;font-size:11px;color:var(--text-dim)}
 #yt-tabs .yt-tab-new:hover{background:rgba(255,255,255,.08);color:var(--accent)}
 /* 연결선 중간 라벨 */
-.conn-label{position:absolute;transform:translate(-50%,-50%);background:rgba(25,30,48,.95);color:#e0e0e0;border:1px solid rgba(126,207,255,.5);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:500;line-height:1.3;max-width:240px;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:grab;pointer-events:auto;user-select:none;white-space:pre-wrap;word-break:break-word}
+.conn-label{position:absolute;transform:translate(-50%,-50%);transform-origin:50% 50%;background:rgba(25,30,48,.95);color:#e0e0e0;border:1px solid rgba(126,207,255,.5);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:500;line-height:1.3;max-width:240px;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:grab;pointer-events:auto;user-select:none;white-space:pre-wrap;word-break:break-word}
 .conn-label:hover{border-color:#7ecfff;box-shadow:0 0 0 2px rgba(126,207,255,.3)}
 .conn-label.dragging{cursor:grabbing;opacity:.8}
 .conn-label.editing{background:rgba(15,20,35,1);border-color:var(--accent);cursor:text;user-select:text}
@@ -3069,6 +3069,55 @@ function showConnCtxMenu(x, y, c, ev){
   }, 100);
 }
 
+// 연결선 라벨 스타일 팝업 — 크기/글자색/배경색/테두리색
+function _showConnLabelStylePop(x, y, c, lab){
+  document.getElementById('conn-label-style-pop')?.remove();
+  const pop = document.createElement('div');
+  pop.id = 'conn-label-style-pop';
+  pop.style.cssText='position:fixed;z-index:510;background:var(--bg-2);border:1px solid var(--border-light);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.6);padding:10px 12px;min-width:220px;font-size:11px;color:var(--text)';
+  const toHex = v => /^#/.test(v||'')?v:'#e0e0e0';
+  const fs = lab.fontSize || 11;
+  const col = lab.color || '#e0e0e0';
+  const bg  = lab.bgColor || 'rgba(25,30,48,.95)';
+  // bgColor 가 rgba 형식이면 투명도 유지하고 hex 로 변환하기 어려우니 별도 처리
+  const bgHex = /^#/.test(bg) ? bg : '#191e30';
+  const brd = lab.borderColor || 'rgba(126,207,255,.5)';
+  const brdHex = /^#/.test(brd) ? brd : '#7ecfff';
+  pop.innerHTML=`<div style="font-weight:700;color:var(--accent);margin-bottom:8px">🎨 라벨 스타일</div>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">크기 <input type="range" min="8" max="28" value="${fs}" data-lab-fs style="flex:1;accent-color:var(--accent)"><span data-lab-fs-v style="color:var(--accent);min-width:28px;text-align:right">${fs}px</span></label>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">글자색 <input type="color" value="${toHex(col)}" data-lab-col style="flex:1"></label>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">배경색 <input type="color" value="${bgHex}" data-lab-bg style="flex:1"></label>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px">테두리 <input type="color" value="${brdHex}" data-lab-brd style="flex:1"></label>
+    <div style="display:flex;gap:4px"><button data-lab-reset style="flex:1;padding:4px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer;font-size:11px">↺ 기본값</button><button data-lab-close style="flex:1;padding:4px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11px">닫기</button></div>`;
+  pop.style.left = Math.min(x, window.innerWidth-240)+'px';
+  pop.style.top = Math.min(y, window.innerHeight-260)+'px';
+  document.body.appendChild(pop);
+  const fsInp = pop.querySelector('[data-lab-fs]'), fsV = pop.querySelector('[data-lab-fs-v]');
+  const colInp = pop.querySelector('[data-lab-col]');
+  const bgInp = pop.querySelector('[data-lab-bg]');
+  const brdInp = pop.querySelector('[data-lab-brd]');
+  const apply = ()=>{
+    lab.fontSize = parseInt(fsInp.value,10)||11; fsV.textContent=lab.fontSize+'px';
+    lab.color = colInp.value;
+    lab.bgColor = bgInp.value;
+    lab.borderColor = brdInp.value;
+    drawConns(); autoSave();
+  };
+  fsInp.addEventListener('input',apply);
+  colInp.addEventListener('input',apply);
+  bgInp.addEventListener('input',apply);
+  brdInp.addEventListener('input',apply);
+  pop.querySelector('[data-lab-reset]').addEventListener('click',()=>{
+    delete lab.fontSize; delete lab.color; delete lab.bgColor; delete lab.borderColor;
+    drawConns(); autoSave(); pop.remove();
+  });
+  pop.querySelector('[data-lab-close]').addEventListener('click',()=>pop.remove());
+  setTimeout(()=>{
+    const close = e => { if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown', close);
+  },100);
+}
+
 // 연결선 라벨 인라인 편집
 function _connLabelStartEdit(ld, c, lab){
   ld.classList.add('editing');
@@ -3182,7 +3231,15 @@ function drawConns(){
         ld.dataset.connId = c.id;
         ld.dataset.labelId = lab.id;
         ld.style.left = pt.x+'px'; ld.style.top = pt.y+'px';
+        // 캔버스 줌 반영 — 노드들과 동일 비율로 축소/확대
+        ld.style.transform = `translate(-50%,-50%) scale(${zoom})`;
+        // 스타일 적용 (라벨별 저장된 속성 있으면 사용)
+        if(lab.fontSize) ld.style.fontSize = lab.fontSize+'px';
+        if(lab.color) ld.style.color = lab.color;
+        if(lab.bgColor) ld.style.background = lab.bgColor;
+        if(lab.borderColor) ld.style.borderColor = lab.borderColor;
         ld.textContent = lab.text || '(라벨)';
+        // × 삭제 버튼
         const xbtn = document.createElement('div');
         xbtn.className='cl-del'; xbtn.textContent='×';
         xbtn.title='라벨 삭제';
@@ -3193,6 +3250,21 @@ function drawConns(){
           drawConns(); autoSave();
         });
         ld.appendChild(xbtn);
+        // 🎨 스타일 버튼 (× 옆)
+        const sbtn = document.createElement('div');
+        sbtn.className = 'cl-style';
+        sbtn.textContent = '🎨';
+        sbtn.title = '스타일 (크기/색상)';
+        sbtn.style.cssText = 'position:absolute;right:-7px;top:14px;width:16px;height:16px;border-radius:50%;background:rgba(139,92,246,.9);color:#fff;font-size:9px;text-align:center;line-height:14px;cursor:pointer;border:1px solid #fff;display:none';
+        sbtn.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault()});
+        sbtn.addEventListener('click',e=>{
+          e.stopPropagation();
+          _showConnLabelStylePop(e.clientX, e.clientY, c, lab);
+        });
+        ld.appendChild(sbtn);
+        // style 버튼을 hover/sel 시에 표시
+        ld.addEventListener('mouseenter',()=>{sbtn.style.display='block'});
+        ld.addEventListener('mouseleave',()=>{sbtn.style.display='none'});
         // 더블클릭 → 인라인 편집
         ld.addEventListener('dblclick',e=>{
           e.stopPropagation();e.preventDefault();
@@ -5858,7 +5930,7 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       pdfPageNumber:(n.doc?.pdfPageNumber)||1,
     }:undefined,
   })),
-  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))})),
+  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined}))})),
   // YouTube 검색 탭 (여러 검색을 묶음으로 저장) — 프로젝트에 포함
   youtubeSearchTabs: (_YT.tabs||[]).map(t=>({
     id:t.id, name:t.name||'', query:t.query||'',
@@ -6061,7 +6133,7 @@ function loadState(st){
       mkNode({...nd, collapsed:true});
     }
   });
-  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))}));
+  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined}))}));
   // YouTube 검색 탭 복원
   _YT.tabs = (st.youtubeSearchTabs||[]).map(t=>({
     id:t.id||('yttab_'+Date.now()+'_'+Math.random().toString(36).slice(2,5)),
