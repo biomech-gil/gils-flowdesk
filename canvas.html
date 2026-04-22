@@ -352,6 +352,13 @@ body > nav.nav, body > div.tb{display:none!important}
 .ce.region{border:1px dashed rgba(255,255,255,.2);border-radius:8px;z-index:1}
 .ce.region .ce-label{position:absolute;left:8px;top:6px;outline:none;background:transparent;border:none;padding:2px 6px;border-radius:4px;cursor:text;font-weight:600}
 .ce.region .ce-label:focus{background:rgba(0,0,0,.4)}
+/* 상단 중앙 뒤로/앞으로 가기 */
+#undo-redo-bar{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:5px 12px;background:rgba(20,25,40,.78);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);border-radius:32px;box-shadow:0 3px 12px rgba(0,0,0,.4);z-index:40}
+#undo-redo-bar .ur-btn{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--text);cursor:pointer;transition:transform .15s,background .15s,border-color .15s}
+#undo-redo-bar .ur-btn:hover:not(:disabled){background:rgba(126,207,255,.2);border-color:rgba(126,207,255,.5);color:#7ecfff;transform:scale(1.08)}
+#undo-redo-bar .ur-btn:active:not(:disabled){transform:scale(.95)}
+#undo-redo-bar .ur-btn:disabled{opacity:.3;cursor:not-allowed}
+#undo-redo-bar #ur-status{font-size:10.5px;color:var(--text-dim);font-family:var(--mono);min-width:42px;text-align:center;user-select:none}
 /* YouTube 검색 탭 */
 #yt-tabs .yt-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px 4px 0 0;cursor:pointer;font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:220px;transition:.12s}
 #yt-tabs .yt-tab:hover{background:rgba(255,255,255,.1);color:var(--text)}
@@ -1763,6 +1770,22 @@ body.focus-mode #canvas-controls{display:none}
     <div id="canvas"></div>
     <div id="conn-labels" style="position:absolute;inset:0;pointer-events:none;z-index:15"></div>
     <div id="sel-box"></div>
+    <!-- 상단 중앙 뒤로가기/앞으로가기 -->
+    <div id="undo-redo-bar">
+      <button id="ur-undo" class="ur-btn" onclick="undo()" title="뒤로가기 (Ctrl+Z)" disabled>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7v6h6"/>
+          <path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>
+        </svg>
+      </button>
+      <span id="ur-status" title="실행 이력 개수">0 / 0</span>
+      <button id="ur-redo" class="ur-btn" onclick="redo()" title="앞으로가기 (Ctrl+Y · Ctrl+Shift+Z)" disabled>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 7v6h-6"/>
+          <path d="M3 17a9 9 0 0 1 15-6.7L21 13"/>
+        </svg>
+      </button>
+    </div>
   </div>
   <div id="memo-editor" style="display:none;position:absolute;inset:0;z-index:50;background:var(--bg-0);flex-direction:column">
     <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0">
@@ -5746,6 +5769,8 @@ function undo(){
   loadState(JSON.parse(prev));
   lastSavedState=prev;
   console.log('[UNDO] '+undoStack.length+' 남음');
+  _updateUndoRedoBar();
+  showCopyToast('⟲ 뒤로가기');
 }
 function redo(){
   if(redoStack.length===0)return;
@@ -5754,6 +5779,16 @@ function redo(){
   loadState(JSON.parse(next));
   lastSavedState=next;
   console.log('[REDO]');
+  _updateUndoRedoBar();
+  showCopyToast('⟳ 앞으로가기');
+}
+function _updateUndoRedoBar(){
+  const u = document.getElementById('ur-undo');
+  const r = document.getElementById('ur-redo');
+  const s = document.getElementById('ur-status');
+  if(u) u.disabled = undoStack.length === 0;
+  if(r) r.disabled = redoStack.length === 0;
+  if(s) s.textContent = `${undoStack.length} / ${redoStack.length}`;
 }
 let _lastTempSave=0;
 function autoSave(){
@@ -5764,6 +5799,7 @@ function autoSave(){
   }
   lastSavedState=JSON.stringify(getState());
   try{localStorage.setItem(LS_KEY,lastSavedState)}catch(e){}
+  _updateUndoRedoBar();
   if(_saveTimer)clearTimeout(_saveTimer);
   _saveTimer=setTimeout(()=>{
     const st=getState();
@@ -11135,6 +11171,7 @@ function newProject(){
   closeSb();drawConns();
   cx=0;cy=0;zoom=1;applyTx();
   undoStack=[];redoStack=[];lastSavedState=null;
+  _updateUndoRedoBar();
   // localStorage 비우기
   try{localStorage.removeItem(LS_KEY)}catch(e){}
   // DB __current__도 비움
@@ -13300,6 +13337,7 @@ async function init(){
   console.log('[INIT] tabId='+TAB_ID);
   refreshWfList();applyTx();applyAppearance();
   undoStack=[];redoStack=[];
+  _updateUndoRedoBar();
   loadFolders();loadMemoTabs();loadPinnedMemos();
   setupJsonDragDrop();
   // 인증 헬스체크 — 빠른(credentials 파싱) 먼저, 이어서 실제 CLI 호출
