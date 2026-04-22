@@ -4282,13 +4282,23 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": True, "id": new_id}
 
     def _project_folder_delete(self, body):
-        fid = body.get("id", "")
-        if fid:
+        fid = body.get("id")
+        if fid in (None, "", 0):
+            return {"ok": False, "error": "folder id is empty"}
+        try:
+            fid = int(fid)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": f"invalid folder id: {fid!r}"}
+        try:
             # 하위 폴더는 부모 NULL로 (최상단으로 이동), 프로젝트도 폴더 NULL로
             db_exec("UPDATE project_folders SET parent_id=NULL WHERE parent_id=?", (fid,))
             db_exec("UPDATE projects SET folder_id=NULL WHERE folder_id=?", (fid,))
             db_exec("DELETE FROM project_folders WHERE id=?", (fid,))
-        return {"ok": True}
+        except Exception as e:
+            log(f"[project-folder/delete] id={fid} failed: {e}")
+            return {"ok": False, "error": str(e)}
+        log(f"[project-folder/delete] id={fid} OK")
+        return {"ok": True, "id": fid}
 
     # ── 날짜 폴더 자동 생성 (YYYY > YYYYMMDD_xxx 계층) ──
     def _project_date_folder(self, body):

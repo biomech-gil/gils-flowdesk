@@ -14688,9 +14688,19 @@ async function editProjectFolderColor(id){
   });
 }
 async function deleteProjectFolder(id){
-  if(!confirm('이 프로젝트 폴더를 삭제할까요?\n(폴더 안의 프로젝트는 분류 없음으로 이동됩니다)'))return;
-  await api('POST','/api/project-folder/delete',{id});
-  loadLandingLists();
+  if(id===undefined||id===null||id===''){
+    alert('폴더 ID 가 없습니다 (새로고침 후 재시도)');
+    console.error('deleteProjectFolder: invalid id',id);
+    return;
+  }
+  if(!confirm('이 프로젝트 폴더를 삭제할까요?\n(폴더 안의 프로젝트는 분류 없음으로 이동 · 하위 폴더는 최상단으로 승격)'))return;
+  const r=await api('POST','/api/project-folder/delete',{id});
+  console.log('[folder-delete]',id,'→',r);
+  if(!r||!r.ok){
+    alert('삭제 실패: '+(r&&r.error?r.error:'서버 응답 없음'));
+    return;
+  }
+  await loadLandingLists();
 }
 async function moveProjectFolder(projId){
   const pf=await api('GET','/api/project-folder/list');
