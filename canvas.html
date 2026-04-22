@@ -3862,26 +3862,152 @@ async function cloneNodeMulti(n){
 let clipboardNode=null;
 window.addEventListener('keydown',e=>{
   if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)||document.activeElement.contentEditable==='true')return;
-  if(e.ctrlKey&&e.key==='c'&&selectedNode){
-    e.preventDefault();
-    clipboardNode=JSON.parse(JSON.stringify({
-      type:selectedNode.type,name:selectedNode.name,
-      w:selectedNode.w,h:selectedNode.h,
-      inputTemplate:selectedNode.inputTemplate,
-      systemPrompt:selectedNode.systemPrompt,
-      chatOnly:selectedNode.chatOnly,
-      model:selectedNode.model||'',
-      images:selectedNode.images||[],
-      collapsed:selectedNode.collapsed,
-      textSize:selectedNode.textSize
-    }));
-    console.log('[COPY]',clipboardNode.name);
+  if(e.ctrlKey&&e.key==='c'){
+    // 우선순위: 이미지/비디오 CE 선택됨 → OS 클립보드에 이미지 복사
+    // (PowerPoint·문서 등 외부 앱에 붙여넣기 가능)
+    if(selectedCe && (selectedCe.type==='image' || selectedCe.type==='video')){
+      e.preventDefault();
+      copyCeAsImage(selectedCe);
+      return;
+    }
+    // 그 외: 노드 복사 (기존)
+    if(selectedNode){
+      e.preventDefault();
+      clipboardNode=JSON.parse(JSON.stringify({
+        type:selectedNode.type,name:selectedNode.name,
+        w:selectedNode.w,h:selectedNode.h,
+        inputTemplate:selectedNode.inputTemplate,
+        systemPrompt:selectedNode.systemPrompt,
+        chatOnly:selectedNode.chatOnly,
+        model:selectedNode.model||'',
+        images:selectedNode.images||[],
+        collapsed:selectedNode.collapsed,
+        textSize:selectedNode.textSize
+      }));
+      console.log('[COPY]',clipboardNode.name);
+    }
   }
   if(e.ctrlKey&&e.key==='v'&&clipboardNode){
     e.preventDefault();
     pasteNode();
   }
 });
+
+// 이미지/비디오 CE → OS 클립보드에 PNG 이미지로 복사
+// HTTPS가 아닌 환경에서도 가능한 한 동작하도록 3단 폴백
+async function copyCeAsImage(ce){
+  try{
+    showCopyToast('📋 이미지 복사 준비 중…');
+    let blob = await _ceToImageBlob(ce);
+    if(!blob){ showCopyToast('⚠ 복사할 이미지가 없어요'); return; }
+    // 1차: Clipboard API (secure context 필요)
+    if(navigator.clipboard && window.ClipboardItem){
+      try{
+        await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+        showCopyToast('✅ 이미지 클립보드에 복사됨 — 아무데나 붙여넣기 (Ctrl+V)');
+        return;
+      }catch(err){
+        console.warn('[copyCe] clipboard.write 실패 (insecure context?):', err.message);
+      }
+    }
+    // 2차: execCommand 폴백 — 임시 contenteditable에 이미지 삽입 후 selection copy
+    try{
+      const url = URL.createObjectURL(blob);
+      const img = document.createElement('img');
+      await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=url; });
+      const holder = document.createElement('div');
+      holder.contentEditable = 'true';
+      holder.style.cssText='position:fixed;left:-9999px;top:-9999px;opacity:0.01;pointer-events:none';
+      holder.appendChild(img);
+      document.body.appendChild(holder);
+      const range = document.createRange();
+      range.selectNode(img);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(range);
+      const ok = document.execCommand('copy');
+      sel.removeAllRanges();
+      holder.remove();
+      URL.revokeObjectURL(url);
+      if(ok){
+        showCopyToast('✅ 이미지 복사됨 (레거시 API) — Ctrl+V 로 붙여넣기');
+        return;
+      }
+    }catch(err){ console.warn('[copyCe] execCommand 폴백 실패:', err.message); }
+    // 3차: 다운로드로 저장
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    a.href = url; a.download = (ce.nodeName||'capture')+'_'+stamp+'.png';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 3000);
+    showCopyToast('⬇ 클립보드 접근 차단됨 — PNG로 다운로드됨 (HTTPS 환경이면 클립보드 작동)');
+  }catch(e){
+    console.error('[copyCe]', e);
+    alert('이미지 복사 실패: '+e.message);
+  }
+}
+
+// CE (이미지/비디오) → PNG Blob
+async function _ceToImageBlob(ce){
+  if(ce.type==='image'){
+    return await _fetchAsBlob(ce.src);
+  }
+  if(ce.type==='video'){
+    const kind = ce.videoKind || (ce.embedUrl ? 'embed' : 'direct');
+    if(kind==='direct'){
+      const vid = ce.el.querySelector('video.ce-video');
+      if(!vid || !vid.videoWidth){
+        throw new Error('영상 메타데이터 아직 로드 안 됨');
+      }
+      const c = document.createElement('canvas');
+      c.width = vid.videoWidth; c.height = vid.videoHeight;
+      const ctx = c.getContext('2d');
+      try{ ctx.drawImage(vid, 0, 0, c.width, c.height); }
+      catch(e){ throw new Error('비디오 프레임 그리기 실패 (CORS?): '+e.message); }
+      return await new Promise(res=>c.toBlob(res, 'image/png'));
+    }
+    // embed (YouTube 등) — 서버에 프레임 추출 요청 후 다운로드
+    if(kind==='embed' && ce.videoProvider==='youtube'){
+      let ts = 0;
+      try{ if(ce._ytReady && ce._ytPlayer) ts = ce._ytPlayer.getCurrentTime()||0; }catch(e){}
+      try{ if(ce._ytPlayer) ce._ytPlayer.pauseVideo(); }catch(e){}
+      const r = await api('POST','/api/media/extract-frame',{url:ce.src, timestamp:ts});
+      if(!r||!r.ok){ throw new Error((r&&r.error)||'서버 프레임 추출 실패'); }
+      return await _fetchAsBlob(r.url);
+    }
+    throw new Error('이 영상 소스는 프레임 복사 미지원 (Vimeo/TikTok 등 임베드) — 🔓 모드로 캡처 추천');
+  }
+  return null;
+}
+
+async function _fetchAsBlob(src){
+  if(!src) return null;
+  // data: URI면 바로 Blob 변환
+  if(src.startsWith('data:')){
+    const r = await fetch(src); return await r.blob();
+  }
+  try{
+    const r = await fetch(src, {credentials:'include'});
+    if(!r.ok) throw new Error('fetch '+r.status);
+    return await r.blob();
+  }catch(e){
+    // CORS 차단 — <img> 경유로 캔버스 re-draw 해서 변환 시도
+    return await new Promise((resolve,reject)=>{
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = ()=>{
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        try{
+          c.getContext('2d').drawImage(img,0,0);
+          c.toBlob(b=>b?resolve(b):reject(new Error('toBlob null')), 'image/png');
+        }catch(e2){ reject(new Error('CORS taint: '+e2.message)); }
+      };
+      img.onerror = ()=>reject(new Error('image load 실패'));
+      img.src = src;
+    });
+  }
+}
 async function pasteNode(){
   if(!clipboardNode)return;
   const c=s2c(cw.clientWidth/2,cw.clientHeight/2);
@@ -9546,6 +9672,7 @@ function showCeCtxMenu(x, y, ce, dx, dy){
       execProgressRefresh();
       autoSave();
     }} : null,
+    (ce.type==='image' || ce.type==='video') ? {label:'📋 이미지로 클립보드 복사 (Ctrl+C)', fn:()=>copyCeAsImage(ce)} : null,
     {label:'🗑 이 요소 삭제', fn:()=>delCe(ce.id), danger:true},
   ].filter(Boolean);
   items.forEach(it=>{
