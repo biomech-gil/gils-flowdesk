@@ -352,6 +352,17 @@ body > nav.nav, body > div.tb{display:none!important}
 .ce.region{border:1px dashed rgba(255,255,255,.2);border-radius:8px;z-index:1}
 .ce.region .ce-label{position:absolute;left:8px;top:6px;outline:none;background:transparent;border:none;padding:2px 6px;border-radius:4px;cursor:text;font-weight:600}
 .ce.region .ce-label:focus{background:rgba(0,0,0,.4)}
+/* YouTube 검색 탭 */
+#yt-tabs .yt-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px 4px 0 0;cursor:pointer;font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:220px;transition:.12s}
+#yt-tabs .yt-tab:hover{background:rgba(255,255,255,.1);color:var(--text)}
+#yt-tabs .yt-tab.active{background:rgba(255,68,68,.2);border-color:rgba(255,68,68,.5);color:#ff9d9d;font-weight:600}
+#yt-tabs .yt-tab .yt-tab-label{overflow:hidden;text-overflow:ellipsis;max-width:170px}
+#yt-tabs .yt-tab .yt-tab-label[contenteditable="true"]{background:rgba(0,0,0,.5);padding:0 3px;border-radius:2px;outline:1px solid var(--accent);cursor:text;min-width:30px}
+#yt-tabs .yt-tab .yt-tab-count{color:var(--text-muted);font-size:10px}
+#yt-tabs .yt-tab .yt-tab-close{width:14px;height:14px;border-radius:50%;background:rgba(0,0,0,.3);text-align:center;line-height:12px;font-size:11px;color:var(--text-muted);margin-left:2px}
+#yt-tabs .yt-tab .yt-tab-close:hover{background:#ef4444;color:#fff}
+#yt-tabs .yt-tab-new{padding:4px 10px;background:rgba(255,255,255,.04);border:1px dashed rgba(255,255,255,.15);border-radius:4px;cursor:pointer;font-size:11px;color:var(--text-dim)}
+#yt-tabs .yt-tab-new:hover{background:rgba(255,255,255,.08);color:var(--accent)}
 /* 연결선 중간 라벨 */
 .conn-label{position:absolute;transform:translate(-50%,-50%);background:rgba(25,30,48,.95);color:#e0e0e0;border:1px solid rgba(126,207,255,.5);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:500;line-height:1.3;max-width:240px;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:grab;pointer-events:auto;user-select:none;white-space:pre-wrap;word-break:break-word}
 .conn-label:hover{border-color:#7ecfff;box-shadow:0 0 0 2px rgba(126,207,255,.3)}
@@ -1489,6 +1500,8 @@ body.focus-mode #canvas-controls{display:none}
       </select>
       <button onclick="ytSearchRun()" style="padding:8px 18px;background:linear-gradient(135deg,#ff4444,#dc2626);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12.5px;font-weight:700">🔍 검색</button>
     </div>
+    <!-- 탭 바: 여러 검색을 탭으로 보관 -->
+    <div id="yt-tabs" style="display:flex;align-items:center;gap:3px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.2);overflow-x:auto;flex-wrap:nowrap;min-height:30px"></div>
     <!-- 액션 바 -->
     <div style="display:flex;align-items:center;gap:6px;padding:7px 18px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,68,68,.06);font-size:11.5px">
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="yt-selectall" onchange="ytToggleAll(this.checked)"> 전체 선택</label>
@@ -4359,8 +4372,8 @@ function buildCeDom(ce){
     const bw=s.borderWidth!=null?s.borderWidth:2;
     const fs=s.fontSize||13;
     d.style.cssText+=`;background:${bg};border:${bw}px solid ${border};border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.4);overflow:hidden`;
-    d.innerHTML=`<div class="cl-title" data-cl-title contenteditable="true" style="padding:6px 10px;font-size:${(fs+2)}px;font-weight:700;color:${titleColor};border-bottom:1px solid ${border}80;background:rgba(255,255,255,.03);outline:none">${(ce.label||'체크리스트').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
-      <div class="cl-items" data-cl-items style="padding:4px 6px;font-size:${fs}px;color:${textColor};overflow-y:auto;max-height:calc(100% - 60px)"></div>
+    d.innerHTML=`<div class="cl-title" data-cl-title title="드래그로 이동 · 더블클릭으로 제목 편집" style="padding:6px 10px;font-size:${(fs+2)}px;font-weight:700;color:${titleColor};border-bottom:1px solid ${border}80;background:rgba(255,255,255,.03);outline:none;cursor:grab;user-select:none">${(ce.label||'체크리스트').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
+      <div class="cl-items" data-cl-items style="padding:4px 6px;font-size:${fs}px;color:${textColor}"></div>
       <div class="cl-foot" style="display:flex;gap:4px;padding:4px 6px;border-top:1px solid ${border}60;background:rgba(0,0,0,.2)">
         <button class="cl-add" data-cl-add title="항목 추가" style="flex:1;padding:3px 8px;background:rgba(250,204,21,.15);color:#facc15;border:1px solid rgba(250,204,21,.35);border-radius:3px;cursor:pointer;font-size:10.5px;font-weight:600">＋ 추가</button>
         <button class="ce-style-btn cl-style-btn" data-ce-style title="스타일" style="position:static;width:auto;height:auto;padding:3px 10px;border-radius:3px;background:rgba(34,197,94,.2);color:#a3e635;border:1px solid rgba(34,197,94,.3);font-weight:600;display:block">🎨</button>
@@ -4453,21 +4466,35 @@ function buildCeDom(ce){
       drawTmpConn();
     }));
     // overlay — iframe/video 위를 덮어 노드 드래그 보장
+    // 클릭 vs 드래그 구분: 5px 이하 이동 & 250ms 이하 = 클릭 → 재생/정지 토글
     const overlay=d.querySelector('[data-ce-overlay]');
     if(overlay){
+      let _mdX=0, _mdY=0, _mdTs=0, _dragStarted=false;
       overlay.addEventListener('mousedown',ev=>{
         ev.stopPropagation();ev.preventDefault();
         selCe(ce);
-        isCeDrag=true;ceDragNd=ce;
+        _mdX=ev.clientX; _mdY=ev.clientY; _mdTs=Date.now(); _dragStarted=false;
+        isCeDrag=true; ceDragNd=ce;
         const p=s2c(ev.clientX,ev.clientY);
-        ceDragOX=p.x-ce.x;ceDragOY=p.y-ce.y;
+        ceDragOX=p.x-ce.x; ceDragOY=p.y-ce.y;
+      });
+      overlay.addEventListener('mousemove',ev=>{
+        if(ceDragNd===ce && (Math.abs(ev.clientX-_mdX)>5 || Math.abs(ev.clientY-_mdY)>5)){
+          _dragStarted = true;
+        }
+      });
+      overlay.addEventListener('mouseup',ev=>{
+        const moved = Math.abs(ev.clientX-_mdX)>5 || Math.abs(ev.clientY-_mdY)>5;
+        const elapsed = Date.now()-_mdTs;
+        if(!moved && elapsed<300 && !_dragStarted){
+          // 순수 클릭 → 재생/정지 토글
+          _ceVideoTogglePlay(ce);
+        }
       });
       overlay.addEventListener('dblclick',ev=>{
         ev.stopPropagation();ev.preventDefault();
         _openCeVideoFullscreen(ce);
       });
-      // 호버 일시정지 기능은 제거됨 — 마우스 이동할 때마다 멈춰서 거슬렸음
-      // 재생/정지는 컨트롤바 버튼이나 🔓 모드의 네이티브 컨트롤로 수동 제어
     }
     // YouTube 임베드면 IFrame API 연결 (비동기 — 준비되면 호버 정지·캡처 정확히 작동)
     if(kind==='embed' && ce.videoProvider==='youtube'){
@@ -4614,11 +4641,37 @@ function buildCeDom(ce){
     ce.el=d;
     _renderChecklistItems(ce);
     ce.el=_oldEl;
-    // 제목 편집
+    // 제목: 기본은 드래그 가능 (contenteditable OFF), 더블클릭으로 편집 진입
     const titleEl=d.querySelector('[data-cl-title]');
     if(titleEl){
-      titleEl.addEventListener('input',()=>{ce.label=titleEl.innerText||titleEl.textContent||'';autoSave()});
-      titleEl.addEventListener('mousedown',e=>e.stopPropagation());
+      titleEl.addEventListener('dblclick',e=>{
+        e.stopPropagation();e.preventDefault();
+        titleEl.setAttribute('contenteditable','true');
+        titleEl.style.cursor='text';
+        titleEl.focus();
+        const range=document.createRange(); range.selectNodeContents(titleEl);
+        const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      });
+      titleEl.addEventListener('input',()=>{
+        if(titleEl.getAttribute('contenteditable')==='true'){
+          ce.label=titleEl.innerText||titleEl.textContent||'';autoSave();
+        }
+      });
+      titleEl.addEventListener('blur',()=>{
+        titleEl.removeAttribute('contenteditable');
+        titleEl.style.cursor='grab';
+      });
+      titleEl.addEventListener('keydown',e=>{
+        if(e.key==='Escape' || (e.key==='Enter' && !e.shiftKey)){
+          e.preventDefault(); titleEl.blur();
+        }
+      });
+      // mousedown은 stopPropagation 안 해서 CE 드래그 허용 (편집 모드일 때만 예외)
+      titleEl.addEventListener('mousedown',e=>{
+        if(titleEl.getAttribute('contenteditable')==='true'){
+          e.stopPropagation(); // 편집 중이면 드래그 방지, 텍스트 선택 허용
+        }
+      });
     }
     // 추가 버튼
     const addBtn=d.querySelector('[data-cl-add]');
@@ -5504,6 +5557,15 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
     }:undefined,
   })),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))})),
+  // YouTube 검색 탭 (여러 검색을 묶음으로 저장) — 프로젝트에 포함
+  youtubeSearchTabs: (_YT.tabs||[]).map(t=>({
+    id:t.id, name:t.name||'', query:t.query||'',
+    items:t.items||[],
+    sort:t.sort||{col:'hot_score',dir:'desc'},
+    selectedVids:t.selectedVids||[],
+    searchParams:t.searchParams||{},
+  })),
+  youtubeActiveTabId: _YT.activeId||null,
   canvasElements:canvasEls.map(c=>{
     // text 요소는 크기가 auto 라 DOM 에서 실측
     let w=c.w,h=c.h;
@@ -5619,6 +5681,17 @@ function loadState(st){
     }
   });
   conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))}));
+  // YouTube 검색 탭 복원
+  _YT.tabs = (st.youtubeSearchTabs||[]).map(t=>({
+    id:t.id||('yttab_'+Date.now()+'_'+Math.random().toString(36).slice(2,5)),
+    name:t.name||'검색',
+    query:t.query||'',
+    items:Array.isArray(t.items)?t.items:[],
+    sort:t.sort||{col:'hot_score',dir:'desc'},
+    selectedVids:Array.isArray(t.selectedVids)?t.selectedVids:[],
+    searchParams:t.searchParams||{},
+  }));
+  _YT.activeId = st.youtubeActiveTabId || (_YT.tabs.length ? _YT.tabs[0].id : null);
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
   // 스크롤 박스 region 복원: 모든 노드 로드 완료 후 스크롤 상태 적용
   try{
@@ -8249,6 +8322,28 @@ async function _attachYouTubePlayer(ce, iframeEl){
   }catch(e){console.warn('[YT] Player 생성 실패:',e);}
 }
 
+// 비디오 재생/정지 토글 — direct 와 YouTube embed 모두 지원
+function _ceVideoTogglePlay(ce){
+  if(!ce || !ce.el) return;
+  const el=ce.el.querySelector('.ce-video');
+  if(!el) return;
+  const isIframe = el.tagName==='IFRAME';
+  if(!isIframe){
+    if(el.paused){ el.play().catch(()=>{}); }
+    else { el.pause(); }
+    // 플레이 버튼 아이콘 동기화
+    const btn = ce.el.querySelector('[data-v-act="play"]');
+    if(btn) btn.textContent = el.paused ? '▶' : '⏸';
+  } else if(ce.videoProvider==='youtube' && ce._ytPlayer && ce._ytReady){
+    try{
+      const state = ce._ytPlayer.getPlayerState?.();
+      // YT.PlayerState: PLAYING=1, PAUSED=2
+      if(state===1){ ce._ytPlayer.pauseVideo(); }
+      else { ce._ytPlayer.playVideo(); }
+    }catch(e){}
+  }
+}
+
 function _ceVideoAction(ce, act, btn){
   const el=ce.el.querySelector('.ce-video');
   if(!el)return;
@@ -8841,6 +8936,28 @@ function _renderChecklistItems(ce){
       _renderChecklistItems(ce);autoSave();
     });
   });
+  // 자동 높이: 렌더 후 필요한 높이를 측정해 ce.h 확장 (줄어들진 않음 — 수동 리사이즈 존중)
+  _autoExpandChecklist(ce);
+}
+
+function _autoExpandChecklist(ce){
+  if(!ce || !ce.el) return;
+  // DOM 렌더 직후 계산하려면 rAF로 한 틱 지연
+  requestAnimationFrame(()=>{
+    const d = ce.el;
+    if(!d || !d.parentNode) return;
+    // children 높이 합산 (flex column) — title + items + footer
+    const titleH = (d.querySelector('.cl-title')?.offsetHeight)||0;
+    const itemsH = (d.querySelector('.cl-items')?.scrollHeight)||0;
+    const footH = (d.querySelector('.cl-foot')?.offsetHeight)||0;
+    const needed = titleH + itemsH + footH + 4; // 여유
+    if(needed > ce.h){
+      ce.h = needed;
+      d.style.height = ce.h + 'px';
+      drawConns();
+      autoSave();
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -9003,12 +9120,114 @@ function openCeStylePopover(ce, x, y){
 // ═══════════════════════════════════════════════
 // 🎥 YouTube 검색 모달
 // ═══════════════════════════════════════════════
-const _YT={items:[], selected:new Set(), sort:{col:'hot_score',dir:'desc'}};
+// YouTube 검색: 탭 기반 — 각 탭이 독립된 검색 결과 보존
+// _YT.tabs 구조: [{id, name, query, items:[], sort:{col,dir}, selectedVids:[], searchParams:{maxResults,order,duration,publishedAfter}}]
+const _YT={tabs:[], activeId:null};
+
+// 현재 활성 탭 반환 (없으면 새로 생성)
+function _ytActiveTab(){
+  let t = _YT.tabs.find(x=>x.id===_YT.activeId);
+  if(!t && _YT.tabs.length) t = _YT.tabs[_YT.tabs.length-1];
+  return t || null;
+}
+function _ytActiveTabOrCreate(){
+  let t = _ytActiveTab();
+  if(!t){ t = _ytNewTab('검색'); }
+  return t;
+}
+function _ytNewTab(name){
+  const id = 'yttab_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+  const t = {id, name:name||'새 검색', query:'', items:[], sort:{col:'hot_score',dir:'desc'}, selectedVids:[], searchParams:{}};
+  _YT.tabs.push(t);
+  _YT.activeId = id;
+  return t;
+}
+function ytTabSwitch(id){
+  const t = _YT.tabs.find(x=>x.id===id);
+  if(!t) return;
+  _YT.activeId = id;
+  // 검색 폼 동기화
+  const q=document.getElementById('yt-query'); if(q) q.value = t.query||'';
+  const sp = t.searchParams||{};
+  const elMax=document.getElementById('yt-max'); if(elMax && sp.maxResults) elMax.value=String(sp.maxResults);
+  const elOrd=document.getElementById('yt-order'); if(elOrd && sp.order) elOrd.value=sp.order;
+  const elDur=document.getElementById('yt-duration'); if(elDur && sp.duration) elDur.value=sp.duration;
+  const elPer=document.getElementById('yt-period'); if(elPer && sp.periodDays!=null) elPer.value=sp.periodDays;
+  ytRenderTabs();
+  ytRender();
+}
+function ytTabClose(id){
+  const idx = _YT.tabs.findIndex(x=>x.id===id);
+  if(idx<0) return;
+  if(!confirm('이 검색 탭을 닫을까요? (검색 결과가 사라집니다)')) return;
+  _YT.tabs.splice(idx,1);
+  if(_YT.activeId === id){
+    _YT.activeId = _YT.tabs.length ? _YT.tabs[Math.min(idx, _YT.tabs.length-1)].id : null;
+  }
+  ytRenderTabs();
+  ytRender();
+  autoSave();
+}
+function ytTabRename(id, newName){
+  const t = _YT.tabs.find(x=>x.id===id);
+  if(!t) return;
+  t.name = (newName||'').trim() || '(이름없음)';
+  ytRenderTabs();
+  autoSave();
+}
+function ytTabNewEmpty(){
+  _ytNewTab('새 검색');
+  ytRenderTabs();
+  ytRender();
+  const q=document.getElementById('yt-query'); if(q){ q.value=''; q.focus(); }
+}
+function ytRenderTabs(){
+  const bar = document.getElementById('yt-tabs');
+  if(!bar) return;
+  const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  let html = '';
+  _YT.tabs.forEach(t=>{
+    const active = t.id===_YT.activeId;
+    html += `<div class="yt-tab${active?' active':''}" data-tab-id="${t.id}">
+      <span class="yt-tab-label" ondblclick="_ytTabLabelEdit(this)">${esc(t.name)}</span>
+      <span class="yt-tab-count">(${(t.items||[]).length})</span>
+      <span class="yt-tab-close" onclick="event.stopPropagation();ytTabClose('${t.id}')" title="탭 닫기">×</span>
+    </div>`;
+  });
+  html += `<div class="yt-tab-new" onclick="ytTabNewEmpty()" title="새 검색 탭">+ 새 검색</div>`;
+  bar.innerHTML = html;
+  // 탭 클릭 바인딩 (라벨/×를 제외한 영역)
+  bar.querySelectorAll('.yt-tab').forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.classList.contains('yt-tab-close')) return;
+      if(e.target.classList.contains('yt-tab-label') && e.target.getAttribute('contenteditable')==='true') return;
+      ytTabSwitch(el.dataset.tabId);
+    });
+  });
+}
+function _ytTabLabelEdit(labelEl){
+  labelEl.setAttribute('contenteditable','true');
+  labelEl.focus();
+  const range=document.createRange(); range.selectNodeContents(labelEl);
+  const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  const finish=()=>{
+    labelEl.removeAttribute('contenteditable');
+    const id = labelEl.closest('.yt-tab').dataset.tabId;
+    ytTabRename(id, labelEl.textContent||'');
+  };
+  labelEl.addEventListener('blur', finish, {once:true});
+  labelEl.addEventListener('keydown', e=>{
+    if(e.key==='Enter' || e.key==='Escape'){ e.preventDefault(); labelEl.blur(); }
+  });
+}
 
 function ytSearchOpen(){
   document.getElementById('yt-modal').style.display='flex';
+  // 탭이 하나도 없으면 기본 탭 생성
+  if(_YT.tabs.length === 0) _ytNewTab('새 검색');
+  ytRenderTabs();
+  ytRender();
   document.getElementById('yt-query').focus();
-  // Enter 키로 검색
   const q=document.getElementById('yt-query');
   q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ytSearchRun()}};
 }
@@ -9033,6 +9252,15 @@ async function ytSearchRun(){
     const d=new Date();d.setDate(d.getDate()-parseInt(period));
     publishedAfter=d.toISOString();
   }
+  // 활성 탭 확보 — 없거나 이미 결과가 있으면 새 탭, 빈 탭이면 재사용
+  let tab = _ytActiveTab();
+  if(!tab || (tab.items && tab.items.length)){
+    tab = _ytNewTab(query);
+  }
+  // 이름이 기본값이면 query 로 자동 설정
+  if(!tab.name || tab.name==='새 검색' || tab.name==='검색') tab.name = query.substring(0,40);
+  tab.query = query;
+  tab.searchParams = {maxResults, order, duration, periodDays:period};
   const st=document.getElementById('yt-status');
   st.textContent='🔍 검색 중…';
   const body=document.getElementById('yt-table');
@@ -9059,11 +9287,13 @@ async function ytSearchRun(){
       st.textContent='실패';
       return;
     }
-    _YT.items=r.items||[];
-    _YT.selected.clear();
-    _YT.sort={col:'hot_score',dir:'desc'};
+    tab.items = r.items||[];
+    tab.selectedVids = [];
+    tab.sort = {col:'hot_score',dir:'desc'};
+    ytRenderTabs();
     ytRender();
-    st.textContent=`${_YT.items.length}개 · ${r.query}`;
+    st.textContent=`${tab.items.length}개 · ${r.query}`;
+    autoSave();
   }catch(e){
     body.innerHTML=`<tr><td colspan="99" style="padding:40px;text-align:center;color:#fca5a5">❌ ${e.message}</td></tr>`;
     st.textContent='실패';
@@ -9072,7 +9302,9 @@ async function ytSearchRun(){
 
 function ytRender(){
   const tbl=document.getElementById('yt-table');
-  const items=_YT.items;
+  const tab = _ytActiveTab();
+  const items = tab ? tab.items : [];
+  const selectedSet = new Set((tab && tab.selectedVids) || []);
   const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const fmtN=n=>(n==null?'':n.toLocaleString());
   const cols=[
@@ -9088,7 +9320,7 @@ function ytRender(){
     {k:'_actions', l:'', sortable:false, w:120},
   ];
   // 정렬 적용
-  const s=_YT.sort;
+  const s = tab ? tab.sort : {col:'hot_score',dir:'desc'};
   if(s.col){
     items.sort((a,b)=>{
       const av=a[s.col]||0, bv=b[s.col]||0;
@@ -9106,10 +9338,10 @@ function ytRender(){
   });
   html+='</tr></thead><tbody>';
   if(items.length===0){
-    html+='<tr><td colspan="99" style="padding:40px;text-align:center;color:var(--text-muted)">검색 결과가 없습니다</td></tr>';
+    html+='<tr><td colspan="99" style="padding:40px;text-align:center;color:var(--text-muted)">검색 결과가 없습니다 — 검색어를 입력하고 🔍 검색을 눌러보세요</td></tr>';
   }
   items.forEach((it,i)=>{
-    const checked=_YT.selected.has(it.video_id);
+    const checked=selectedSet.has(it.video_id);
     html+=`<tr data-vid="${it.video_id}" class="${checked?'sel':''}">
       <td style="text-align:center"><input type="checkbox" ${checked?'checked':''} onchange="ytToggleSel('${it.video_id}',this.checked)"></td>
       <td><img class="yt-thumb" src="${esc(it.thumbnail)}" loading="lazy" onerror="this.style.display='none'"></td>
@@ -9136,30 +9368,42 @@ function ytRender(){
   ytUpdateSelCount();
 }
 function ytSortBy(col){
-  if(_YT.sort.col===col)_YT.sort.dir=_YT.sort.dir==='asc'?'desc':'asc';
-  else { _YT.sort.col=col; _YT.sort.dir=(col==='days'?'asc':'desc'); }
+  const tab = _ytActiveTab(); if(!tab) return;
+  if(tab.sort.col===col) tab.sort.dir=tab.sort.dir==='asc'?'desc':'asc';
+  else { tab.sort.col=col; tab.sort.dir=(col==='days'?'asc':'desc'); }
   ytRender();
+  autoSave();
 }
 function ytToggleSel(vid, checked){
-  if(checked)_YT.selected.add(vid);
-  else _YT.selected.delete(vid);
+  const tab = _ytActiveTab(); if(!tab) return;
+  const set = new Set(tab.selectedVids||[]);
+  if(checked) set.add(vid); else set.delete(vid);
+  tab.selectedVids = [...set];
   const tr=document.querySelector(`#yt-table tr[data-vid="${vid}"]`);
   if(tr)tr.classList.toggle('sel', checked);
   ytUpdateSelCount();
+  autoSave();
 }
 function ytToggleAll(on){
-  _YT.selected.clear();
-  if(on)_YT.items.forEach(it=>_YT.selected.add(it.video_id));
+  const tab = _ytActiveTab(); if(!tab) return;
+  tab.selectedVids = on ? (tab.items||[]).map(it=>it.video_id) : [];
   ytRender();
+  autoSave();
 }
 function ytUpdateSelCount(){
-  document.getElementById('yt-sel-count').textContent=_YT.selected.size;
-  document.getElementById('yt-selectall').checked = _YT.selected.size===_YT.items.length && _YT.items.length>0;
+  const tab = _ytActiveTab();
+  const selCount = tab ? (tab.selectedVids||[]).length : 0;
+  const total = tab ? (tab.items||[]).length : 0;
+  document.getElementById('yt-sel-count').textContent=selCount;
+  document.getElementById('yt-total').textContent=total;
+  document.getElementById('yt-selectall').checked = selCount===total && total>0;
 }
 
 // 선택된 영상들 → 그리드로 캔버스에 배치
 function ytAddSelectedToCanvas(){
-  const selected=_YT.items.filter(it=>_YT.selected.has(it.video_id));
+  const tab = _ytActiveTab(); if(!tab) return;
+  const selSet = new Set(tab.selectedVids||[]);
+  const selected = (tab.items||[]).filter(it=>selSet.has(it.video_id));
   if(selected.length===0){alert('선택된 영상이 없어요');return;}
   // 그리드 계산: 4열, CE 크기 360×203, gap 20
   const cols=4, w=360, h=203, gap=20;
@@ -9195,8 +9439,9 @@ function ytAddOneToCanvas(url){
 }
 function ytOpenOriginal(url){ window.open(url, '_blank'); }
 function ytPreview(url){
-  // 현재 검색 결과 전체를 urls로 등록 → 좌우 화살표로 순회 가능
-  const items = (_YT && _YT.items) ? _YT.items : [];
+  // 활성 탭의 전체 결과를 urls로 등록 → 좌우 화살표로 순회 가능
+  const tab = _ytActiveTab();
+  const items = tab ? (tab.items||[]) : [];
   const urls = items.map(it=>it.url).filter(Boolean);
   const idx = Math.max(0, urls.indexOf(url));
   if(urls.length){
@@ -9212,7 +9457,9 @@ function ytPreview(url){
 
 // 선택된 것들 일괄 다운로드 (다운로더 노드 생성 대안)
 async function ytDownloadSelected(){
-  const selected=_YT.items.filter(it=>_YT.selected.has(it.video_id));
+  const tab = _ytActiveTab(); if(!tab) return;
+  const selSet = new Set(tab.selectedVids||[]);
+  const selected = (tab.items||[]).filter(it=>selSet.has(it.video_id));
   if(selected.length===0){alert('선택된 영상이 없어요');return;}
   if(!workflowId){alert('프로젝트를 먼저 저장해주세요');return;}
   if(!confirm(`${selected.length}개 영상을 ${`{프로젝트}/videos/`} 로 다운로드합니다.\n(720p MP4, 순차 진행, 영상마다 30초~2분)`))return;
@@ -9233,7 +9480,9 @@ async function ytDownloadSelected(){
 
 // 선택 영상 자막 일괄 생성
 async function ytSubtitleSelected(){
-  const selected=_YT.items.filter(it=>_YT.selected.has(it.video_id));
+  const tab = _ytActiveTab(); if(!tab) return;
+  const selSet = new Set(tab.selectedVids||[]);
+  const selected = (tab.items||[]).filter(it=>selSet.has(it.video_id));
   if(selected.length===0){alert('선택된 영상이 없어요');return;}
   if(!workflowId){alert('프로젝트를 먼저 저장해주세요');return;}
   if(!confirm(`${selected.length}개 영상의 자막을 생성합니다.\nYouTube 네이티브 자막이 있으면 즉시, 없으면 Whisper 전사 (10분 영상 ≈ 5분).`))return;
