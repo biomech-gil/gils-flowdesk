@@ -14116,26 +14116,113 @@ function setupJsonDragDrop(){
   cwEl.addEventListener('dragleave', e => {
     cwEl.style.outline = '';
   });
-  cwEl.addEventListener('drop', e => {
+  cwEl.addEventListener('drop', async e => {
     cwEl.style.outline = '';
-    const file = [...e.dataTransfer.files].find(f => f.name.endsWith('.json'));
-    if(!file) return;
+    if(!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
     e.preventDefault();
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result);
-        if(!data.nodes || !Array.isArray(data.nodes)){
-          alert('유효한 프로젝트 JSON이 아닙니다.');
-          return;
+    const files = [...e.dataTransfer.files];
+    // 프로젝트 JSON 우선 처리 (기존 동작) — 단일 json 파일로 판단
+    if(files.length===1 && files[0].name.endsWith('.json')){
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const data = JSON.parse(reader.result);
+          if(data.nodes && Array.isArray(data.nodes)){ importProjectJson(data); return; }
+          // nodes 없는 일반 json → 그냥 문서로 저장
+          _dropLocalFileToProject(files[0], e.clientX, e.clientY);
+        }catch(err){
+          _dropLocalFileToProject(files[0], e.clientX, e.clientY);
         }
-        importProjectJson(data);
-      } catch(err){
-        alert('JSON 파싱 실패: ' + err.message);
-      }
-    };
-    reader.readAsText(file);
+      };
+      reader.readAsText(files[0]);
+      return;
+    }
+    // 여러 파일 / 일반 파일 → 프로젝트 폴더로 즉시 저장 + 노드 생성
+    const dropPos = s2c(e.clientX, e.clientY);
+    let offsetIdx = 0;
+    for(const f of files){
+      await _dropLocalFileToProject(f, e.clientX, e.clientY + offsetIdx*20);
+      offsetIdx++;
+    }
   });
+}
+
+// 로컬 파일을 프로젝트 폴더에 즉시 저장 + 캔버스에 해당 노드/CE 생성 (B 방식)
+async function _dropLocalFileToProject(file, screenX, screenY){
+  if(!file) return;
+  const ext = (file.name.split('.').pop()||'').toLowerCase();
+  // 카테고리 판정
+  let category = 'attachments';
+  if(['jpg','jpeg','png','gif','webp','bmp','svg','ico'].includes(ext)) category = 'images';
+  else if(['mp4','mov','webm','mkv','avi','m4v'].includes(ext)) category = 'videos';
+  else if(['mp3','wav','m4a','flac','ogg','aac'].includes(ext)) category = 'audio';
+  else if(['docx','hwp','hwpx','pdf','xlsx','txt','md','csv','json','html','rtf','odt','pptx'].includes(ext)) category = 'documents';
+  // 큰 파일 경고
+  if(file.size > 100*1024*1024){
+    if(!confirm(`📦 ${file.name} 은 ${Math.round(file.size/1024/1024)}MB 입니다. 프로젝트 폴더에 복사할까요?`)) return;
+  }
+  showCopyToast(`📥 ${file.name} 저장 중…`);
+  // base64 읽기
+  const dataUrl = await new Promise((res,rej)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>res(fr.result);
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+  // 서버 업로드 — 프로젝트 폴더로 저장
+  if(!window._tempKey) window._tempKey = 'tk_'+(typeof TAB_ID!=='undefined'?TAB_ID:'')+'_'+Date.now().toString(36);
+  const r = await api('POST','/api/project/file/upload',{
+    projectId: workflowId||'', tempKey: window._tempKey,
+    filename: file.name, data: dataUrl, category,
+  });
+  if(!r || !r.ok){
+    alert('파일 저장 실패: '+((r&&r.error)||''));
+    return;
+  }
+  // 드롭 지점 → 캔버스 좌표
+  const pos = s2c(screenX, screenY);
+  // 카테고리별 노드/CE 생성
+  if(category==='images'){
+    const ce = mkCe({type:'image', src:r.url, x:pos.x-150, y:pos.y-100, w:300, h:200, nodeName:file.name});
+    if(r.path) ce.srcPath = r.path;
+    selCe(ce); autoSave();
+    showCopyToast(`🖼️ ${file.name} → images/ 저장 + 이미지 CE 생성`);
+  } else if(category==='videos'){
+    const ce = mkCe({type:'video', src:r.url, videoKind:'direct',
+                      x:pos.x-180, y:pos.y-101, w:360, h:203,
+                      muted:true, loop:true, autoplay:false, nodeName:file.name});
+    if(r.path) ce.srcPath = r.path;
+    selCe(ce); autoSave();
+    showCopyToast(`🎬 ${file.name} → videos/ 저장 + 비디오 CE 생성`);
+  } else if(category==='documents' || category==='attachments'){
+    // Document 노드로 생성 (docx/hwp/pdf/txt/etc.)
+    const isRef = _docEngineForExt(ext)==='fileref';
+    const n = await addNode('document', pos.x, pos.y);
+    if(n && n.doc){
+      n.doc.filename = r.filename;
+      _docSyncNodeNameToFilename(n);
+      if(isRef){
+        n.collapsed = true;
+        n.el.classList.add('collapsed');
+        const btn=n.el.querySelector('[data-act="tog"]'); if(btn) btn.textContent='►';
+      }
+      docRenderMini(n);
+      if(!n.collapsed){ docInlineUnmount(n); setTimeout(()=>docInlineMount(n), 100); }
+      autoSave(); drawConns();
+    }
+    showCopyToast(`📄 ${file.name} → ${category}/ 저장 + Document 노드 생성`);
+  } else {
+    // audio 등 — 이미지 CE 대신 downloader-like 참조. 일단 Document 노드 (fileref)
+    const n = await addNode('document', pos.x, pos.y);
+    if(n && n.doc){
+      n.doc.filename = r.filename;
+      _docSyncNodeNameToFilename(n);
+      n.collapsed = true; n.el.classList.add('collapsed');
+      docRenderMini(n); autoSave();
+    }
+    showCopyToast(`📁 ${file.name} → ${category}/ 저장됨`);
+  }
+  try{ fpRefresh(true); }catch(e){}
 }
 
 // Ctrl+V 붙여넣기: 이미지(클립보드 그림) 또는 JSON 프로젝트 자동 감지

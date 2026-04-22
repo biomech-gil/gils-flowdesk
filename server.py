@@ -2062,6 +2062,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/sheet/export-xlsx": self._sheet_export_xlsx,
             "/api/doc/read": self._doc_read,
             "/api/doc/write": self._doc_write,
+            "/api/project/file/upload": self._project_file_upload,
             "/api/doc/delete": self._doc_delete,
             "/api/doc/restore": self._doc_restore,
             "/api/doc/milestone": self._doc_milestone,
@@ -3565,6 +3566,83 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try: os.remove(p); pruned += 1
             except Exception: pass
         if pruned: log(f"[DOC_THIN] {filename}: {pruned}개 자동 정리")
+
+    def _project_file_upload(self, body):
+        """로컬 파일을 프로젝트 폴더로 직접 저장 (싱크 스타일).
+        body: {projectId, filename, data(base64), category? ('documents'|'images'|'videos'|'audio'|'attachments')}
+        return: {ok, filename, path(절대), url(브라우저용), relPath(프로젝트 기준 상대)}
+        프로젝트 미저장 시 → _temp 폴더 사용."""
+        import base64 as _b64
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        b64 = body.get("data") or ""
+        category = (body.get("category") or "").strip()
+        if not filename or not b64:
+            return {"ok": False, "error": "filename 과 data 필요"}
+        # 카테고리 자동 판정 (확장자)
+        if not category:
+            ext = filename.rsplit(".",1)[-1].lower() if "." in filename else ""
+            if ext in ("jpg","jpeg","png","gif","webp","bmp","svg","ico"): category = "images"
+            elif ext in ("mp4","mov","webm","mkv","avi","m4v"): category = "videos"
+            elif ext in ("mp3","wav","m4a","flac","ogg","aac"): category = "audio"
+            elif ext in ("docx","hwp","hwpx","pdf","xlsx","txt","md","csv","json","html","rtf","odt","pptx"): category = "documents"
+            else: category = "attachments"
+        # 프로젝트 work_dir 확보
+        work_dir = None
+        if pid:
+            try:
+                row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+                if row and row.get("work_dir"): work_dir = row["work_dir"]
+            except Exception as e:
+                log(f"[PFU] DB 조회 실패: {e}")
+        if not work_dir:
+            # _temp 폴더 사용 (저장 안 된 프로젝트)
+            try:
+                temp_key = body.get("tempKey") or ""
+                work_dir = self._get_or_create_temp_dir_pf(temp_key)
+            except Exception:
+                work_dir = None
+        if not work_dir:
+            return {"ok": False, "error": "프로젝트 폴더 확보 실패"}
+        target_dir = os.path.join(work_dir, category)
+        try: os.makedirs(target_dir, exist_ok=True)
+        except Exception as e: return {"ok": False, "error": f"디렉토리 생성 실패: {e}"}
+        # 파일명 sanitize + 중복 시 자동 번호
+        base = re.sub(r'[^\w\s.\-_가-힣()]', '_', filename).strip().strip('.')
+        if not base: base = "file"
+        target = os.path.join(target_dir, base)
+        if os.path.exists(target):
+            stem, ext = os.path.splitext(base)
+            for i in range(2, 1000):
+                candidate = os.path.join(target_dir, f"{stem} ({i}){ext}")
+                if not os.path.exists(candidate):
+                    target = candidate; base = f"{stem} ({i}){ext}"; break
+        # 저장
+        try:
+            if "," in b64 and b64.startswith("data:"): b64 = b64.split(",",1)[1]
+            data = _b64.b64decode(b64)
+            with open(target, "wb") as f: f.write(data)
+            st = os.stat(target)
+        except Exception as e:
+            return {"ok": False, "error": f"저장 실패: {e}"}
+        rel_path = f"{category}/{base}"
+        # 브라우저 표시용 URL (이미지/비디오 <src> 지원)
+        url = f"/api/project/file?projectId={pid}&path={category}%2F{base}" if pid else ""
+        log(f"[PFU] {filename} → {target} ({st.st_size} bytes, category={category})")
+        return {"ok": True, "filename": base, "path": target,
+                "url": url, "relPath": rel_path, "category": category, "size": st.st_size}
+
+    def _get_or_create_temp_dir_pf(self, temp_key):
+        """_temp 폴더 안에 현재 세션용 임시 디렉토리 반환 (없으면 생성)."""
+        try:
+            base = self._resolve_temp_base() if hasattr(self, "_resolve_temp_base") else "/synology/_temp"
+        except Exception:
+            base = "/synology/_temp"
+        os.makedirs(base, exist_ok=True)
+        key = (temp_key or f"tk_{int(time.time()*1000)}").strip()
+        d = os.path.join(base, key)
+        os.makedirs(d, exist_ok=True)
+        return d
 
     def _doc_write(self, body):
         """파일 저장 + 저장 전 자동 스냅샷 + 씨이어링.
