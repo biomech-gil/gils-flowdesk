@@ -3088,30 +3088,78 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 "source": source, "language": language,
                 "title": safe_title}
 
+    def _resolve_local_media_path(self, url):
+        """URL이 내부 API 경로(/api/project/file?projectId=X&path=Y)거나 로컬 파일 경로면
+        실제 파일시스템 절대 경로를 반환. 외부 URL이면 None."""
+        if not url: return None
+        u = str(url).strip()
+        # 1) 절대 파일 경로 (Linux/Windows)
+        if os.path.isabs(u) and os.path.isfile(u):
+            return u
+        # 2) 내부 API: /api/project/file?projectId=X&path=Y (혹은 전체 URL 형태)
+        try:
+            from urllib.parse import urlparse, parse_qs, unquote
+            parsed = urlparse(u)
+            path = parsed.path or u
+            if "/api/project/file" in path:
+                qs = parse_qs(parsed.query or u.split("?",1)[-1] if "?" in u else "")
+                pid = (qs.get("projectId") or [""])[0]
+                rel = unquote((qs.get("path") or [""])[0])
+                if pid and rel:
+                    try:
+                        row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+                    except Exception:
+                        row = None
+                    if row and row.get("work_dir"):
+                        full = os.path.join(row["work_dir"], rel.replace("\\","/"))
+                        if os.path.isfile(full):
+                            return full
+        except Exception as e:
+            log(f"[RESOLVE_LOCAL] 실패: {e}")
+        return None
+
     def _whisper_transcribe(self, url, workdir):
-        """faster-whisper 로 전사. 오디오 먼저 yt-dlp 로 추출.
+        """faster-whisper 로 전사. 오디오 먼저 추출.
+        URL이 내부 API (/api/project/file?...) 또는 로컬 경로면 ffmpeg로 직접 추출,
+        외부 URL (YouTube 등)이면 yt-dlp 사용.
         return: (segments list, language)"""
         try:
             from faster_whisper import WhisperModel
         except ImportError:
             raise Exception("faster-whisper 미설치 — Dockerfile 재빌드 필요")
 
-        # 오디오 다운로드 (임시)
+        # 로컬 파일 경로 해석 시도
+        local_path = self._resolve_local_media_path(url)
+
         tmp_dir = tempfile.mkdtemp(prefix="whisper_")
         audio_tpl = os.path.join(tmp_dir, "audio.%(ext)s")
         try:
-            r = subprocess.run(
-                ["yt-dlp", "-x", "--audio-format", "mp3", "--audio-quality", "5",
-                 "-o", audio_tpl, "--no-warnings", "--no-playlist", url],
-                capture_output=True, text=True, timeout=300,
-                encoding="utf-8", errors="replace",
-            )
             audio_file = None
-            for fn in os.listdir(tmp_dir):
-                if fn.startswith("audio."):
-                    audio_file = os.path.join(tmp_dir, fn); break
-            if not audio_file:
-                raise Exception(f"오디오 추출 실패: {(r.stderr or r.stdout or '')[-300:]}")
+            if local_path and os.path.isfile(local_path):
+                # 로컬 파일 → ffmpeg 로 직접 오디오 추출
+                audio_file = os.path.join(tmp_dir, "audio.mp3")
+                r = subprocess.run(
+                    ["ffmpeg", "-y", "-i", local_path, "-vn",
+                     "-acodec", "libmp3lame", "-q:a", "5", audio_file],
+                    capture_output=True, text=True, timeout=300,
+                    encoding="utf-8", errors="replace",
+                )
+                if r.returncode != 0 or not os.path.isfile(audio_file):
+                    raise Exception(f"ffmpeg 오디오 추출 실패: {(r.stderr or r.stdout or '')[-300:]}")
+                log(f"[WHISPER] 로컬 파일 audio 추출 완료: {local_path} → {audio_file}")
+            else:
+                # 외부 URL → yt-dlp
+                r = subprocess.run(
+                    ["yt-dlp", "-x", "--audio-format", "mp3", "--audio-quality", "5",
+                     "-o", audio_tpl, "--no-warnings", "--no-playlist", url],
+                    capture_output=True, text=True, timeout=300,
+                    encoding="utf-8", errors="replace",
+                )
+                for fn in os.listdir(tmp_dir):
+                    if fn.startswith("audio."):
+                        audio_file = os.path.join(tmp_dir, fn); break
+                if not audio_file:
+                    raise Exception(f"yt-dlp 오디오 추출 실패: {(r.stderr or r.stdout or '')[-300:]}")
 
             # Whisper 모델 로드 (캐시 디렉토리 사용)
             model_size = os.environ.get("WHISPER_MODEL", "small")

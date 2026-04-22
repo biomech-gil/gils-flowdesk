@@ -352,6 +352,13 @@ body > nav.nav, body > div.tb{display:none!important}
 .ce.region{border:1px dashed rgba(255,255,255,.2);border-radius:8px;z-index:1}
 .ce.region .ce-label{position:absolute;left:8px;top:6px;outline:none;background:transparent;border:none;padding:2px 6px;border-radius:4px;cursor:text;font-weight:600}
 .ce.region .ce-label:focus{background:rgba(0,0,0,.4)}
+/* 연결선 중간 라벨 */
+.conn-label{position:absolute;transform:translate(-50%,-50%);background:rgba(25,30,48,.95);color:#e0e0e0;border:1px solid rgba(126,207,255,.5);border-radius:5px;padding:3px 8px;font-size:11px;font-weight:500;line-height:1.3;max-width:240px;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:grab;pointer-events:auto;user-select:none;white-space:pre-wrap;word-break:break-word}
+.conn-label:hover{border-color:#7ecfff;box-shadow:0 0 0 2px rgba(126,207,255,.3)}
+.conn-label.dragging{cursor:grabbing;opacity:.8}
+.conn-label.editing{background:rgba(15,20,35,1);border-color:var(--accent);cursor:text;user-select:text}
+.conn-label .cl-del{position:absolute;right:-7px;top:-7px;width:16px;height:16px;border-radius:50%;background:#ef4444;color:#fff;font-size:11px;text-align:center;line-height:14px;cursor:pointer;border:1px solid #fff;display:none}
+.conn-label:hover .cl-del,.conn-label.sel .cl-del{display:block}
 .ce.region.region-scroll{border:2px dashed rgba(139,92,246,.7);box-shadow:inset 0 0 0 2px rgba(139,92,246,.15);cursor:ns-resize}
 .ce.region.region-scroll::before{content:'';position:absolute;right:2px;top:20px;bottom:20px;width:3px;background:linear-gradient(to bottom, rgba(139,92,246,.1), rgba(139,92,246,.5), rgba(139,92,246,.1));border-radius:2px;pointer-events:none}
 /* 영역 실행 모드 — 번호 부여 / 실행 중 펄싱 */
@@ -381,7 +388,7 @@ body.exec-order-mode .ce.region:hover{outline-color:rgba(255,200,80,1);backgroun
 .ce.image img{width:100%;height:100%;display:block;pointer-events:none;border-radius:4px}
 .ce.has-node-mode{outline:2px solid var(--accent);outline-offset:1px}
 .ce .ce-port{position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid var(--accent);background:var(--bg-1);cursor:crosshair;z-index:20;display:none}
-.ce.has-node-mode .ce-port,.ce.image .ce-port{display:block}
+.ce.has-node-mode .ce-port,.ce.image .ce-port,.ce.video .ce-port{display:block}
 .ce .ce-port-l{left:-9px;top:50%;margin-top:-7px}
 .ce .ce-port-r{right:-9px;top:50%;margin-top:-7px}
 .ce .ce-port:hover{background:var(--accent);transform:scale(1.4)}
@@ -965,14 +972,18 @@ body.focus-mode #fp-panel:not(.fp-user-pinned){display:none!important}
 .ce.video.sel{outline:2px solid #22d3ee;outline-offset:2px}
 /* 미디어 자체는 클릭 이벤트 먹지 않음 (overlay 가 모든 포인터 잡아 노드 드래그 보장) */
 .ce.video .ce-video{position:absolute;inset:0;width:100%;height:100%;background:#000;border:0;display:block;pointer-events:none}
-.ce.video video.ce-video{object-fit:cover}
+.ce.video video.ce-video{object-fit:contain;background:#000}
 .ce.video iframe.ce-video{object-fit:unset}
 /* overlay — iframe/video 위를 덮어 드래그 이벤트 가로챔. 항상 활성. */
 .ce.video .ce-video-overlay{position:absolute;inset:0;cursor:grab;background:transparent;z-index:3}
 .ce.video .ce-video-overlay:active{cursor:grabbing}
 .ce.video .ce-video-badge{position:absolute;top:4px;left:4px;padding:1px 6px;background:rgba(34,211,238,.85);color:#0a0a14;font-size:9px;border-radius:3px;font-weight:700;letter-spacing:.5px;pointer-events:none;z-index:4}
-.ce.video .ce-video-controls{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);display:flex;gap:3px;padding:2px 4px;background:rgba(0,0,0,.75);border-radius:4px;z-index:5;opacity:0;transition:opacity .15s;pointer-events:none}
-.ce.video:hover .ce-video-controls{opacity:1;pointer-events:auto}
+.ce.video .ce-video-controls{position:absolute;top:calc(100% + 40px);left:50%;transform:translateX(-50%);display:flex;gap:3px;padding:3px 6px;background:rgba(0,0,0,.85);border-radius:4px;z-index:5;opacity:0;transition:opacity .15s;pointer-events:none;white-space:nowrap}
+.ce.video:hover .ce-video-controls,.ce.video.sel .ce-video-controls{opacity:1;pointer-events:auto}
+.ce.video .ce-video-scrubber{position:absolute;top:calc(100% + 14px);left:0;right:0;height:22px;display:flex;align-items:center;gap:6px;padding:0 6px;background:rgba(0,0,0,.75);border-radius:3px;z-index:5;opacity:0;transition:opacity .15s;pointer-events:none}
+.ce.video:hover .ce-video-scrubber,.ce.video.sel .ce-video-scrubber{opacity:1;pointer-events:auto}
+.ce.video .ce-video-scrubber input[type="range"]{flex:1;margin:0;height:4px;cursor:pointer}
+.ce.video .ce-video-scrubber .sc-t{color:#9ca3af;font-size:10px;font-family:var(--mono);min-width:38px;text-align:center}
 .ce.video .ce-v-btn{background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;line-height:1}
 .ce.video .ce-v-btn:hover{background:rgba(255,255,255,.2)}
 .ce.video .ce-resize,.ce.video .ce-del{z-index:6}
@@ -1737,6 +1748,7 @@ body.focus-mode #canvas-controls{display:none}
   <div class="cw" id="cw">
     <svg id="svg"><defs><marker id="ah" markerWidth="4" markerHeight="3" refX="4" refY="1.5" orient="auto"><polygon points="0 0,4 1.5,0 3" fill="#7ecfff"/></marker></defs></svg>
     <div id="canvas"></div>
+    <div id="conn-labels" style="position:absolute;inset:0;pointer-events:none;z-index:15"></div>
     <div id="sel-box"></div>
   </div>
   <div id="memo-editor" style="display:none;position:absolute;inset:0;z-index:50;background:var(--bg-0);flex-direction:column">
@@ -2921,8 +2933,93 @@ function anchorScreenPos(ce, anchorId){
   // ce.x, ce.y 는 캔버스 좌표 → 화면 좌표 변환: x*zoom+cx, y*zoom+cy
   return {x:(ce.x+a.dx)*zoom+cx, y:(ce.y+a.dy)*zoom+cy};
 }
+let _lblDrag = null; // {connId, labelId, pathEl}
+
+// 연결선 우클릭 메뉴 (라벨 추가 · 연결선 삭제)
+function showConnCtxMenu(x, y, c, ev){
+  document.getElementById('conn-ctx')?.remove();
+  const pop = document.createElement('div');
+  pop.id='conn-ctx';
+  pop.style.cssText='position:fixed;z-index:500;background:var(--bg-2);border:1px solid var(--border-light);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.6);padding:4px;min-width:160px';
+  const items = [
+    {label:'➕ 중간 라벨 추가', fn:()=>{
+      const text = prompt('라벨 내용:', '');
+      if(text===null || !text.trim()) return;
+      // 클릭 지점에 가장 가까운 t 추정
+      const pathEl = svg.querySelector(`path.conn[data-conn-id="${c.id}"]`) || svg.querySelectorAll('path.conn')[conns.indexOf(c)];
+      let t = 0.5;
+      if(pathEl && pathEl.getTotalLength){
+        const rect = cw.getBoundingClientRect();
+        const cx = ev.clientX - rect.left, cy = ev.clientY - rect.top;
+        const tot = pathEl.getTotalLength();
+        let best=0.5, bd=Infinity;
+        for(let i=0;i<=100;i++){
+          const p = pathEl.getPointAtLength((i/100)*tot);
+          const d=(p.x-cx)*(p.x-cx)+(p.y-cy)*(p.y-cy);
+          if(d<bd){bd=d;best=i/100;}
+        }
+        t=best;
+      }
+      c.labels = c.labels || [];
+      c.labels.push({id:'lb'+Date.now()+Math.random().toString(36).slice(2,5), text:text.trim(), t});
+      drawConns(); autoSave();
+    }},
+    {label:'🗑 연결선 삭제', fn:()=>{
+      conns = conns.filter(x=>x.id!==c.id);
+      if(selectedConn===c.id) selectedConn=null;
+      drawConns(); autoSave();
+    }, danger:true},
+  ];
+  items.forEach(it=>{
+    const b=document.createElement('div');
+    b.textContent=it.label;
+    b.style.cssText='padding:6px 12px;font-size:12px;cursor:pointer;border-radius:3px;color:'+(it.danger?'#fca5a5':'var(--text)');
+    b.onmouseenter=()=>b.style.background='rgba(255,255,255,.08)';
+    b.onmouseleave=()=>b.style.background='';
+    b.onclick=()=>{it.fn(); pop.remove();};
+    pop.appendChild(b);
+  });
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+  document.body.appendChild(pop);
+  setTimeout(()=>{
+    const close=e=>{ if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown',close);
+  }, 100);
+}
+
+// 연결선 라벨 인라인 편집
+function _connLabelStartEdit(ld, c, lab){
+  ld.classList.add('editing');
+  const xbtn = ld.querySelector('.cl-del');
+  ld.textContent = lab.text||'';
+  if(xbtn) ld.appendChild(xbtn);
+  ld.contentEditable = 'true';
+  ld.focus();
+  const range = document.createRange();
+  range.selectNodeContents(ld);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
+  const finish = ()=>{
+    ld.contentEditable = 'false';
+    ld.classList.remove('editing');
+    const txt = (ld.textContent||'').replace(/×$/,'').trim();
+    lab.text = txt || '(라벨)';
+    drawConns(); autoSave();
+  };
+  ld.addEventListener('blur', finish, {once:true});
+  ld.addEventListener('keydown', e=>{
+    if(e.key==='Escape' || (e.key==='Enter' && !e.shiftKey)){
+      e.preventDefault(); ld.blur();
+    }
+  });
+}
+
 function drawConns(){
   svg.querySelectorAll('path,circle').forEach(p=>p.remove());
+  // 연결선 라벨 컨테이너 — 매 draw마다 초기화 후 재렌더 (path 재생성이라 동기화)
+  const lblCt = document.getElementById('conn-labels');
+  if(lblCt) lblCt.innerHTML = '';
   conns.forEach(c=>{
     const sn=findNodeOrCe(c.sid),tn=findNodeOrCe(c.tid);
     if(!sn||!tn)return;
@@ -2970,6 +3067,10 @@ function drawConns(){
     };
     hit.addEventListener('mousedown',onMouseDown);
     hit.addEventListener('dblclick',onDblClick);
+    hit.addEventListener('contextmenu',ev=>{
+      ev.preventDefault(); ev.stopPropagation();
+      showConnCtxMenu(ev.clientX, ev.clientY, c, ev);
+    });
     svg.appendChild(hit);
 
     // 2) 실제 표시 path
@@ -2979,8 +3080,71 @@ function drawConns(){
     const anchorCls=c.sourceAnchorId?' conn-anchor':'';
     p.setAttribute('class','conn'+(act?' active':'')+(selectedConn===c.id?' sel':'')+anchorCls);
     p.setAttribute('marker-end','url(#ah)');
+    p.dataset.connId = c.id;
     p.style.pointerEvents='none';
     svg.appendChild(p);
+    // 연결선 중간 라벨 렌더 (HTML, 별도 컨테이너) — getTotalLength/getPointAtLength 활용
+    if(lblCt && Array.isArray(c.labels) && c.labels.length){
+      const totalLen = p.getTotalLength();
+      c.labels.forEach(lab=>{
+        const tClamp = Math.max(0, Math.min(1, lab.t||0.5));
+        const pt = p.getPointAtLength(tClamp * totalLen);
+        const ld = document.createElement('div');
+        ld.className = 'conn-label';
+        ld.dataset.connId = c.id;
+        ld.dataset.labelId = lab.id;
+        ld.style.left = pt.x+'px'; ld.style.top = pt.y+'px';
+        ld.textContent = lab.text || '(라벨)';
+        const xbtn = document.createElement('div');
+        xbtn.className='cl-del'; xbtn.textContent='×';
+        xbtn.title='라벨 삭제';
+        xbtn.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault()});
+        xbtn.addEventListener('click',e=>{
+          e.stopPropagation();
+          c.labels = c.labels.filter(x=>x.id!==lab.id);
+          drawConns(); autoSave();
+        });
+        ld.appendChild(xbtn);
+        // 더블클릭 → 인라인 편집
+        ld.addEventListener('dblclick',e=>{
+          e.stopPropagation();e.preventDefault();
+          _connLabelStartEdit(ld, c, lab);
+        });
+        // 드래그 → 곡선 위에서 t 이동
+        ld.addEventListener('mousedown',e=>{
+          if(ld.classList.contains('editing')) return;
+          if(e.target.classList.contains('cl-del')) return;
+          e.stopPropagation(); e.preventDefault();
+          ld.classList.add('dragging');
+          _lblDrag = {connId:c.id, labelId:lab.id, pathEl:p, label:lab};
+          const onMove = ev=>{
+            if(!_lblDrag) return;
+            const rect = cw.getBoundingClientRect();
+            const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+            // path 위에서 가장 가까운 점 샘플링 (100개)
+            const tot = _lblDrag.pathEl.getTotalLength();
+            let bestT = 0, bestD = Infinity;
+            for(let i=0; i<=100; i++){
+              const pp = _lblDrag.pathEl.getPointAtLength((i/100)*tot);
+              const d = (pp.x-x)*(pp.x-x) + (pp.y-y)*(pp.y-y);
+              if(d<bestD){ bestD=d; bestT=i/100; }
+            }
+            _lblDrag.label.t = bestT;
+            const npt = _lblDrag.pathEl.getPointAtLength(bestT * tot);
+            ld.style.left = npt.x+'px'; ld.style.top = npt.y+'px';
+          };
+          const onUp = ()=>{
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            ld.classList.remove('dragging');
+            if(_lblDrag){ _lblDrag = null; autoSave(); }
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        lblCt.appendChild(ld);
+      });
+    }
     // Waypoint 점은 선택 시에만 표시 (캔버스 좌표 → 화면 좌표)
     if(selectedConn===c.id)(c.waypoints||[]).forEach((wp,i)=>{
       const sx=wp.x*zoom+cx, sy=wp.y*zoom+cy;
@@ -4254,10 +4418,16 @@ function buildCeDom(ce){
     const mediaHtml = kind==='direct'
       ? `<video class="ce-video" src="${escapeHtml(ce.src||'')}" ${ce.autoplay?'autoplay':''} ${ce.loop?'loop':''} ${ce.muted?'muted':''} playsinline></video>`
       : `<iframe class="ce-video" src="${escapeHtml(ce.embedUrl||'')}" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    const scrubHtml = kind==='direct' ? `<div class="ce-video-scrubber" data-scrubber>
+        <span class="sc-t" data-sc-cur>0:00</span>
+        <input type="range" min="0" max="1000" value="0" step="1" data-sc-range>
+        <span class="sc-t" data-sc-dur>0:00</span>
+      </div>` : '';
     d.innerHTML=`${mediaHtml}
       <div class="ce-video-overlay" data-ce-overlay title="드래그로 이동 / 더블클릭=크게보기"></div>
       <div class="ce-bookmarks" data-bookmarks></div>
       <div class="ce-video-badge">${kind==='embed' ? (ce.videoProvider||'EMBED').toUpperCase() : 'VIDEO'}</div>
+      ${scrubHtml}
       <div class="ce-video-controls">
         ${kind==='direct' ? `<button class="ce-v-btn" data-v-act="play" title="재생/정지">▶</button><button class="ce-v-btn" data-v-act="mute" title="음소거 토글">${ce.muted?'🔇':'🔊'}</button><button class="ce-v-btn" data-v-act="capture" title="현재 프레임 캡처 → 이미지 노드로">📷</button>` : ''}
         ${(kind==='embed' && ce.videoProvider==='youtube') ? `<button class="ce-v-btn" data-v-act="capture-yt" title="서버에서 현재 시각 프레임 추출 (yt-dlp+ffmpeg, 5~15초)">📷</button>` : ''}
@@ -4320,6 +4490,34 @@ function buildCeDom(ce){
           // 북마크 렌더 (duration 을 이제 얻었으니)
           _renderVideoBookmarks(ce, vid.duration);
         });
+        // 스크러버 연결
+        const rng = d.querySelector('[data-sc-range]');
+        const curEl = d.querySelector('[data-sc-cur]');
+        const durEl = d.querySelector('[data-sc-dur]');
+        const fmtT = s=>{ if(!isFinite(s)||s<0) s=0; const m=Math.floor(s/60), sec=Math.floor(s%60); return `${m}:${String(sec).padStart(2,'0')}`; };
+        if(rng && curEl && durEl){
+          let seeking = false;
+          vid.addEventListener('durationchange',()=>{ durEl.textContent=fmtT(vid.duration||0); });
+          vid.addEventListener('timeupdate',()=>{
+            if(seeking || !vid.duration) return;
+            rng.value = Math.round((vid.currentTime/vid.duration)*1000);
+            curEl.textContent = fmtT(vid.currentTime);
+          });
+          rng.addEventListener('mousedown',e=>{ e.stopPropagation(); seeking=true; });
+          rng.addEventListener('touchstart',e=>{ e.stopPropagation(); seeking=true; });
+          rng.addEventListener('input',e=>{
+            e.stopPropagation();
+            if(!vid.duration) return;
+            const t = (+rng.value/1000)*vid.duration;
+            curEl.textContent = fmtT(t);
+          });
+          rng.addEventListener('change',e=>{
+            e.stopPropagation();
+            if(vid.duration){ vid.currentTime = (+rng.value/1000)*vid.duration; }
+            setTimeout(()=>{seeking=false;}, 100);
+          });
+          rng.addEventListener('mouseup',()=>{ seeking=false; });
+        }
       }
     } else {
       // embed — 프로바이더별 기본 종횡비 적용
@@ -5305,7 +5503,7 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       engine:(n.doc?.engine)||null,
     }:undefined,
   })),
-  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l')})),
+  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))})),
   canvasElements:canvasEls.map(c=>{
     // text 요소는 크기가 auto 라 DOM 에서 실측
     let w=c.w,h=c.h;
@@ -5414,7 +5612,7 @@ function loadState(st){
   applyAppearance();
   // 프로젝트 불러오기 시 모든 노드는 접힌 상태로 (사용자 요청)
   (st.nodes||[]).forEach(nd=>mkNode({...nd,collapsed:true}));
-  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l')}));
+  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))}));
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
   // 스크롤 박스 region 복원: 모든 노드 로드 완료 후 스크롤 상태 적용
   try{
@@ -6657,13 +6855,26 @@ function _nodeScrollRegion(n){
   return null;
 }
 
-// 주어진 영역에 "센터가 속한" 노드들 반환
+// 주어진 영역에 "센터가 속한" 노드들 반환 (실행용, 엄격)
 function _regionFindInsideNodes(ce){
   if(!ce || ce.type!=='region') return [];
   const rx=ce.x, ry=ce.y, rR=ce.x+ce.w, rB=ce.y+ce.h;
   return nodes.filter(n=>{
     const cx=n.x+(n.w||280)/2, cy=n.y+(n.h||240)/2;
     return cx>=rx && cx<=rR && cy>=ry && cy<=rB;
+  });
+}
+
+// 스크롤 박스 전용 — 영역과 X축 범위만 겹치면 멤버 (영역 위/아래로 쌓인 노드도 포함)
+// 영역을 "세로 컬럼 뷰포트"로 쓰는 케이스: 페이지 10개가 세로 스택으로 쌓여있고
+// 그 중 일부만 덮는 작은 영역을 그려도 모든 페이지가 스크롤 멤버가 되어야 함.
+function _regionFindColumnNodes(ce){
+  if(!ce || ce.type!=='region') return [];
+  const rL=ce.x, rR=ce.x+ce.w;
+  return nodes.filter(n=>{
+    const nL=n.x, nR=n.x+(n.w||280);
+    // X축 범위가 조금이라도 겹치면 포함 (Y는 무관)
+    return !(nR<=rL || nL>=rR);
   });
 }
 
@@ -6694,12 +6905,12 @@ function _regionApplyScroll(ce){
   drawConns();
 }
 
-// 스크롤 박스 모드 켜기 — 영역 내부 노드를 멤버로 캡처
+// 스크롤 박스 모드 켜기 — 영역의 세로 컬럼(X-overlap)에 있는 노드를 멤버로 캡처
 function regionEnableScroll(ce){
   if(!ce || ce.type!=='region') return;
-  const inside = _regionFindInsideNodes(ce);
+  const inside = _regionFindColumnNodes(ce);
   if(inside.length===0){
-    if(!confirm('이 영역 안에 노드가 없습니다. 그래도 스크롤 박스 모드를 켤까요?\n(나중에 영역을 이동/확장해서 노드들을 담으세요)')) return;
+    if(!confirm('이 영역의 세로 컬럼(X축 범위)에 노드가 없습니다. 그래도 스크롤 박스 모드를 켤까요?\n(영역 아래나 위에 페이지들을 세로로 쌓고 영역을 작게 그려주세요)')) return;
   }
   ce.scrollable = true;
   ce.scrollOffsetY = 0;
@@ -9043,10 +9254,10 @@ function showCeCtxMenu(x, y, ce, dx, dy){
     ce.type==='region' ? {label:'🎨 배경색 변경', fn:()=>{const ev={clientX:x,clientY:y};showColorPicker(ev,ce)}} : null,
     ce.type==='region' && !ce.scrollable ? {label:'🔭 스크롤 박스 모드 켜기', fn:()=>regionEnableScroll(ce)} : null,
     ce.type==='region' && ce.scrollable ? {label:'🔭 스크롤 박스 모드 끄기', fn:()=>regionDisableScroll(ce)} : null,
-    ce.type==='region' && ce.scrollable ? {label:'🔄 멤버 재스캔 (현재 영역 안 노드 다시 담기)', fn:()=>{
-      const inside=_regionFindInsideNodes(ce);
+    ce.type==='region' && ce.scrollable ? {label:'🔄 멤버 재스캔 (세로 컬럼의 모든 노드)', fn:()=>{
+      const inside=_regionFindColumnNodes(ce);
       ce.memberIds=inside.map(n=>n.id);
-      _regionApplyScroll(ce);autoSave();showCopyToast(`🔭 멤버 ${inside.length}개 재설정`);
+      _regionApplyScroll(ce);autoSave();showCopyToast(`🔭 멤버 ${inside.length}개 재설정 (세로 컬럼)`);
     }} : null,
     ce.type==='region' ? {label:'▶ 이 영역만 실행', fn:()=>executeRegion(ce)} : null,
     ce.type==='region' ? {label:(typeof ce.execOrder==='number'?`🔢 실행 순서 변경 (현재 #${ce.execOrder})`:'🔢 실행 순서 부여'), fn:()=>{
