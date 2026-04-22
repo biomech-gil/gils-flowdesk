@@ -1489,7 +1489,7 @@ body.focus-mode #canvas-controls{display:none}
     </div>
   </div>
 </div>
-<input type="file" id="doc-file-input" accept=".docx,.doc,.hwp,.hwpx,.odt,.rtf,.txt,.md" style="display:none">
+<input type="file" id="doc-file-input" accept="*/*" style="display:none">
 
 <!-- 📜 버전 기록 팝업 -->
 <div id="doc-ver-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:380;align-items:center;justify-content:center">
@@ -8912,13 +8912,16 @@ async function docEnsureMammoth(){
 }
 async function docEnsurePdfjs(){
   if(window.pdfjsLib) return;
-  await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs','pdfjsLib');
-  // 없으면 pdfjs-dist 로 폴백
-  if(!window.pdfjsLib){
-    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js','pdfjsLib');
+  // pdf.js 3.11 — UMD 빌드라 <script> 태그로 로드되며 window.pdfjsLib 노출 O
+  // (4.x 는 ESM 전용이라 단순 script 로드로는 전역 노출 안 됨)
+  try{
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js','pdfjsLib');
+  }catch(e){
+    // cdnjs 실패 시 jsDelivr 폴백
+    await _loadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js','pdfjsLib');
   }
   if(window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions){
-    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js';
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 }
 
