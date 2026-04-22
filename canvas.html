@@ -4049,38 +4049,60 @@ window.addEventListener('keydown',e=>{
 });
 
 // 이미지/비디오 CE → OS 클립보드에 PNG 이미지로 복사
-// HTTPS (secure context) 에서만 클립보드 직접 복사 가능. HTTP 에서는 다운로드 폴백.
+// secure-context 검사 선제적 차단 안 함 — 일단 시도하고 실제 실패시 폴백
 async function copyCeAsImage(ce){
   try{
     showCopyToast('📋 이미지 복사 준비 중…');
     let blob = await _ceToImageBlob(ce);
     if(!blob){ showCopyToast('⚠ 복사할 이미지가 없어요'); return; }
-    const isSecure = window.isSecureContext || location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1';
-    // Secure context + Clipboard API — PPT/Word/Paint 어디든 붙여넣기 가능
-    if(isSecure && navigator.clipboard && window.ClipboardItem){
+    // 1차: 표준 Clipboard API — secure-context 체크 건너뛰고 일단 시도
+    //  (localhost, 일부 HTTP 환경, iframe 상위가 HTTPS 등에서도 작동할 수 있음)
+    if(navigator.clipboard && window.ClipboardItem){
       try{
         await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
         showCopyToast('✅ 이미지 클립보드에 복사됨 — 아무데나 붙여넣기 (Ctrl+V)');
         return;
       }catch(err){
-        console.warn('[copyCe] clipboard.write 실패:', err.message);
-        // 권한 거부/미지원 → 다운로드 폴백으로
+        console.warn('[copyCe] clipboard.write 실패 (secure-context/권한):', err.message);
       }
     }
-    // HTTP 환경 — 클립보드 이미지 복사가 브라우저 보안 정책으로 불가
-    //  (execCommand+<img> 방식은 PPT가 못 읽는 HTML 조각만 복사되어 빈 파일로 붙여짐)
-    //  깔끔하게 PNG 파일로 다운로드해 사용자가 직접 삽입하도록 유도
+    // 2차: 대형 Clipboard 이벤트 경유 — copy 이벤트 가로채서 그 안에 ClipboardData 설정
+    //  일부 브라우저는 navigator.clipboard.write 가 아닌 이 경로로 허용
+    try{
+      let ok = false;
+      const dataUrl = await new Promise((res)=>{
+        const fr = new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob);
+      });
+      const handler = (e)=>{
+        try{
+          e.clipboardData.setData('image/png', dataUrl);
+          // HTML 폴백 (일부 앱은 HTML 안의 <img data:...> 도 디코드)
+          e.clipboardData.setData('text/html', `<img src="${dataUrl}">`);
+          e.preventDefault(); ok = true;
+        }catch(err){}
+      };
+      document.addEventListener('copy', handler, {once:true, capture:true});
+      const sel = window.getSelection(); sel.removeAllRanges();
+      // 빈 선택이어도 execCommand('copy') 가 copy 이벤트를 발화시킴
+      const tmp = document.createElement('span'); tmp.textContent=' '; tmp.style.cssText='position:fixed;left:-9999px';
+      document.body.appendChild(tmp);
+      const range = document.createRange(); range.selectNodeContents(tmp);
+      sel.addRange(range);
+      document.execCommand('copy');
+      sel.removeAllRanges(); tmp.remove();
+      if(ok){
+        showCopyToast('✅ 이미지 클립보드에 복사됨 (fallback) — Ctrl+V 로 붙여넣기');
+        return;
+      }
+    }catch(err){ console.warn('[copyCe] copy 이벤트 폴백 실패:', err.message); }
+    // 3차: PNG 파일로 다운로드
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
     a.href = url; a.download = (ce.nodeName||'capture')+'_'+stamp+'.png';
     a.click();
     setTimeout(()=>URL.revokeObjectURL(url), 3000);
-    if(!isSecure){
-      showCopyToast('⬇ HTTP 환경 — 이미지 클립보드 복사는 HTTPS 에서만 지원. PNG 파일로 다운로드됨 (PPT에 드래그해 넣기)');
-    } else {
-      showCopyToast('⬇ 클립보드 권한 거부됨 — PNG 파일로 다운로드됨');
-    }
+    showCopyToast('⬇ 클립보드 접근 불가 — PNG 파일로 다운로드됨 (파일을 직접 드래그해 넣기)');
   }catch(e){
     console.error('[copyCe]', e);
     alert('이미지 복사 실패: '+e.message);
