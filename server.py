@@ -2014,6 +2014,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/move": self._project_move,
             "/api/project-folder/save": self._project_folder_save,
             "/api/project-folder/delete": self._project_folder_delete,
+            "/api/project/rename-folder": self._project_rename_folder,
             "/api/upload": self._upload_file,
             "/api/pdf-split": self._pdf_split,
             "/api/list-pdf-images": self._list_pdf_images,
@@ -4573,13 +4574,77 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _project_delete(self, body):
         pid = body.get("id", "")
         if not pid: return {"ok": False, "error": "id required"}
-        row = db_exec("SELECT id, name, data, created, modified, favorite, folder_id FROM projects WHERE id=?", (pid,), fetchone=True)
+        delete_folder = bool(body.get("deleteFolder"))
+        row = db_exec("SELECT id, name, data, created, modified, favorite, folder_id, work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        work_dir = (row or {}).get("work_dir") or ""
         if row:
             trash_data = json.dumps(dict(row), ensure_ascii=False, default=str)
             db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
                     ("projects", str(pid), row.get("name", ""), trash_data, datetime.now().isoformat()))
         db_exec("DELETE FROM projects WHERE id=?", (pid,))
-        return {"ok": True}
+        folder_removed = False
+        folder_error = ""
+        if delete_folder and work_dir:
+            # 안전 가드: SYNOLOGY_CONTAINER_ROOT 밑에 있을 때만, 그리고 경로가 존재할 때만
+            norm = os.path.normpath(work_dir)
+            if norm.startswith(SYNOLOGY_CONTAINER_ROOT + os.sep) and os.path.isdir(norm):
+                try:
+                    shutil.rmtree(norm)
+                    folder_removed = True
+                    log(f"[PROJECT_DELETE] work_dir removed: {norm}")
+                except Exception as e:
+                    folder_error = str(e)
+                    log(f"[PROJECT_DELETE] work_dir removal failed: {norm} — {e}")
+            else:
+                folder_error = f"경로가 {SYNOLOGY_CONTAINER_ROOT} 밖이거나 존재하지 않음: {norm}"
+                log(f"[PROJECT_DELETE] work_dir skip (safety): {norm}")
+        return {"ok": True, "folderRemoved": folder_removed, "folderError": folder_error, "workDir": work_dir}
+
+    def _project_rename_folder(self, body):
+        """프로젝트의 work_dir 실폴더 이름만 변경 (내용물은 그대로 유지)."""
+        pid = body.get("id", "")
+        new_name = (body.get("newName") or "").strip()
+        if not pid: return {"ok": False, "error": "id required"}
+        if not new_name: return {"ok": False, "error": "새 폴더명이 비어있음"}
+        ok_name, name_err = validate_project_name(new_name)
+        if not ok_name:
+            return {"ok": False, "error": f"잘못된 폴더명: {name_err}"}
+        row = db_exec("SELECT id, name, work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        if not row: return {"ok": False, "error": "프로젝트를 찾을 수 없음"}
+        old_wd = (row.get("work_dir") or "").strip()
+        if not old_wd: return {"ok": False, "error": "이 프로젝트에는 work_dir 가 없음"}
+        old_wd = os.path.normpath(old_wd)
+        if not old_wd.startswith(SYNOLOGY_CONTAINER_ROOT + os.sep):
+            return {"ok": False, "error": f"안전 가드: {SYNOLOGY_CONTAINER_ROOT} 밖의 폴더는 변경 불가"}
+        if not os.path.isdir(old_wd):
+            return {"ok": False, "error": f"폴더가 존재하지 않음: {old_wd}"}
+        # 같은 부모 아래에 새 이름으로 리네임
+        parent = os.path.dirname(old_wd)
+        safe_new = _sanitize_folder_name(new_name)
+        new_wd = os.path.normpath(os.path.join(parent, safe_new))
+        if new_wd == old_wd:
+            return {"ok": True, "workDir": old_wd, "note": "이름이 같음 — 변경 없음"}
+        if os.path.exists(new_wd):
+            return {"ok": False, "error": f"이미 같은 이름의 폴더가 존재: {new_wd}"}
+        try:
+            os.rename(old_wd, new_wd)
+        except Exception as e:
+            log(f"[PROJECT_RENAME_FOLDER] rename 실패: {old_wd} → {new_wd}: {e}")
+            return {"ok": False, "error": str(e)}
+        db_exec("UPDATE projects SET work_dir=? WHERE id=?", (new_wd, pid))
+        # project.json 내부의 workDir 필드도 갱신 (있으면)
+        try:
+            pj_path = os.path.join(new_wd, "project.json")
+            if os.path.isfile(pj_path):
+                with open(pj_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                data["workDir"] = new_wd
+                with open(pj_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log(f"[PROJECT_RENAME_FOLDER] project.json 갱신 실패(무시): {e}")
+        log(f"[PROJECT_RENAME_FOLDER] {pid}: {old_wd} → {new_wd}")
+        return {"ok": True, "workDir": new_wd, "oldWorkDir": old_wd}
 
     # ── Trash (휴지통) ──
 

@@ -14004,6 +14004,7 @@ async function loadLandingLists(){
         </div>
         <button onclick="event.stopPropagation();window.open(location.origin+'/#wf=${p.id}','_blank')" title="새 탭에서 열기 (멀티 탭 작업)" style="background:none;border:none;color:#c4b5fd;cursor:pointer;font-size:12px;padding:2px">↗</button>
         ${p.work_dir?`<button onclick="event.stopPropagation();openInDsm('${p.work_dir.replace(/'/g,"&#39;")}')" title="DSM 파일스테이션에서 열기 (${escapeHtml(p.work_dir)})" style="background:none;border:none;color:#c4b5fd;cursor:pointer;font-size:12px;padding:2px">🌐</button>`:''}
+        ${p.work_dir?`<button onclick="event.stopPropagation();renameProjectWorkDir('${p.id}')" title="시놀로지 폴더명 변경 (내용물 유지)" style="background:none;border:none;color:#fcd34d;cursor:pointer;font-size:11px;padding:2px">✏️</button>`:''}
         <button onclick="event.stopPropagation();moveProjectFolder('${p.id}')" title="폴더 이동" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:2px">📂</button>
         <button onclick="event.stopPropagation();downloadProject('${p.id}','${escapeHtml(p.name||'project').replace(/'/g,'&#39;')}')" title="JSON 다운로드" style="background:none;border:none;color:#88c0d0;cursor:pointer;font-size:12px;padding:2px">⬇</button>
         <button class="del" onclick="event.stopPropagation();deleteProject('${p.id}')" title="삭제">✕</button>
@@ -14454,8 +14455,79 @@ async function toggleStar(id,fav){
   loadLandingLists();
 }
 async function deleteProject(id){
-  if(!confirm('이 프로젝트를 삭제할까요?'))return;
-  await api('POST','/api/project/delete',{id});
+  // 커스텀 다이얼로그 — '시놀로지 폴더도 함께 삭제' 체크박스 제공
+  // 기본: DB 만 삭제 (폴더·파일 보존) · 체크 시 work_dir 까지 shutil.rmtree
+  const meta=await api('GET','/api/project/list-meta');
+  const p=(meta.ok&&meta.projects||[]).find(x=>x.id===id);
+  const workDir=p?.work_dir||'';
+  const name=p?.name||'(이름 없음)';
+  const choice=await _projectDeleteDialog({name, workDir});
+  if(!choice) return;
+  const r=await api('POST','/api/project/delete',{id, deleteFolder: choice.deleteFolder});
+  if(!r||!r.ok){
+    alert('삭제 실패: '+((r&&r.error)||'서버 오류'));
+    return;
+  }
+  if(choice.deleteFolder && r.folderError){
+    alert('프로젝트는 삭제됐지만 시놀로지 폴더 삭제 실패:\n'+r.folderError);
+  } else if(choice.deleteFolder && r.folderRemoved){
+    console.log('[project-delete] folder removed:', r.workDir);
+  }
+  loadLandingLists();
+}
+function _projectDeleteDialog(opts){
+  return new Promise(res=>{
+    const wd=opts.workDir||'';
+    const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML=`<div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 26px;min-width:420px;max-width:560px;box-shadow:0 10px 40px rgba(0,0,0,.6)">
+      <h3 style="margin:0 0 10px;color:#fca5a5;font-size:15px">🗑 프로젝트 삭제</h3>
+      <div style="font-size:13px;color:var(--text);margin-bottom:12px"><b>${esc(opts.name)}</b> 프로젝트를 삭제할까요?</div>
+      <div style="font-size:11.5px;color:var(--text-dim);line-height:1.6;background:rgba(255,255,255,.03);padding:8px 10px;border-radius:5px;margin-bottom:14px">
+        기본: DB에서만 삭제 · 휴지통 복원 가능 · 시놀로지 폴더·파일은 그대로 유지
+      </div>
+      ${wd?`<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text);cursor:pointer;padding:8px 10px;border:1px solid rgba(239,68,68,.3);border-radius:6px;background:rgba(239,68,68,.05)">
+        <input type="checkbox" id="_pdl-rmdir" style="margin-top:2px;accent-color:#ef4444">
+        <div>
+          <div style="color:#fca5a5;font-weight:600;margin-bottom:3px">⚠ 시놀로지 폴더도 함께 삭제</div>
+          <div style="font-size:10.5px;color:var(--text-dim);word-break:break-all;font-family:var(--mono)">${esc(wd)}</div>
+          <div style="font-size:10.5px;color:#fca5a5;margin-top:3px">※ 복구 불가 — 폴더 안의 다운로드 영상·PDF·모든 파일이 영구 삭제됩니다</div>
+        </div>
+      </label>`:`<div style="font-size:11px;color:var(--text-dim);padding:8px 10px;border:1px dashed var(--border);border-radius:5px">work_dir 가 없는 프로젝트 — DB 레코드만 삭제됩니다</div>`}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button id="_pdl-cancel" style="padding:6px 16px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:5px;cursor:pointer">취소</button>
+        <button id="_pdl-ok" style="padding:6px 18px;background:#ef4444;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600">삭제</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const close=v=>{document.body.removeChild(ov);res(v);};
+    ov.querySelector('#_pdl-cancel').onclick=()=>close(null);
+    ov.querySelector('#_pdl-ok').onclick=()=>{
+      const chk=ov.querySelector('#_pdl-rmdir');
+      close({deleteFolder: !!(chk&&chk.checked)});
+    };
+    ov.addEventListener('click',e=>{if(e.target===ov)close(null)});
+  });
+}
+async function renameProjectWorkDir(id){
+  // 프로젝트 work_dir 실폴더 이름만 변경 (내용물은 그대로)
+  const meta=await api('GET','/api/project/list-meta');
+  const p=(meta.ok&&meta.projects||[]).find(x=>x.id===id);
+  if(!p){alert('프로젝트를 찾을 수 없음');return;}
+  if(!p.work_dir){alert('이 프로젝트에는 시놀로지 work_dir 가 없습니다.\n먼저 저장을 한 번 수행해야 폴더가 만들어집니다.');return;}
+  const cur=p.work_dir.split(/[\\/]/).pop()||'';
+  const inp=prompt(`폴더명 변경 (내용물은 그대로 유지)\n\n현재 폴더: ${p.work_dir}\n\n새 폴더명 입력:`, cur);
+  if(inp===null) return;
+  const nn=inp.trim();
+  if(!nn) return alert('폴더명이 비어있습니다');
+  if(nn===cur) return;  // 변경 없음
+  const r=await api('POST','/api/project/rename-folder',{id, newName: nn});
+  if(!r||!r.ok){
+    alert('폴더명 변경 실패: '+((r&&r.error)||'서버 오류'));
+    return;
+  }
+  alert(`폴더명 변경 완료\n\n이전: ${r.oldWorkDir}\n이후: ${r.workDir}`);
   loadLandingLists();
 }
 async function deleteTemp(id){
@@ -14467,21 +14539,54 @@ async function deleteTemp(id){
 async function batchDeleteLanding(){
   const checks=document.querySelectorAll('.landing-chk:checked');
   if(!checks.length) return alert('삭제할 항목을 선택하세요\n(Ctrl/Shift+클릭으로 다중 선택)');
-  // 종류별로 카운트 안내
   const cntP=[...checks].filter(c=>c.dataset.kind==='project').length;
   const cntT=checks.length-cntP;
   const parts=[];
   if(cntP)parts.push(`프로젝트 ${cntP}개`);
   if(cntT)parts.push(`임시저장 ${cntT}개`);
-  if(!confirm(`${parts.join(' + ')} — 총 ${checks.length}개 항목을 삭제할까요?`)) return;
+  // 커스텀 다이얼로그 — 시놀로지 폴더 함께 삭제 옵션
+  const choice=await _batchDeleteDialog({count:checks.length, parts, hasProjects:cntP>0});
+  if(!choice) return;
   for(const chk of checks){
     const kind=chk.dataset.kind;
     const id=chk.dataset.id;
-    if(kind==='project') await api('POST','/api/project/delete',{id});
+    if(kind==='project') await api('POST','/api/project/delete',{id, deleteFolder: choice.deleteFolder});
     else await api('POST','/api/temp/delete',{id});
   }
   _ltLastChkedItem=null;
   loadLandingLists();
+}
+function _batchDeleteDialog(opts){
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML=`<div style="background:var(--bg-1);border:1px solid var(--border);border-radius:10px;padding:22px 26px;min-width:420px;max-width:560px;box-shadow:0 10px 40px rgba(0,0,0,.6)">
+      <h3 style="margin:0 0 10px;color:#fca5a5;font-size:15px">🗑 일괄 삭제</h3>
+      <div style="font-size:13px;color:var(--text);margin-bottom:12px"><b>${opts.parts.join(' + ')}</b> — 총 ${opts.count}개 항목을 삭제할까요?</div>
+      <div style="font-size:11.5px;color:var(--text-dim);line-height:1.6;background:rgba(255,255,255,.03);padding:8px 10px;border-radius:5px;margin-bottom:14px">
+        기본: DB에서만 삭제 · 프로젝트는 휴지통에서 복원 가능 · 시놀로지 폴더·파일은 그대로 유지
+      </div>
+      ${opts.hasProjects?`<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text);cursor:pointer;padding:8px 10px;border:1px solid rgba(239,68,68,.3);border-radius:6px;background:rgba(239,68,68,.05)">
+        <input type="checkbox" id="_bdl-rmdir" style="margin-top:2px;accent-color:#ef4444">
+        <div>
+          <div style="color:#fca5a5;font-weight:600;margin-bottom:3px">⚠ 프로젝트 항목의 시놀로지 폴더도 함께 삭제</div>
+          <div style="font-size:10.5px;color:#fca5a5;margin-top:3px">※ 복구 불가 — 각 프로젝트 폴더 안의 모든 파일이 영구 삭제됩니다</div>
+        </div>
+      </label>`:''}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button id="_bdl-cancel" style="padding:6px 16px;background:transparent;color:var(--text);border:1px solid var(--border);border-radius:5px;cursor:pointer">취소</button>
+        <button id="_bdl-ok" style="padding:6px 18px;background:#ef4444;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:600">삭제</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const close=v=>{document.body.removeChild(ov);res(v);};
+    ov.querySelector('#_bdl-cancel').onclick=()=>close(null);
+    ov.querySelector('#_bdl-ok').onclick=()=>{
+      const chk=ov.querySelector('#_bdl-rmdir');
+      close({deleteFolder: !!(chk&&chk.checked)});
+    };
+    ov.addEventListener('click',e=>{if(e.target===ov)close(null)});
+  });
 }
 
 function toggleSelectAll(column){
