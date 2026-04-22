@@ -16,8 +16,18 @@ RUN curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-st
     && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe \
     && rm -rf /tmp/ffmpeg /tmp/ffmpeg.tar.xz
 
-# Python deps + yt-dlp (YouTube/Instagram/TikTok 등 다운로더) + openpyxl (Sheet 노드 xlsx I/O)
-RUN pip install --no-cache-dir psycopg2-binary yt-dlp openpyxl
+# Python deps + yt-dlp (다운로더) + openpyxl (Sheet xlsx I/O) + YouTube 검색/자막
+RUN pip install --no-cache-dir \
+    psycopg2-binary \
+    yt-dlp \
+    openpyxl \
+    google-api-python-client \
+    youtube-transcript-api \
+    faster-whisper
+
+# Whisper 모델 캐시 디렉토리 (첫 실행 시 ~470MB small 모델 자동 다운)
+RUN mkdir -p /app/whisper-cache && chown -R 1000:1000 /app/whisper-cache
+ENV WHISPER_CACHE_DIR=/app/whisper-cache
 
 # Claude Code CLI + Gemini CLI
 RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli

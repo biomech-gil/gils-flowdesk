@@ -79,12 +79,15 @@ Claude AI → 응답 → 다음 노드로 자동 전달
 
 ### 2. 시놀로지에 데이터 폴더 미리 생성
 ```bash
-mkdir -p /volume1/FlowDesk/{db,workspace,creds,uploads}
+mkdir -p /volume1/FlowDesk/{db,workspace,creds,gemini-creds,uploads,whisper-cache}
+sudo chown -R 1000:1000 /volume1/FlowDesk/{workspace,creds,gemini-creds,uploads,whisper-cache}
 ```
 - `db/` — PostgreSQL 데이터 (용량 커짐, SSD 권장)
 - `workspace/` — 각 노드가 파일 읽고 쓸 공간
 - `creds/` — Claude 인증 파일
+- `gemini-creds/` — Gemini 인증 파일
 - `uploads/` — 업로드된 이미지/PDF
+- `whisper-cache/` — YouTube 자막 Whisper 모델 캐시 (첫 사용 시 ~470MB 다운)
 
 ### 3. `.env` 작성
 ```bash

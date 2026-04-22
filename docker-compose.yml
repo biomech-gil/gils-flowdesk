@@ -31,12 +31,16 @@ services:
       DB_NAME: canvas_db
       DB_USER: canvas
       DB_PASSWORD: ${DB_PASSWORD:-FlowDesk2026Strong!}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      WHISPER_MODEL: ${WHISPER_MODEL:-small}
+      WHISPER_CACHE_DIR: /app/whisper-cache
       TZ: Asia/Seoul
     volumes:
       - ${WORKSPACE_HOST:-/volume1/FlowDesk/workspace}:/workspace
       - ${CLAUDE_CREDS_HOST:-/volume1/FlowDesk/creds}:/claude-creds
       - ${GEMINI_CREDS_HOST:-/volume1/FlowDesk/gemini-creds}:/gemini-creds
       - ${UPLOADS_HOST:-/volume1/FlowDesk/uploads}:/app/uploads
+      - ${WHISPER_CACHE_HOST:-/volume1/FlowDesk/whisper-cache}:/app/whisper-cache
       # 시놀로지 전체 디스크를 컨테이너에서 접근 (사용자가 임의 폴더 작업 폴더로 지정 가능)
       # 컨테이너 안에서 /synology/... 로 시놀로지 어떤 폴더든 접근 가능
       # 권한 주의: 컨테이너의 flowdesk(uid 1000)가 쓸 수 있는 폴더만 작성 가능

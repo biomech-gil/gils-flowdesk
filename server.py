@@ -1989,6 +1989,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/adopt": self._project_adopt,
             "/api/media/download": self._media_download,
             "/api/media/extract-frame": self._media_extract_frame,
+            "/api/youtube/search": self._youtube_search,
+            "/api/media/subtitle": self._media_subtitle,
             "/api/project/delete": self._project_delete,
             "/api/state/save": self._state_save,
             "/api/temp/save": self._temp_save,
@@ -2615,7 +2617,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     # ══════════════ 미디어 다운로드 (YouTube/Instagram/TikTok 등) ══════════════
     def _media_extract_frame(self, body):
-        """yt-dlp 로 스트림 URL 얻은 뒤 ffmpeg 로 특정 시각의 프레임 추출.
+        """해당 시각 전후 짧은 세그먼트만 yt-dlp 로 로컬에 다운받은 뒤 ffmpeg 로 프레임 추출.
+        -g 방식은 구글비디오 HTTP 헤더·DASH 분리 등으로 ffmpeg 에서 실패 잦음 → 세그먼트 우회.
         body: {url, timestamp (초 단위, 실수)}
         return: {ok, url (/uploads/images/xxx.png), path, size}"""
         url = (body.get("url") or "").strip()
@@ -2623,43 +2626,87 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         if not url:
             return {"ok": False, "error": "url 필요"}
         if ts < 0: ts = 0
-        # 1) yt-dlp -g 로 직접 스트림 URL 취득 (720p 이하로 빠르게)
+
+        img_dir = os.path.join(UPLOADS_DIR, "images")
+        os.makedirs(img_dir, exist_ok=True)
+        out_name = f"ytframe_{int(time.time()*1000)}_{int(ts)}s.png"
+        out_path = os.path.join(img_dir, out_name)
+
+        # 임시 세그먼트 다운 디렉토리
+        temp_dir = tempfile.mkdtemp(prefix="ytframe_")
+        seg_template = os.path.join(temp_dir, "seg.%(ext)s")
+        seg_start = max(0, int(ts) - 1)
+        seg_end = int(ts) + 2
+        sections = f"*{seg_start}-{seg_end}"
+
         try:
             r = subprocess.run(
-                ["yt-dlp", "-g", "-f", "best[height<=720]/best", "--no-warnings", url],
-                capture_output=True, text=True, timeout=40,
+                ["yt-dlp",
+                 "-f", "best[height<=720][ext=mp4]/best[height<=720]/best",
+                 "--download-sections", sections,
+                 "--force-keyframes-at-cuts",
+                 "--no-warnings", "--no-playlist",
+                 "-o", seg_template,
+                 url],
+                capture_output=True, text=True, timeout=90,
                 encoding="utf-8", errors="replace",
             )
         except subprocess.TimeoutExpired:
-            return {"ok": False, "error": "yt-dlp 타임아웃 (40초)"}
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return {"ok": False, "error": "yt-dlp 타임아웃 (90초) — 네트워크 또는 영상 접근 확인"}
         except FileNotFoundError:
+            shutil.rmtree(temp_dir, ignore_errors=True)
             return {"ok": False, "error": "yt-dlp 미설치"}
-        stream_urls = [s.strip() for s in (r.stdout or "").splitlines() if s.strip()]
-        if not stream_urls:
-            err = (r.stderr or "").strip()[-400:]
-            return {"ok": False, "error": f"스트림 URL 가져오기 실패: {err or 'unknown'}"}
-        stream_url = stream_urls[0]
 
-        # 2) ffmpeg -ss TS -i URL -vframes 1  (input seek → 빠름)
-        img_dir = os.path.join(UPLOADS_DIR, "images")
-        os.makedirs(img_dir, exist_ok=True)
-        ts_str = f"{ts:.2f}"
-        out_name = f"ytframe_{int(time.time()*1000)}_{int(ts)}s.png"
-        out_path = os.path.join(img_dir, out_name)
+        # 다운로드된 세그먼트 파일 찾기 (확장자 모름 — seg.* 패턴)
+        seg_file = None
+        try:
+            for fn in sorted(os.listdir(temp_dir)):
+                full = os.path.join(temp_dir, fn)
+                if os.path.isfile(full) and fn.startswith("seg.") and os.path.getsize(full) > 0:
+                    seg_file = full
+                    break
+        except Exception:
+            pass
+        if not seg_file:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            err = ((r.stderr or "") + (r.stdout or "")).strip()[-300:]
+            return {"ok": False, "error": f"세그먼트 다운로드 실패: {err or 'yt-dlp가 파일을 생성하지 못함'}"}
+
+        # 세그먼트 내부에서 원래 ts 위치 = ts - seg_start
+        local_ts = max(0, ts - seg_start)
         try:
             r2 = subprocess.run(
-                ["ffmpeg", "-ss", ts_str, "-i", stream_url,
-                 "-vframes", "1", "-q:v", "2", "-y", out_path],
-                capture_output=True, timeout=60,
+                ["ffmpeg", "-y",
+                 "-ss", f"{local_ts:.2f}",
+                 "-i", seg_file,
+                 "-frames:v", "1",
+                 "-q:v", "2",
+                 "-update", "1",
+                 out_path],
+                capture_output=True, timeout=30,
             )
         except subprocess.TimeoutExpired:
-            return {"ok": False, "error": "ffmpeg 타임아웃 (60초)"}
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return {"ok": False, "error": "ffmpeg 타임아웃 (30초)"}
         except FileNotFoundError:
+            shutil.rmtree(temp_dir, ignore_errors=True)
             return {"ok": False, "error": "ffmpeg 미설치"}
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
         if not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
-            err = (r2.stderr or b"").decode("utf-8", errors="replace")[-400:]
-            return {"ok": False, "error": f"프레임 추출 실패: {err or 'unknown'}"}
-        log(f"[EXTRACT_FRAME] {url} @ {ts_str}s → {out_path}")
+            err_raw = (r2.stderr or b"").decode("utf-8", errors="replace")
+            # ffmpeg 버전 헤더 · configure 라인 제거 → 진짜 오류만 남김
+            meaningful = []
+            for line in err_raw.splitlines():
+                l = line.strip()
+                if not l: continue
+                if l.startswith(("ffmpeg version","built with","configuration:","  lib","Input #","Stream #")): continue
+                meaningful.append(l)
+            err_msg = "\n".join(meaningful[-5:])[-400:] or "알 수 없는 오류"
+            return {"ok": False, "error": f"프레임 추출 실패: {err_msg}"}
+        log(f"[EXTRACT_FRAME] {url} @ {ts:.2f}s → {out_path}")
         return {"ok": True, "url": f"/uploads/images/{out_name}",
                 "path": out_path, "size": os.path.getsize(out_path),
                 "timestamp": ts}
@@ -2825,6 +2872,275 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 "videoCount": sum(1 for m in moved if m["kind"] == "video"),
                 "imageCount": sum(1 for m in moved if m["kind"] == "image"),
                 "audioCount": sum(1 for m in moved if m["kind"] == "audio")}
+
+    # ═══════════════════════════════════════
+    # 🎥 YouTube 검색 (Data API v3) — hot_score 계산 포함
+    # ═══════════════════════════════════════
+    def _youtube_search(self, body):
+        """YouTube Data API v3 검색.
+        body: {query, maxResults=30, order='viewCount', duration='any', publishedAfter=''}
+        return: {ok, items:[{video_id, title, channel, channel_id, views, likes, comments,
+                  duration_sec, published, thumbnail, daily_views, engagement, hot_score, ...}]}
+        """
+        # 우선순위: DB(설정 UI로 저장한 값) → env(.env 배포 폴백)
+        api_key = ""
+        try:
+            r = db_exec("SELECT value FROM system_settings WHERE key='youtube_api_key'", fetchone=True)
+            if r and r.get("value"): api_key = r["value"].strip()
+        except Exception: pass
+        if not api_key:
+            api_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+        if not api_key:
+            return {"ok": False, "error": "YouTube API 키가 설정되지 않았습니다. ⚙️ 설정 → 🎬 YouTube Data API 키에서 등록하세요.",
+                    "errorKind": "no_api_key"}
+        try:
+            from googleapiclient.discovery import build
+            from googleapiclient.errors import HttpError
+        except ImportError:
+            return {"ok": False, "error": "google-api-python-client 미설치 — Dockerfile 재빌드 필요"}
+
+        query = (body.get("query") or "").strip()
+        if not query:
+            return {"ok": False, "error": "검색어를 입력하세요"}
+        max_results = min(int(body.get("maxResults") or 30), 200)
+        order = body.get("order") or "viewCount"  # relevance, date, rating, viewCount, title
+        duration = body.get("duration") or "any"  # any, short, medium, long
+        published_after = (body.get("publishedAfter") or "").strip()  # ISO8601 or ""
+
+        try:
+            yt = build("youtube", "v3", developerKey=api_key, cache_discovery=False)
+            # 1) search.list — video id 만 먼저 얻음 (여러 페이지)
+            video_ids = []
+            page_token = None
+            per_page = 50  # API 최대
+            while len(video_ids) < max_results:
+                remaining = max_results - len(video_ids)
+                search_params = {
+                    "q": query,
+                    "part": "id",
+                    "type": "video",
+                    "maxResults": min(per_page, remaining),
+                    "order": order,
+                    "videoDuration": duration,
+                }
+                if page_token: search_params["pageToken"] = page_token
+                if published_after: search_params["publishedAfter"] = published_after
+                resp = yt.search().list(**search_params).execute()
+                for item in resp.get("items", []):
+                    vid = item.get("id", {}).get("videoId")
+                    if vid: video_ids.append(vid)
+                page_token = resp.get("nextPageToken")
+                if not page_token: break
+
+            if not video_ids:
+                return {"ok": True, "items": [], "totalCount": 0}
+
+            # 2) videos.list — 메트릭 배치 조회 (50개씩)
+            items = []
+            for i in range(0, len(video_ids), 50):
+                chunk = video_ids[i:i+50]
+                vresp = yt.videos().list(
+                    id=",".join(chunk),
+                    part="snippet,contentDetails,statistics",
+                ).execute()
+                for v in vresp.get("items", []):
+                    snip = v.get("snippet", {})
+                    stat = v.get("statistics", {})
+                    cd = v.get("contentDetails", {})
+                    vid = v.get("id","")
+                    views = int(stat.get("viewCount", 0) or 0)
+                    likes = int(stat.get("likeCount", 0) or 0)
+                    comments = int(stat.get("commentCount", 0) or 0)
+                    dur_sec = self._parse_iso8601_duration(cd.get("duration", "PT0S"))
+                    published = snip.get("publishedAt", "")
+                    # 업로드 이후 일수
+                    days = 1
+                    try:
+                        pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                        days = max(1, (datetime.now(pub_dt.tzinfo) - pub_dt).days)
+                    except Exception: pass
+                    daily_views = views // days if days else views
+                    engagement = ((likes + comments) / views * 100) if views else 0
+                    hot_score = round(daily_views * (1 + engagement/10) / 1000, 1)
+                    thumbs = snip.get("thumbnails", {})
+                    thumb = (thumbs.get("high") or thumbs.get("medium") or thumbs.get("default") or {}).get("url", "")
+                    items.append({
+                        "video_id": vid,
+                        "url": f"https://www.youtube.com/watch?v={vid}",
+                        "title": snip.get("title",""),
+                        "channel_name": snip.get("channelTitle",""),
+                        "channel_id": snip.get("channelId",""),
+                        "published": published,
+                        "days": days,
+                        "views": views,
+                        "likes": likes,
+                        "comments": comments,
+                        "duration_sec": dur_sec,
+                        "duration_str": self._format_duration(dur_sec),
+                        "daily_views": daily_views,
+                        "engagement": round(engagement, 2),
+                        "hot_score": hot_score,
+                        "thumbnail": thumb,
+                        "description": (snip.get("description","") or "")[:200],
+                    })
+            # 핫스코어 내림차순 기본 정렬
+            items.sort(key=lambda x: x["hot_score"], reverse=True)
+            return {"ok": True, "items": items, "totalCount": len(items),
+                    "query": query, "order": order}
+        except HttpError as e:
+            err_detail = str(e)
+            if "quotaExceeded" in err_detail:
+                return {"ok": False, "error": "YouTube API 할당량 초과 (일일 10,000 units). 내일 다시 시도하거나 새 API 키를 만드세요."}
+            return {"ok": False, "error": f"YouTube API 오류: {err_detail[:300]}"}
+        except Exception as e:
+            return {"ok": False, "error": f"검색 실패: {e}"}
+
+    def _parse_iso8601_duration(self, s):
+        """'PT4M13S' → 253초"""
+        m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', s or '')
+        if not m: return 0
+        h = int(m.group(1) or 0)
+        mi = int(m.group(2) or 0)
+        se = int(m.group(3) or 0)
+        return h*3600 + mi*60 + se
+
+    def _format_duration(self, sec):
+        if not sec: return ""
+        h, r = divmod(int(sec), 3600)
+        m, s = divmod(r, 60)
+        return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+    # ═══════════════════════════════════════
+    # 📝 자막 생성 — YouTube native → faster-whisper 폴백
+    # ═══════════════════════════════════════
+    def _media_subtitle(self, body):
+        """비디오 URL → SRT 파일 생성.
+        body: {url, projectId, method='auto' (auto|youtube|whisper), videoTitle?}
+        return: {ok, srtPath (/videos/title.srt), preview (첫 500자), source, language}
+        """
+        url = (body.get("url") or "").strip()
+        project_id = (body.get("projectId") or "").strip()
+        method = (body.get("method") or "auto").lower()
+        want_title = (body.get("videoTitle") or "").strip()
+        if not url or not project_id:
+            return {"ok": False, "error": "url 과 projectId 필요"}
+
+        # 프로젝트 work_dir
+        try:
+            row = db_exec("SELECT work_dir FROM projects WHERE id=?", (project_id,), fetchone=True)
+        except Exception as e:
+            return {"ok": False, "error": f"DB 오류: {e}"}
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트를 먼저 저장해주세요"}
+        videos_dir = os.path.join(row["work_dir"], "videos")
+        os.makedirs(videos_dir, exist_ok=True)
+
+        # 영상 ID 및 제목 추출
+        ytm = re.search(r'(?:youtube\.com/(?:watch\?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{10,14})', url)
+        yt_id = ytm.group(1) if ytm else None
+        safe_title = _sanitize_folder_name(want_title or (yt_id or "subtitle"))
+        srt_path = os.path.join(videos_dir, f"{safe_title}.srt")
+
+        segments = None
+        language = None
+        source = None
+
+        # 1) YouTube 네이티브 자막 시도
+        if method in ("auto", "youtube") and yt_id:
+            try:
+                from youtube_transcript_api import YouTubeTranscriptApi
+                for lang in ["ko", "en", "ja"]:
+                    try:
+                        data = YouTubeTranscriptApi.get_transcript(yt_id, languages=[lang])
+                        segments = [{"start": d.get("start",0), "duration": d.get("duration",0),
+                                     "text": (d.get("text","") or "").replace("\n"," ")} for d in data]
+                        language = lang; source = "youtube-native"
+                        break
+                    except Exception:
+                        continue
+            except ImportError:
+                pass
+
+        # 2) 실패 or method=whisper → faster-whisper
+        if segments is None and method in ("auto", "whisper"):
+            try:
+                segments, language = self._whisper_transcribe(url, videos_dir)
+                source = "whisper"
+            except Exception as e:
+                return {"ok": False, "error": f"자막 생성 실패: {e}"}
+
+        if not segments:
+            return {"ok": False, "error": "자막을 가져올 수 없습니다. YouTube 자막 없음·Whisper 미설치·영상 접근 불가 중 하나."}
+
+        # SRT 파일 쓰기
+        try:
+            self._write_srt(srt_path, segments)
+        except Exception as e:
+            return {"ok": False, "error": f"SRT 쓰기 실패: {e}"}
+
+        # 프리뷰 텍스트
+        preview = " ".join(s.get("text","") for s in segments)[:500]
+        log(f"[SUBTITLE] {source} ({language}) → {srt_path} ({len(segments)}개 세그먼트)")
+        return {"ok": True,
+                "srtPath": os.path.join("videos", f"{safe_title}.srt").replace("\\","/"),
+                "srtAbsPath": srt_path,
+                "preview": preview, "segmentCount": len(segments),
+                "source": source, "language": language,
+                "title": safe_title}
+
+    def _whisper_transcribe(self, url, workdir):
+        """faster-whisper 로 전사. 오디오 먼저 yt-dlp 로 추출.
+        return: (segments list, language)"""
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError:
+            raise Exception("faster-whisper 미설치 — Dockerfile 재빌드 필요")
+
+        # 오디오 다운로드 (임시)
+        tmp_dir = tempfile.mkdtemp(prefix="whisper_")
+        audio_tpl = os.path.join(tmp_dir, "audio.%(ext)s")
+        try:
+            r = subprocess.run(
+                ["yt-dlp", "-x", "--audio-format", "mp3", "--audio-quality", "5",
+                 "-o", audio_tpl, "--no-warnings", "--no-playlist", url],
+                capture_output=True, text=True, timeout=300,
+                encoding="utf-8", errors="replace",
+            )
+            audio_file = None
+            for fn in os.listdir(tmp_dir):
+                if fn.startswith("audio."):
+                    audio_file = os.path.join(tmp_dir, fn); break
+            if not audio_file:
+                raise Exception(f"오디오 추출 실패: {(r.stderr or r.stdout or '')[-300:]}")
+
+            # Whisper 모델 로드 (캐시 디렉토리 사용)
+            model_size = os.environ.get("WHISPER_MODEL", "small")
+            cache = os.environ.get("WHISPER_CACHE_DIR", "/app/whisper-cache")
+            log(f"[WHISPER] 로딩 모델={model_size} cache={cache}")
+            model = WhisperModel(model_size, device="cpu", compute_type="int8",
+                                 download_root=cache)
+            segs_iter, info = model.transcribe(audio_file, beam_size=5, language=None)
+            segments = []
+            for seg in segs_iter:
+                segments.append({"start": seg.start, "duration": seg.end - seg.start,
+                                 "text": (seg.text or "").strip()})
+            return segments, info.language
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def _write_srt(self, path, segments):
+        """세그먼트 → SRT 포맷 파일"""
+        def fmt_t(sec):
+            h, r = divmod(int(sec), 3600)
+            m, s = divmod(r, 60)
+            ms = int((sec - int(sec)) * 1000)
+            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+        with open(path, "w", encoding="utf-8") as f:
+            for i, seg in enumerate(segments, 1):
+                start = seg.get("start", 0)
+                dur = seg.get("duration", 2)
+                end = start + dur
+                f.write(f"{i}\n{fmt_t(start)} --> {fmt_t(end)}\n{seg.get('text','').strip()}\n\n")
 
     # ═══════════════════════════════════════
     # 📊 Sheet 노드 — xlsx/csv/tsv 가져오기·내보내기
@@ -5348,6 +5664,16 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _settings_get(self):
         rows = db_exec("SELECT key, value FROM system_settings", fetch=True)
         settings = {r["key"]: r["value"] for r in rows}
+        # YouTube API key: DB에 없으면 env 를 대체 노출 (읽기 전용 안내용)
+        if not (settings.get("youtube_api_key") or "").strip():
+            env_key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+            if env_key:
+                settings["youtube_api_key"] = env_key
+                settings["youtube_api_key_source"] = "env"
+            else:
+                settings["youtube_api_key_source"] = "none"
+        else:
+            settings["youtube_api_key_source"] = "db"
         return {"ok": True, "settings": settings}
 
     def _settings_set(self, body):

@@ -352,6 +352,15 @@ body > nav.nav, body > div.tb{display:none!important}
 .ce.region{border:1px dashed rgba(255,255,255,.2);border-radius:8px;z-index:1}
 .ce.region .ce-label{position:absolute;left:8px;top:6px;outline:none;background:transparent;border:none;padding:2px 6px;border-radius:4px;cursor:text;font-weight:600}
 .ce.region .ce-label:focus{background:rgba(0,0,0,.4)}
+.ce.region.region-scroll{border:2px dashed rgba(139,92,246,.7);box-shadow:inset 0 0 0 2px rgba(139,92,246,.15);cursor:ns-resize}
+.ce.region.region-scroll::before{content:'';position:absolute;right:2px;top:20px;bottom:20px;width:3px;background:linear-gradient(to bottom, rgba(139,92,246,.1), rgba(139,92,246,.5), rgba(139,92,246,.1));border-radius:2px;pointer-events:none}
+/* 영역 실행 모드 — 번호 부여 / 실행 중 펄싱 */
+body.exec-order-mode .ce.region{outline:2px dashed rgba(255,200,80,.7);outline-offset:2px;cursor:pointer}
+body.exec-order-mode .ce.region:hover{outline-color:rgba(255,200,80,1);background:rgba(255,200,80,.12) !important}
+.ce.region.region-exec-running{animation:regionPulse 1.2s ease-in-out infinite;box-shadow:0 0 0 3px rgba(76,175,80,.5), 0 0 20px rgba(76,175,80,.4);z-index:2}
+@keyframes regionPulse{0%,100%{box-shadow:0 0 0 3px rgba(76,175,80,.4), 0 0 18px rgba(76,175,80,.3)} 50%{box-shadow:0 0 0 5px rgba(76,175,80,.7), 0 0 28px rgba(76,175,80,.6)}}
+.rail-btn.active{background:rgba(255,200,80,.3) !important;color:#fbbd2c !important}
+.epp-row:hover{background:rgba(255,255,255,.05)}
 .ce.text{z-index:2;font-weight:500;padding:6px 10px;outline:none;background:transparent;border:1px solid transparent;border-radius:4px;overflow:visible}
 .ce.text .ce-text-body{min-height:16px}
 .ce.text:hover,.ce.text.sel{box-shadow:0 0 0 1px rgba(255,255,255,.15),0 4px 12px rgba(0,0,0,.3)}
@@ -932,8 +941,27 @@ body.focus-mode #fp-panel:not(.fp-user-pinned){display:none!important}
 .fp-empty{padding:20px 10px;text-align:center;font-size:10.5px;color:var(--text-muted);line-height:1.6}
 .fp-foot{padding:4px 8px;border-top:1px solid rgba(255,255,255,.05);font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:6px;flex-shrink:0}
 .fp-drag-ghost{position:fixed;z-index:500;padding:4px 10px;background:#1a1a2e;color:#a7f3d0;border:1px solid rgba(34,197,94,.4);border-radius:5px;font-size:11px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+/* 🎥 YouTube 검색 모달 */
+#yt-table th{position:sticky;top:0;background:#1a1a2e;color:#ff6b6b;font-weight:700;font-size:11px;padding:8px 10px;text-align:left;border-bottom:1px solid rgba(255,68,68,.3);text-transform:uppercase;letter-spacing:.5px;z-index:1;white-space:nowrap;user-select:none}
+#yt-table th.sortable{cursor:pointer}
+#yt-table th.sortable:hover{background:#22223a}
+#yt-table th.sortable.asc::after{content:' ▲';color:#fbbd2c;font-size:8px}
+#yt-table th.sortable.desc::after{content:' ▼';color:#fbbd2c;font-size:8px}
+#yt-table td{padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+#yt-table tr:hover{background:rgba(255,255,255,.03)}
+#yt-table tr.sel{background:rgba(255,68,68,.08)}
+#yt-table .yt-thumb{width:100px;height:56px;object-fit:cover;border-radius:4px;background:#000;display:block}
+#yt-table .yt-title{font-weight:600;color:var(--text);max-width:360px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.35;cursor:pointer}
+#yt-table .yt-title:hover{color:#7ecfff;text-decoration:underline}
+#yt-table .yt-channel{color:var(--text-dim);font-size:10.5px}
+#yt-table .yt-hot{font-family:var(--mono);font-weight:700;color:#fbbd2c;text-align:right}
+#yt-table .yt-num{font-family:var(--mono);text-align:right;color:var(--text-dim);font-size:10.5px}
+#yt-table .yt-actions{white-space:nowrap}
+#yt-table .yt-actions button{background:none;border:1px solid transparent;padding:2px 6px;border-radius:3px;color:var(--text-dim);cursor:pointer;font-size:10px;margin-right:2px}
+#yt-table .yt-actions button:hover{background:rgba(255,255,255,.08);color:var(--text);border-color:var(--border)}
 /* 🎬 캔버스 동영상 CE (스튜디오 벽 효과) */
-.ce.video{background:#000;border:1px solid rgba(255,255,255,.12);border-radius:6px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:0;z-index:2}
+.ce.video{background:#000;border:1px solid rgba(255,255,255,.12);border-radius:6px;overflow:visible;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:0;z-index:2}
+.ce.video .ce-video{border-radius:5px}  /* 미디어도 모서리 둥글게 — 부모 overflow:visible 라 직접 적용 */
 .ce.video.sel{outline:2px solid #22d3ee;outline-offset:2px}
 /* 미디어 자체는 클릭 이벤트 먹지 않음 (overlay 가 모든 포인터 잡아 노드 드래그 보장) */
 .ce.video .ce-video{position:absolute;inset:0;width:100%;height:100%;background:#000;border:0;display:block;pointer-events:none}
@@ -948,15 +976,13 @@ body.focus-mode #fp-panel:not(.fp-user-pinned){display:none!important}
 .ce.video .ce-v-btn{background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:2px 5px;border-radius:3px;line-height:1}
 .ce.video .ce-v-btn:hover{background:rgba(255,255,255,.2)}
 .ce.video .ce-resize,.ce.video .ce-del{z-index:6}
-/* 호버 일시정지 상태 — 부드러운 어두워짐 + 재생 중단 뱃지 */
-.ce.video.hover-paused::after{content:'⏸ 일시정지 — 떼면 재생';position:absolute;top:8px;right:8px;padding:2px 8px;background:rgba(0,0,0,.75);color:#fff;font-size:9.5px;border-radius:10px;pointer-events:none;z-index:6;font-weight:600;letter-spacing:.3px}
-.ce.video.hover-paused .ce-video{filter:brightness(.85) contrast(1.05)}
-/* 🚩 비디오 북마크 진행바 (상단) */
-.ce.video .ce-bookmarks{position:absolute;top:0;left:0;right:0;height:10px;z-index:6;pointer-events:none}
-.ce.video .ce-bookmark{position:absolute;top:0;width:2px;height:10px;background:#facc15;transform:translateX(-50%);pointer-events:auto;cursor:pointer;transition:.1s;box-shadow:0 0 4px rgba(250,204,21,.6)}
-.ce.video .ce-bookmark:hover{width:4px;height:14px;background:#fde047;box-shadow:0 0 8px #fde047}
-.ce.video .ce-bookmark::before{content:'🚩';position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;opacity:0;transition:.1s;white-space:nowrap;pointer-events:none}
-.ce.video .ce-bookmark:hover::before{opacity:1}
+/* 호버 일시정지 기능 제거됨 (2026-04 사용자 피드백: 마우스 지나갈 때마다 멈춰서 거슬림) */
+/* 🚩 비디오 북마크 진행바 (상단 바깥) — 박스 경계 위 20px 벗어난 영역, 클릭 영역 넓음 */
+.ce.video .ce-bookmarks{position:absolute;top:-20px;left:0;right:0;height:20px;z-index:8;pointer-events:none}
+.ce.video .ce-bookmark{position:absolute;top:0;width:18px;height:20px;transform:translateX(-50%);pointer-events:auto;cursor:pointer;transition:transform .12s;display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.ce.video .ce-bookmark::after{content:'🚩';display:block}
+.ce.video .ce-bookmark::before{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:2px;height:6px;background:#facc15;box-shadow:0 0 3px rgba(250,204,21,.8)}
+.ce.video .ce-bookmark:hover{transform:translateX(-50%) scale(1.3)}
 /* 🔓 unlocked 상태 — 네이티브 컨트롤 사용 가능, 이동 불가 */
 .ce.video.ce-unlocked{outline:2px dashed #22d3ee;outline-offset:3px}
 .ce.video.ce-unlocked .ce-video-badge::after{content:' · 🔓 제어 모드';color:#22d3ee;font-weight:600}
@@ -1249,6 +1275,9 @@ body.focus-mode #canvas-controls{display:none}
     <div class="rail-group">
       <button class="rail-btn rail-btn-run" onclick="engine.startAll()" data-tip="전체 실행 (Alt+A)">▶</button>
       <button class="rail-btn rail-btn-stop" onclick="engine.stop()" data-tip="정지">■</button>
+      <button class="rail-btn" data-rail-exec-order onclick="toggleExecOrderMode()" data-tip="영역 순서 지정 모드 · 영역 클릭 순서대로 번호 부여">🔢</button>
+      <button class="rail-btn" onclick="executeOrderedRegions()" data-tip="순서대로 영역 실행 🎬">🎬</button>
+      <button class="rail-btn" onclick="execProgressShow()" data-tip="영역 진행 패널 표시">📊</button>
     </div>
 
     <div class="rail-divider"></div>
@@ -1289,6 +1318,7 @@ body.focus-mode #canvas-controls{display:none}
         <span class="status">자동저장</span>
       </div>
       <button class="ts-btn icon" onclick="openInDsm((window._currentWorkDir||document.getElementById('wf-cwd').value||'').trim())" title="현재 프로젝트 폴더를 DSM 파일스테이션(새 탭)에서 열기" style="color:#c4b5fd">🌐</button>
+      <button class="ts-btn" onclick="ytSearchOpen()" title="YouTube 검색 (체계 분석)" style="color:#ff4444;font-weight:700">🎥 YouTube</button>
       <!-- 인증 헬스체크 배지 (로그인 후 자동 점검) -->
       <div id="auth-health-badge" class="auth-badge auth-loading" onclick="runAuthHealthCheck(false)" title="클릭해 인증 재점검">
         <span class="auth-badge-dot"></span>
@@ -1403,6 +1433,64 @@ body.focus-mode #canvas-controls{display:none}
       🏁 마일스톤은 자동 삭제 안 됨 · 자동 스냅샷은 Time Machine 규칙으로 정리 (24h 전부 · 7d 시간당 · 30d 하루당 · 180d 주당 · 이후 월당)
     </div>
     <div id="doc-ver-list" class="doc-ver-list"></div>
+  </div>
+</div>
+
+<!-- 🎥 YouTube 검색 모달 -->
+<div id="yt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:360;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="width:94vw;height:92vh;background:linear-gradient(180deg,#0f0f1a,#0a0a14);border:1px solid rgba(255,68,68,.2);border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.8),0 0 30px rgba(255,68,68,.08);display:flex;flex-direction:column;overflow:hidden">
+    <!-- 헤더 -->
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid rgba(255,68,68,.15);background:linear-gradient(180deg,rgba(255,68,68,.06),transparent)">
+      <span style="font-size:22px">🎥</span>
+      <h2 style="margin:0;flex:1;font-size:15px;font-weight:700;color:#ff6b6b;letter-spacing:-.3px">YouTube 검색 · 체계 분석</h2>
+      <span id="yt-status" style="font-size:11px;color:var(--text-dim);margin-right:8px"></span>
+      <button onclick="ytSearchClose()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:22px;padding:0 6px">×</button>
+    </div>
+    <!-- 검색 폼 -->
+    <div style="display:flex;align-items:center;gap:6px;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(0,0,0,.3);flex-wrap:wrap">
+      <input id="yt-query" type="text" placeholder="검색어 (Enter 로 검색)" style="flex:1;min-width:260px;padding:8px 12px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:13px;outline:none">
+      <select id="yt-max" style="padding:7px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11.5px">
+        <option value="15">15개</option>
+        <option value="30" selected>30개</option>
+        <option value="50">50개</option>
+        <option value="100">100개</option>
+        <option value="200">200개</option>
+      </select>
+      <select id="yt-order" style="padding:7px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11.5px">
+        <option value="viewCount">조회수순</option>
+        <option value="relevance">관련도순</option>
+        <option value="date">최신순</option>
+        <option value="rating">평점순</option>
+      </select>
+      <select id="yt-duration" style="padding:7px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11.5px">
+        <option value="any">길이: 전체</option>
+        <option value="short">4분 이하</option>
+        <option value="medium">4~20분</option>
+        <option value="long">20분 이상</option>
+      </select>
+      <select id="yt-period" style="padding:7px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:11.5px">
+        <option value="">기간: 전체</option>
+        <option value="1">최근 1일</option>
+        <option value="7">최근 1주</option>
+        <option value="30">최근 1달</option>
+        <option value="180">최근 6달</option>
+        <option value="365">최근 1년</option>
+      </select>
+      <button onclick="ytSearchRun()" style="padding:8px 18px;background:linear-gradient(135deg,#ff4444,#dc2626);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12.5px;font-weight:700">🔍 검색</button>
+    </div>
+    <!-- 액션 바 -->
+    <div style="display:flex;align-items:center;gap:6px;padding:7px 18px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,68,68,.06);font-size:11.5px">
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="yt-selectall" onchange="ytToggleAll(this.checked)"> 전체 선택</label>
+      <span style="color:var(--text-dim);margin-left:8px"><span id="yt-sel-count" style="color:#fbbd2c;font-weight:700">0</span> / <span id="yt-total" style="color:var(--text)">0</span> 선택</span>
+      <span style="flex:1"></span>
+      <button onclick="ytAddSelectedToCanvas()" style="padding:6px 14px;background:rgba(34,197,94,.18);color:#a3e635;border:1px solid rgba(34,197,94,.4);border-radius:4px;cursor:pointer;font-size:11.5px;font-weight:700">🎬 선택 캔버스에 추가 (그리드)</button>
+      <button onclick="ytDownloadSelected()" style="padding:6px 14px;background:rgba(16,185,129,.15);color:#6ee7b7;border:1px solid rgba(16,185,129,.3);border-radius:4px;cursor:pointer;font-size:11.5px;font-weight:700">📥 선택 다운로드</button>
+      <button onclick="ytSubtitleSelected()" style="padding:6px 14px;background:rgba(167,139,250,.15);color:#c4b5fd;border:1px solid rgba(167,139,250,.3);border-radius:4px;cursor:pointer;font-size:11.5px;font-weight:700">📝 선택 자막</button>
+    </div>
+    <!-- 결과 테이블 -->
+    <div style="flex:1;overflow:auto;background:var(--bg-0)">
+      <table id="yt-table" style="width:100%;border-collapse:collapse;font-size:11.5px;color:var(--text)"></table>
+    </div>
   </div>
 </div>
 
@@ -2226,6 +2314,44 @@ body.focus-mode #canvas-controls{display:none}
         </div>
       </div>
 
+      <!-- 인증 자동 복구 -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#a3e635;margin-bottom:6px">🔄 인증 자동 복구 (이 PC 전용)</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;line-height:1.6">
+          재배포/토큰만료 등으로 서버 쪽 인증이 깨지면, 이 PC 브라우저의 <b>IndexedDB에 캐시된 최근 업로드본</b>으로 조용히 재전송하고 다시 테스트합니다.<br>
+          <span style="color:var(--text-muted)">캐시는 이 PC에만 저장됩니다 (시놀로지/다른 PC와 공유 X). 계정 이름이 같으면 매칭되어 교체됩니다.</span>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-0);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">
+          <input type="checkbox" id="s-auto-recover-auth" onchange="saveAutoRecoverAuth(this.checked)">
+          <span><b>🛟 인증 실패 시 내 PC 캐시로 자동 복구</b> — Claude/Gemini 계정을 업로드한 PC에서만 의미 있음</span>
+        </label>
+        <div id="s-auth-cache-status" style="margin-top:8px;font-size:11px;color:var(--text-dim)"></div>
+        <div style="margin-top:8px;display:flex;gap:6px">
+          <button onclick="showAuthCacheList()" style="padding:4px 10px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">📋 캐시 확인</button>
+          <button onclick="clearAuthCache()" style="padding:4px 10px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3);border-radius:4px;cursor:pointer;font-size:11px">🗑 캐시 전체 삭제</button>
+        </div>
+      </div>
+
+      <!-- YouTube Data API -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#fca5a5;margin-bottom:6px">🎬 YouTube Data API 키</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;line-height:1.6">
+          캔버스의 🎬 YouTube 검색 기능에 사용됩니다.
+          <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" style="color:#7ecfff">Google Cloud Console</a>
+          에서 YouTube Data API v3를 활성화 후 API 키 발급 → 붙여넣기.<br>
+          <span style="color:var(--text-muted)">무료 할당량: 일 10,000 units (검색 1회 ≈ 100 units)</span>
+        </div>
+        <div id="s-youtube-status" style="font-size:11px;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px;align-items:stretch">
+          <input type="password" id="s-youtube-key" placeholder="AIzaSy... (붙여넣기)" autocomplete="off"
+                 style="flex:1;padding:7px 10px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:12px">
+          <button onclick="const e=document.getElementById('s-youtube-key');e.type=e.type==='password'?'text':'password'" title="표시/숨김"
+                  style="padding:5px 10px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">👁</button>
+          <button onclick="saveYoutubeApiKey()" style="padding:5px 14px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600">💾 저장</button>
+          <button onclick="deleteYoutubeApiKey()" style="padding:5px 10px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3);border-radius:4px;cursor:pointer;font-size:12px">🗑 삭제</button>
+        </div>
+      </div>
+
       <!-- DB 정보 (읽기 전용) -->
       <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
         <div style="font-weight:600;color:#a3be8c;margin-bottom:6px">🗄️ 데이터베이스</div>
@@ -2522,6 +2648,39 @@ const cw=document.getElementById('cw'),cvs=document.getElementById('canvas'),svg
 function applyTx(){cvs.style.transform=`translate(${cx}px,${cy}px) scale(${zoom})`;document.getElementById('zoom-lbl').textContent=Math.round(zoom*100)+'%';drawConns()}
 function s2c(sx,sy){const r=cw.getBoundingClientRect();return{x:(sx-r.left-cx)/zoom,y:(sy-r.top-cy)/zoom}}
 cw.addEventListener('wheel',e=>{
+  // 0) 스크롤 박스 영역 히트테스트 — Ctrl 안 눌렀고 스크롤 영역 안이면 영역 스크롤
+  //    (문서 노드가 region과 DOM 형제라서 이벤트가 region까지 bubble 안 되므로 여기서 처리)
+  if(!e.ctrlKey){
+    const cp = s2c(e.clientX, e.clientY);
+    const hit = canvasEls.find(ce =>
+      ce.type==='region' && ce.scrollable &&
+      cp.x >= ce.x && cp.x <= ce.x + ce.w &&
+      cp.y >= ce.y && cp.y <= ce.y + ce.h
+    );
+    if(hit){
+      e.preventDefault(); e.stopPropagation();
+      // _regionOnWheel과 동일 로직
+      const ry = hit.y, rB = hit.y + hit.h;
+      let minY = Infinity, maxY = -Infinity;
+      (hit.memberIds||[]).forEach(id=>{
+        const n = nodes.find(x=>x.id===id);
+        if(!n) return;
+        if(n.y < minY) minY = n.y;
+        if((n.y + (n.h||240)) > maxY) maxY = n.y + (n.h||240);
+      });
+      if(!isFinite(minY)){ minY = ry; maxY = rB; }
+      const maxOff = Math.max(0, (maxY - ry) - hit.h);
+      const minOff = Math.min(0, (minY - ry));
+      // 줌 수준에 따라 스크롤 속도 조정 (줌 아웃되면 더 빠르게, 인되면 더 느리게 자연스러움)
+      const delta = e.deltaY / Math.max(zoom, 0.3);
+      const newOff = Math.max(minOff, Math.min(maxOff, (hit.scrollOffsetY||0) + delta));
+      if(newOff !== hit.scrollOffsetY){
+        hit.scrollOffsetY = newOff;
+        _regionApplyScroll(hit);
+      }
+      return;
+    }
+  }
   // 선택된 연결선이 있으면 → 곡률 조정
   if(selectedConn){
     e.preventDefault();
@@ -2549,14 +2708,23 @@ cw.addEventListener('mousedown',e=>{
       // Ctrl+좌클릭 드래그: 선택 박스
       isSelBox=true;const wr=cw.getBoundingClientRect();selBSX=e.clientX-wr.left;selBSY=e.clientY-wr.top;
       const sb=document.getElementById('sel-box');sb.style.display='block';sb.style.left=selBSX+'px';sb.style.top=selBSY+'px';sb.style.width='0';sb.style.height='0';
-      nodes.forEach(n=>{n.el.classList.remove('sel','multi-sel')});selectedNode=null;multiSel=[];closeSb();
+      _deselectAll();
     } else if(e.button===0||e.button===1){
       // 좌클릭/중간: 팬 (기본)
       isPan=true;panSX=e.clientX-cx;panSY=e.clientY-cy;cw.classList.add('grabbing');
-      if(!e.ctrlKey){nodes.forEach(n=>{n.el.classList.remove('sel','multi-sel')});selectedNode=null;multiSel=[];selectedConn=null;closeSb();drawConns()}
+      if(!e.ctrlKey)_deselectAll();
     }
   }
 });
+
+// 노드·CE·연결 모든 선택 해제 + 사이드바 닫기
+function _deselectAll(){
+  nodes.forEach(n=>{n.el.classList.remove('sel','multi-sel')});
+  canvasEls.forEach(c=>c.el.classList.remove('sel'));
+  selectedNode=null;selectedCe=null;multiSel=[];selectedConn=null;
+  closeSb();
+  drawConns();
+}
 
 window.addEventListener('mousemove',e=>{
   if(isPan){cx=e.clientX-panSX;cy=e.clientY-panSY;applyTx()}
@@ -2583,8 +2751,8 @@ window.addEventListener('mousemove',e=>{
   if(isSelBox){const sb=document.getElementById('sel-box');const wr=cw.getBoundingClientRect();const mx=e.clientX-wr.left,my=e.clientY-wr.top;const x=Math.min(selBSX,mx),y=Math.min(selBSY,my);sb.style.left=x+'px';sb.style.top=y+'px';sb.style.width=Math.abs(mx-selBSX)+'px';sb.style.height=Math.abs(my-selBSY)+'px'}
   if(isWpDrag&&wpDrag){const cp=s2c(e.clientX,e.clientY);wpDrag.conn.waypoints[wpDrag.idx].x=cp.x;wpDrag.conn.waypoints[wpDrag.idx].y=cp.y;drawConns()}
   if(ceCreateEl){const cp=s2c(e.clientX,e.clientY);const w=cp.x-ceCreateSX,h=cp.y-ceCreateSY;ceCreateEl.style.left=Math.min(ceCreateSX,cp.x)+'px';ceCreateEl.style.top=Math.min(ceCreateSY,cp.y)+'px';ceCreateEl.style.width=Math.abs(w)+'px';ceCreateEl.style.height=Math.abs(h)+'px'}
-  if(isCeDrag&&ceDragNd){const cp=s2c(e.clientX,e.clientY);ceDragNd.x=cp.x-ceDragOX;ceDragNd.y=cp.y-ceDragOY;ceDragNd.el.style.left=ceDragNd.x+'px';ceDragNd.el.style.top=ceDragNd.y+'px';drawConns()}
-  if(isCeResize&&ceResNd){const w=Math.max(20,ceResSW+(e.clientX-ceResSX)/zoom),h=Math.max(20,ceResSH+(e.clientY-ceResSY)/zoom);ceResNd.w=w;ceResNd.h=h;ceResNd.el.style.width=w+'px';ceResNd.el.style.height=h+'px';drawConns()}
+  if(isCeDrag&&ceDragNd){const cp=s2c(e.clientX,e.clientY);const _oldX=ceDragNd.x,_oldY=ceDragNd.y;ceDragNd.x=cp.x-ceDragOX;ceDragNd.y=cp.y-ceDragOY;ceDragNd.el.style.left=ceDragNd.x+'px';ceDragNd.el.style.top=ceDragNd.y+'px';if(ceDragNd.type==='region'&&ceDragNd.scrollable){_regionShiftMembers(ceDragNd, ceDragNd.x-_oldX, ceDragNd.y-_oldY);}drawConns()}
+  if(isCeResize&&ceResNd){const w=Math.max(20,ceResSW+(e.clientX-ceResSX)/zoom),h=Math.max(20,ceResSH+(e.clientY-ceResSY)/zoom);ceResNd.w=w;ceResNd.h=h;ceResNd.el.style.width=w+'px';ceResNd.el.style.height=h+'px';if(ceResNd.type==='region'&&ceResNd.scrollable){_regionApplyScroll(ceResNd);}drawConns()}
   // 가까운 포트 강조 (드래그 중이 아닐 때만)
   if(!isDrag&&!isResize&&!isCeDrag&&!isCeResize){
     let nearest=null,minDist=120;
@@ -2969,7 +3137,11 @@ function mkNode(opts={}){
   // 타입별 기본 크기: Document 는 A4 비율(600×720), 나머지는 280×240
   const defW=type==='document'?600:280;
   const defH=type==='document'?720:240;
-  const n={id:opts.id||('n'+Date.now()+'_'+ncnt),name:opts.name||(ti.label+ncnt),type,
+  // Document 노드는 파일명이 있으면 파일명 기반 이름, 아니면 레이블+번호
+  const _defaultName = (type==='document' && opts.doc && opts.doc.filename)
+    ? opts.doc.filename
+    : (ti.label+ncnt);
+  const n={id:opts.id||('n'+Date.now()+'_'+ncnt),name:opts.name||_defaultName,type,
     x:opts.x??100,y:opts.y??100,w:opts.w||defW,h:opts.h||defH,
     paneIndex:opts.paneIndex||null,collapsed:opts.collapsed||false,textSize:opts.textSize||1,chatOnly:opts.chatOnly??(window._defaultChatOnly??true),
     systemPrompt:opts.systemPrompt||'',images:opts.images||[],customImage:opts.customImage||'',
@@ -3027,8 +3199,16 @@ function buildDom(n){
     <div class="nd-resize"></div>`;
   // EVENTS
   const hd=d.querySelector('.nd-hd');
-  function startDrag(e){e.stopPropagation();isDrag=true;dragNd=n;const p=s2c(e.clientX,e.clientY);dragOX=p.x-n.x;dragOY=p.y-n.y;
-    if(e.ctrlKey){toggleMultiSel(n)}else if(!multiSel.includes(n)){selNode(n)}}
+  function startDrag(e){
+    // 스크롤 박스 멤버 노드는 드래그 잠금 (영역 모드 OFF 후 이동하도록 안내)
+    if(_nodeScrollRegion(n)){
+      e.stopPropagation();
+      showCopyToast('🔒 스크롤 박스 멤버는 이동 잠금 — 영역의 🔭 모드를 끄고 이동하세요');
+      return;
+    }
+    e.stopPropagation();isDrag=true;dragNd=n;const p=s2c(e.clientX,e.clientY);dragOX=p.x-n.x;dragOY=p.y-n.y;
+    if(e.ctrlKey){toggleMultiSel(n)}else if(!multiSel.includes(n)){selNode(n)}
+  }
   if(hd){hd.addEventListener('mousedown',e=>{if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT')return;startDrag(e)});
     hd.addEventListener('dblclick',e=>{e.stopPropagation();togCollapse(n)})}
   const cb=d.querySelector('.coll-body');
@@ -3199,7 +3379,10 @@ function deleteSelectedNode(){
   // confirm 제거 — Ctrl+Z 로 되돌리기 가능
   delNode(selectedNode.id);
 }
-function delNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i].el.remove();nodes.splice(i,1);conns=conns.filter(c=>c.sid!==id&&c.tid!==id);drawConns();if(selectedNode&&selectedNode.id===id){selectedNode=null;closeSb()}autoSave()}
+function delNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i].el.remove();nodes.splice(i,1);conns=conns.filter(c=>c.sid!==id&&c.tid!==id);
+  // 스크롤 박스 멤버에서도 제거
+  canvasEls.forEach(ce=>{if(ce.type==='region'&&ce.scrollable&&ce.memberIds&&ce.memberIds.includes(id)){ce.memberIds=ce.memberIds.filter(x=>x!==id);_regionApplyScroll(ce);}});
+  drawConns();if(selectedNode&&selectedNode.id===id){selectedNode=null;closeSb()}autoSave()}
 
 // ═══ CONTEXT MENU ═══
 cw.addEventListener('contextmenu',e=>{e.preventDefault();if(e.target===cw||e.target===cvs||e.target.tagName==='svg')showCtx(e.clientX,e.clientY,'canvas')});
@@ -3222,6 +3405,7 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item" onclick="document.getElementById('ce-img-input').click()">🖼️ 이미지 추가</div>
       <div class="ctx-item" onclick="promptAddVideoCe(${ctxPos.x},${ctxPos.y})" style="color:#22d3ee">🎬 동영상 추가 (URL)</div>
       <div class="ctx-item" onclick="addCeChecklist(${ctxPos.x},${ctxPos.y})" style="color:#facc15">☑ 체크리스트 (할 일)</div>
+      <div class="ctx-item" onclick="addCeMinitable(${ctxPos.x},${ctxPos.y})" style="color:#a78bfa">📋 표 메모 (장식 테이블)</div>
       <div class="ctx-sep"></div>
       <div class="ctx-item" onclick="arrangeAll()">🔲 정렬 즉시 적용</div>
       <div style="padding:8px 14px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
@@ -3932,6 +4116,7 @@ function mkCe(opts={}){
     loop:opts.loop!==undefined?opts.loop:true,
     autoplay:opts.autoplay!==undefined?opts.autoplay:true,
     bookmarks:Array.isArray(opts.bookmarks)?opts.bookmarks:[],
+    subtitlePath:opts.subtitlePath||null,
     // region/text 세부 스타일
     labelColor:opts.labelColor,
     _alpha:opts._alpha,
@@ -3942,6 +4127,16 @@ function mkCe(opts={}){
     // 체크리스트 CE
     items:Array.isArray(opts.items)?opts.items:(opts.type==='checklist'?[{text:'할 일 1',checked:false}]:undefined),
     checkStyle:opts.checkStyle||null,
+    // 표 메모 CE (minitable)
+    table:opts.table||null,
+    // 스크롤 박스 (region 전용) — 영역 내부 노드들을 휠 스크롤로 상하 이동
+    scrollable:opts.scrollable||false,
+    scrollOffsetY:opts.scrollOffsetY||0,
+    memberIds:Array.isArray(opts.memberIds)?opts.memberIds:[],
+    // 영역 실행 오케스트레이션 (region 전용)
+    execOrder:(typeof opts.execOrder==='number')?opts.execOrder:null,
+    execLabel:opts.execLabel||'',
+    execMode:opts.execMode||'parallel',  // 'parallel'|'sequential'
     el:null
   };
   ce.el=buildCeDom(ce);cvs.appendChild(ce.el);canvasEls.push(ce);
@@ -3968,6 +4163,19 @@ function buildCeDom(ce){
     d.style.background=ce.color;
     const labelColor=ce.labelColor||'#ffffff';
     d.innerHTML=`<input class="ce-label" value="${ce.label||''}" placeholder="영역 이름" style="font-size:${ce.fontSize}px;color:${labelColor}"><button class="ce-style-btn" title="라벨 크기/색상" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-del">×</div>`;
+    // 실행 순서 뱃지 (있으면 표시 — setTimeout으로 el 할당 이후 렌더)
+    if(typeof ce.execOrder==='number'){
+      setTimeout(()=>_regionRefreshExecBadge(ce), 0);
+    }
+    if(ce.scrollable){
+      d.classList.add('region-scroll');
+      const badge=document.createElement('div');
+      badge.className='region-scroll-badge';
+      badge.textContent='🔭 스크롤';
+      badge.style.cssText='position:absolute;right:28px;top:4px;padding:2px 8px;background:rgba(139,92,246,.5);color:#fff;border-radius:3px;font-size:10px;font-weight:600;pointer-events:none;z-index:3';
+      d.appendChild(badge);
+      // wheel 이벤트는 renderCeEvents 아래에서 바인딩
+    }
   } else if(ce.type==='text'){
     // 스타일 적용 — 사용자가 지정한 텍스트색·배경·테두리 색/두께
     const tc=ce.textColor||'#ffffff';
@@ -3994,6 +4202,34 @@ function buildCeDom(ce){
         <button class="ce-style-btn cl-style-btn" data-ce-style title="스타일" style="position:static;width:auto;height:auto;padding:3px 10px;border-radius:3px;background:rgba(34,197,94,.2);color:#a3e635;border:1px solid rgba(34,197,94,.3);font-weight:600;display:block">🎨</button>
       </div>
       <div class="ce-resize"></div><div class="ce-del">×</div>`;
+  } else if(ce.type==='minitable'){
+    const tbl=ce.table||{rows:[['','']], style:{}};
+    const s=tbl.style||{};
+    const bg=s.bgColor||'rgba(20,20,30,.92)';
+    const headerBg=s.headerBgColor||'rgba(94,129,172,.25)';
+    const textColor=s.textColor||'#e0e0e0';
+    const borderColor=s.borderColor||'rgba(167,139,250,.55)';
+    const bw=s.borderWidth!=null?s.borderWidth:1;
+    const bs=s.borderStyle||'solid';
+    const fs=s.fontSize||12;
+    const align=s.cellAlign||'left';
+    const pad=s.cellPadding||6;
+    d.style.cssText+=`;background:${bg};border:${bw}px ${bs} ${borderColor};border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.4);overflow:hidden`;
+    d.innerHTML=`<div style="display:flex;align-items:center;gap:2px;padding:3px 4px;background:rgba(0,0,0,.3);border-bottom:1px solid ${borderColor}80;font-size:10px">
+        <span style="flex:1;color:${textColor};opacity:.7;font-weight:600;padding-left:4px">📋 표 메모</span>
+        <button data-mt-addrow title="행 추가" style="background:none;border:none;color:${textColor};cursor:pointer;padding:2px 6px;opacity:.7">＋행</button>
+        <button data-mt-addcol title="열 추가" style="background:none;border:none;color:${textColor};cursor:pointer;padding:2px 6px;opacity:.7">＋열</button>
+        <button class="ce-style-btn" data-ce-style title="스타일" style="position:static;width:auto;height:auto;padding:2px 8px;border-radius:3px;background:rgba(34,197,94,.2);color:#a3e635;border:1px solid rgba(34,197,94,.3);font-weight:600;display:block;font-size:10px">🎨</button>
+      </div>
+      <div data-mt-body style="flex:1;overflow:auto"></div>
+      <div class="ce-resize"></div><div class="ce-del">×</div>`;
+    d.style.display='flex';
+    d.style.flexDirection='column';
+    // 임시 el 설정 후 렌더
+    const _oldEl=ce.el;
+    ce.el=d;
+    _renderMinitable(ce);
+    ce.el=_oldEl;
   } else if(ce.type==='image'){
     d.innerHTML=`<img src="${ce.src}" draggable="false">
       <div class="ce-mode-badge">${ce.nodeType?ce.nodeType.toUpperCase():''}</div>
@@ -4023,9 +4259,11 @@ function buildCeDom(ce){
       <div class="ce-bookmarks" data-bookmarks></div>
       <div class="ce-video-badge">${kind==='embed' ? (ce.videoProvider||'EMBED').toUpperCase() : 'VIDEO'}</div>
       <div class="ce-video-controls">
-        ${kind==='direct' ? `<button class="ce-v-btn" data-v-act="play" title="재생/정지">▶</button><button class="ce-v-btn" data-v-act="mute" title="음소거 토글">${ce.muted?'🔇':'🔊'}</button><button class="ce-v-btn" data-v-act="lock" title="이동 모드 ↔ 네이티브 컨트롤 모드 전환">${ce._unlocked?'🔓':'🔒'}</button><button class="ce-v-btn" data-v-act="capture" title="현재 프레임 캡처 → 이미지 노드로">📷</button>` : ''}
+        ${kind==='direct' ? `<button class="ce-v-btn" data-v-act="play" title="재생/정지">▶</button><button class="ce-v-btn" data-v-act="mute" title="음소거 토글">${ce.muted?'🔇':'🔊'}</button><button class="ce-v-btn" data-v-act="capture" title="현재 프레임 캡처 → 이미지 노드로">📷</button>` : ''}
         ${(kind==='embed' && ce.videoProvider==='youtube') ? `<button class="ce-v-btn" data-v-act="capture-yt" title="서버에서 현재 시각 프레임 추출 (yt-dlp+ffmpeg, 5~15초)">📷</button>` : ''}
+        <button class="ce-v-btn" data-v-act="lock" title="이동 모드 ↔ 네이티브 컨트롤 모드 (시크바·볼륨 사용)">${ce._unlocked?'🔓':'🔒'}</button>
         ${(kind==='direct' || (kind==='embed' && ce.videoProvider==='youtube')) ? `<button class="ce-v-btn" data-v-act="bookmark" title="현재 시각 즐겨찾기 추가 (🚩)">🚩</button>` : ''}
+        <button class="ce-v-btn" data-v-act="subtitle" title="자막 생성 (YT native → Whisper)">📝</button>
         ${kind==='embed' ? `<button class="ce-v-btn" data-v-act="download-local" title="로컬에 다운로드 (30초~1분) → 캔버스에서 직접 스크러빙·볼륨·캡처 가능">📥</button>` : ''}
         <button class="ce-v-btn" data-v-act="loop" title="반복 토글">${ce.loop?'🔁':'➡'}</button>
         <button class="ce-v-btn" data-v-act="preview" title="전체화면 프리뷰">⤢</button>
@@ -4058,53 +4296,8 @@ function buildCeDom(ce){
         ev.stopPropagation();ev.preventDefault();
         _openCeVideoFullscreen(ce);
       });
-      // 호버 일시정지 — direct 는 <video> 엘리먼트, YouTube 임베드는 IFrame API 로
-      overlay.addEventListener('mouseenter',()=>{
-        // 🔓 제어 모드면 호버 정지 스킵 (사용자가 직접 컨트롤)
-        if(ce._unlocked)return;
-        if(kind==='direct'){
-          const vid=d.querySelector('video.ce-video');
-          if(!vid)return;
-          if(!vid.paused){ce._wasPlaying=true;vid.pause();}
-          else ce._wasPlaying=false;
-          d.classList.add('hover-paused');
-        } else if(kind==='embed' && ce.videoProvider==='youtube'){
-          if(ce._ytReady && ce._ytPlayer){
-            try{
-              const state = ce._ytPlayer.getPlayerState ? ce._ytPlayer.getPlayerState() : -1;
-              // YT.PlayerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
-              if(state===1 || state===3){ce._wasPlaying=true;ce._ytPlayer.pauseVideo();}
-              else ce._wasPlaying=false;
-              d.classList.add('hover-paused');
-            }catch(e){}
-          } else {
-            // 아직 API 준비 안 됨 — 폴백 postMessage
-            const ifr=d.querySelector('iframe.ce-video');
-            if(ifr && ifr.contentWindow){
-              try{ifr.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}','*');}catch(e){}
-              d.classList.add('hover-paused');
-            }
-          }
-        }
-      });
-      overlay.addEventListener('mouseleave',()=>{
-        if(ce._unlocked)return;
-        d.classList.remove('hover-paused');
-        if(isCeDrag)return;
-        if(kind==='direct'){
-          const vid=d.querySelector('video.ce-video');
-          if(vid && ce._wasPlaying)vid.play().catch(()=>{});
-        } else if(kind==='embed' && ce.videoProvider==='youtube'){
-          if(ce._ytReady && ce._ytPlayer && ce._wasPlaying){
-            try{ce._ytPlayer.playVideo();}catch(e){}
-          } else if(ce._wasPlaying){
-            const ifr=d.querySelector('iframe.ce-video');
-            if(ifr && ifr.contentWindow){
-              try{ifr.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}','*');}catch(e){}
-            }
-          }
-        }
-      });
+      // 호버 일시정지 기능은 제거됨 — 마우스 이동할 때마다 멈춰서 거슬렸음
+      // 재생/정지는 컨트롤바 버튼이나 🔓 모드의 네이티브 컨트롤로 수동 제어
     }
     // YouTube 임베드면 IFrame API 연결 (비동기 — 준비되면 호버 정지·캡처 정확히 작동)
     if(kind==='embed' && ce.videoProvider==='youtube'){
@@ -4169,6 +4362,20 @@ function buildCeDom(ce){
     inp.addEventListener('input',()=>{ce.label=inp.value;autoSave()});
     inp.addEventListener('mousedown',e=>e.stopPropagation());
     inp.addEventListener('wheel',e=>{if(e.ctrlKey){e.preventDefault();ce.fontSize=Math.max(8,Math.min(48,ce.fontSize+(e.deltaY>0?-2:2)));inp.style.fontSize=ce.fontSize+'px';autoSave()}});
+    // 스크롤 박스 모드: 휠 이벤트로 멤버 이동
+    if(ce.scrollable && !ce._scrollWheelBound){
+      d.addEventListener('wheel', _regionOnWheel, {passive:false});
+      ce._scrollWheelBound = true;
+    }
+    // 순서 지정 모드: 영역 클릭 시 다음 번호 부여 (이미 번호 있으면 지움+재정렬)
+    d.addEventListener('click',e=>{
+      if(!_execOrderMode) return;
+      // 라벨 편집 중이면 무시
+      if(e.target.closest('.ce-label, .ce-del, .ce-resize, .ce-style-btn, .region-exec-badge')) return;
+      e.stopPropagation(); e.preventDefault();
+      if(typeof ce.execOrder==='number'){ _regionClearOrder(ce); }
+      else { _regionAssignNextOrder(ce); }
+    });
   }
   if(ce.type==='text'){
     const body=d.querySelector('.ce-text-body');
@@ -4178,9 +4385,37 @@ function buildCeDom(ce){
     }
     d.addEventListener('wheel',e=>{if(e.ctrlKey){e.preventDefault();ce.fontSize=Math.max(8,Math.min(96,ce.fontSize+(e.deltaY>0?-2:2)));d.style.fontSize=ce.fontSize+'px';autoSave()}});
   }
+  if(ce.type==='minitable'){
+    const addRowBtn=d.querySelector('[data-mt-addrow]');
+    const addColBtn=d.querySelector('[data-mt-addcol]');
+    if(addRowBtn){
+      addRowBtn.addEventListener('mousedown',e=>e.stopPropagation());
+      addRowBtn.addEventListener('click',e=>{
+        e.stopPropagation();e.preventDefault();
+        const t=ce.table;
+        const cols=(t.rows[0]||[]).length||1;
+        t.rows.push(new Array(cols).fill(''));
+        _renderMinitable(ce);autoSave();
+      });
+    }
+    if(addColBtn){
+      addColBtn.addEventListener('mousedown',e=>e.stopPropagation());
+      addColBtn.addEventListener('click',e=>{
+        e.stopPropagation();e.preventDefault();
+        const t=ce.table;
+        t.rows.forEach(r=>r.push(''));
+        if(!t.colWidths)t.colWidths=[];
+        t.colWidths.push(100);
+        _renderMinitable(ce);autoSave();
+      });
+    }
+  }
   if(ce.type==='checklist'){
-    // 항목 렌더
+    // buildCeDom 내부에선 ce.el 이 아직 null — 임시로 d 를 붙여서 렌더 후 복원
+    const _oldEl=ce.el;
+    ce.el=d;
     _renderChecklistItems(ce);
+    ce.el=_oldEl;
     // 제목 편집
     const titleEl=d.querySelector('[data-cl-title]');
     if(titleEl){
@@ -4360,7 +4595,24 @@ async function ceImgConnectDrag(){
 }
 function delCe(id){
   const i=canvasEls.findIndex(c=>c.id===id);if(i<0)return;
-  canvasEls[i].el.remove();canvasEls.splice(i,1);
+  const _ce=canvasEls[i];
+  // 스크롤 박스 region 삭제 시 멤버 노드 DOM 복원
+  if(_ce && _ce.type==='region' && _ce.scrollable){
+    (_ce.memberIds||[]).forEach(mid=>{
+      const n=nodes.find(x=>x.id===mid);
+      if(n&&n.el){n.el.style.top=n.y+'px';n.el.style.clipPath='';n.el.style.visibility='';}
+    });
+  }
+  const _hadExecOrder = _ce && _ce.type==='region' && typeof _ce.execOrder==='number';
+  _ce.el.remove();canvasEls.splice(i,1);
+  // 삭제된 region에 순서가 있었으면 나머지 영역들 번호를 연속되게 재정렬
+  if(_hadExecOrder){
+    try{
+      const rest = _orderedRegions();
+      rest.forEach((r,idx)=>{ r.execOrder = idx+1; _regionRefreshExecBadge(r); });
+      execProgressRefresh();
+    }catch(e){}
+  }
   if(selectedCe&&selectedCe.id===id)selectedCe=null;
   // 이 요소를 src/tgt 로 쓰는 연결선 제거 (고아 라인 방지)
   const before=conns.length;
@@ -4810,9 +5062,14 @@ const engine={
     t=await resolveMemoPlaceholders(t);
     nd.inputResolved=t;return t;
   },
-  async executeNode(nd, retryCount=0){
+  async executeNode(nd, retryCount=0, memberSet=null){
     this.running=true;
-    if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
+    // memberSet: Set<id> 이면 downstream 추적을 이 집합에 제한 (영역 실행용)
+    const _chain = (dn)=>{
+      if(memberSet && !memberSet.has(dn.id)) return;
+      if(this.canExec(dn.id)) this.executeNode(dn, 0, memberSet);
+    };
+    if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(_chain);return}
     if(nd.type==='downloader'){
       // 프로젝트 미저장 차단 (파일 미아 방지)
       if(!workflowId){
@@ -4875,16 +5132,16 @@ const engine={
       const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
       autoSave();
       if(selectedNode===nd)dlRenderRows(nd);
-      if(!errCount)this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
+      if(!errCount)this.downstream(nd.id).forEach(_chain);
       return;
     }
-    if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});return}
+    if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(_chain);return}
     if(nd.type==='sheet'){
       sheetEnsureNodeData(nd);
       nd.outputCapture=sheetFormatFor(nd, nd.sheet.outputFormat||'markdown');
       this.setSt(nd,'complete');
       if(selectedNode===nd){const out=document.getElementById('sb-output');if(out)out.textContent=nd.outputCapture||'';}
-      this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
+      this.downstream(nd.id).forEach(_chain);
       return;
     }
     if(nd.type==='document'){
@@ -4929,7 +5186,7 @@ const engine={
           nd.outputCapture = text;
           this.setSt(nd,'complete');
           if(selectedNode===nd){const out=document.getElementById('sb-output');if(out)out.textContent=nd.outputCapture;}
-          this.downstream(nd.id).forEach(dn=>{if(this.canExec(dn.id))this.executeNode(dn)});
+          this.downstream(nd.id).forEach(_chain);
           autoSave();
         }catch(e){
           nd.outputCapture='❌ '+e.message;
@@ -5004,7 +5261,7 @@ const engine={
         nd.history.push({timestamp:new Date().toISOString(),input:nd.inputResolved,output});
         this.setSt(nd,'complete');autoSave();
         // check token limits on downstream nodes (their resolved input may have changed)
-        this.downstream(nd.id).forEach(dn=>{checkTokenLimit(dn);if(this.canExec(dn.id))this.executeNode(dn)});
+        this.downstream(nd.id).forEach(dn=>{checkTokenLimit(dn); _chain(dn);});
       }
     },3000);
     this.polls.set(nd.id,pid);
@@ -5075,12 +5332,23 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
             loop:c.type==='video'?!!c.loop:undefined,
             autoplay:c.type==='video'?!!c.autoplay:undefined,
             bookmarks:(c.bookmarks||[]).map(b=>({t:b.t,label:b.label||''})),
+            subtitlePath:c.subtitlePath||undefined,
             // region/text 스타일 세부
             labelColor:c.labelColor||undefined, _alpha:c._alpha,
             textColor:c.textColor||undefined, bgColor:c.bgColor||undefined,
             borderColor:c.borderColor||undefined, borderWidth:(c.borderWidth!=null?c.borderWidth:undefined),
             // 체크리스트
-            items:(c.items||undefined), checkStyle:c.checkStyle||undefined};
+            items:(c.items||undefined), checkStyle:c.checkStyle||undefined,
+            // 표 메모
+            table:(c.table||undefined),
+            // 스크롤 박스 (region 전용)
+            scrollable:c.scrollable?true:undefined,
+            scrollOffsetY:c.scrollable?(c.scrollOffsetY||0):undefined,
+            memberIds:(c.scrollable&&c.memberIds&&c.memberIds.length)?c.memberIds.slice():undefined,
+            // 영역 실행 오케스트레이션 (region 전용)
+            execOrder:(typeof c.execOrder==='number')?c.execOrder:undefined,
+            execLabel:c.execLabel||undefined,
+            execMode:(c.execMode && c.execMode!=='parallel')?c.execMode:undefined};
   })}}
 let _saveTimer=null;
 let undoStack=[],redoStack=[],lastSavedState=null;
@@ -5148,6 +5416,14 @@ function loadState(st){
   (st.nodes||[]).forEach(nd=>mkNode({...nd,collapsed:true}));
   conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l')}));
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
+  // 스크롤 박스 region 복원: 모든 노드 로드 완료 후 스크롤 상태 적용
+  try{
+    canvasEls.forEach(ce=>{
+      if(ce.type==='region' && ce.scrollable){
+        _regionApplyScroll(ce);
+      }
+    });
+  }catch(e){console.warn('[scroll-region] restore 실패',e);}
   applyTx();drawConns();
   checkAllTokenLimits();
   // Sheet/Document 미니 뷰 렌더
@@ -5724,6 +6000,7 @@ function _fpCreateNodeFromFile(el, x, y){
     Promise.resolve(n).then(nd=>{
       if(nd && nd.doc){
         nd.doc.filename=name;
+        _docSyncNodeNameToFilename(nd);
         if(isRef){
           // 파일 카드 — 작은 크기로 접음
           nd.collapsed=true;
@@ -6102,7 +6379,7 @@ async function dlPreviewCapture(){
 }
 
 function _dlCapCreateCe(src, srcPath, label, aspect){
-  // 캔버스 중앙에 이미지 CE 생성. 모달은 닫지 않음 (여러 컷 연속 캡처 가능).
+  // 캔버스 중앙에 이미지 CE 생성 + 모달 닫고 해당 이미지로 포커스 이동
   const c=s2c(cw.clientWidth/2, cw.clientHeight/2);
   const w=Math.min(340, Math.max(200, cw.clientWidth*0.25));
   const h=Math.round(w/(aspect||16/9));
@@ -6113,6 +6390,15 @@ function _dlCapCreateCe(src, srcPath, label, aspect){
     nodeName: `📷 ${label}`});
   if(srcPath)ce.srcPath=srcPath;
   autoSave();
+  // 프리뷰 모달 자동 닫기 + 새 이미지 선택해 강조
+  setTimeout(()=>{
+    dlClosePreview();
+    selCe(ce);
+    // 캔버스 팬해서 캡처된 이미지 보이게
+    const cx0=cw.clientWidth/2-(ce.x+ce.w/2)*zoom;
+    const cy0=cw.clientHeight/2-(ce.y+ce.h/2)*zoom;
+    cx=cx0;cy=cy0;applyTx();
+  }, 200);
 }
 
 // 키보드 탐색
@@ -6233,22 +6519,29 @@ async function docInlineMount(n){
     const bin=atob(r.data);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
     state.buffer=arr.buffer;
     state.mtime=r.mtime;
+    state.dirty=false;
+    state._suppressAutoSave=true; // 엔진 초기 로드의 change 이벤트로 인한 false-dirty 무시
     n.doc.lastSeenMtime=r.mtime;
     const ext=(n.doc.filename.split('.').pop()||'').toLowerCase();
     state.engineKind=_docEngineForExt(ext);
     await docInlineRender(state, holder);
+    // 엔진 초기화 완료 후 800ms 뒤 실제 편집 감지 활성화
+    setTimeout(()=>{ if(_DOC_INLINE.get(n.id)===state){state._suppressAutoSave=false;state.dirty=false;_docUpdateStatusInline(n,'loaded');} }, 800);
     _docUpdateStatusInline(n,'loaded');
   }catch(e){
     holder.innerHTML=`<div class="doc-loading" style="color:#fca5a5">❌ ${e.message}</div>`;
   }
 }
 
-function docInlineUnmount(n){
+function docInlineUnmount(n, opts){
   if(!n||!n.el)return;
+  opts = opts || {};
   const state=_DOC_INLINE.get(n.id);
   if(state){
-    if(state.dirty){
-      // 조용히 자동 저장 시도 (실패 시 무시)
+    // opts.skipSave=true 면 자동저장 우회 (리로드/외부리프레시용)
+    // state._suppressAutoSave 는 방금 초기 로드로 인한 false-dirty 무시용
+    if(state.dirty && !opts.skipSave && !state._suppressAutoSave){
+      // 조용히 자동 저장 시도 (실패 시 무시) — 노드 제거/사이드바 전환 시에만 의미
       docInlineSave(n).catch(()=>{});
     }
     // 엔진 정리
@@ -6257,6 +6550,526 @@ function docInlineUnmount(n){
   _DOC_INLINE.delete(n.id);
   const holder=n.el.querySelector('[data-doc-editor]');
   if(holder)holder.innerHTML='';
+}
+
+// 스크롤 위치 캡처: holder 하위의 모든 스크롤 가능 descendant를 트리 순서대로 기록
+function _docCaptureScroll(holder){
+  if(!holder)return [];
+  const snaps=[];
+  const walk = el => {
+    if(!el)return;
+    // 스크롤 가능한 요소만 기록 (overflow 있고 scrollHeight > clientHeight)
+    if(el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2){
+      snaps.push({
+        ratio: el.scrollHeight ? (el.scrollTop / el.scrollHeight) : 0,
+        top: el.scrollTop,
+        ratioX: el.scrollWidth ? (el.scrollLeft / el.scrollWidth) : 0,
+      });
+    }
+    for(const c of el.children) walk(c);
+  };
+  walk(holder);
+  // iframe 내부 (rhwp 계열)도 시도
+  const iframe = holder.querySelector('iframe');
+  if(iframe){
+    try{
+      const doc = iframe.contentDocument;
+      if(doc){
+        const w = iframe.contentWindow;
+        snaps.push({
+          iframe:true,
+          top: (w.scrollY||doc.documentElement.scrollTop||doc.body.scrollTop||0),
+          ratio: (doc.documentElement.scrollHeight ? (w.scrollY||0)/doc.documentElement.scrollHeight : 0),
+        });
+      }
+    }catch(e){} // cross-origin 차단 시 무시
+  }
+  return snaps;
+}
+
+// 스크롤 위치 복원 — 엔진이 렌더 끝날 시간 주고 여러 번 재시도
+function _docRestoreScroll(holder, snaps){
+  if(!holder || !snaps || !snaps.length) return;
+  const applyOnce = () => {
+    let i = 0;
+    const walk = el => {
+      if(!el || i>=snaps.length) return;
+      if(el.scrollHeight > el.clientHeight + 2 || el.scrollWidth > el.clientWidth + 2){
+        const s = snaps[i++];
+        if(s && !s.iframe){
+          // 절대 top 시도 → 범위 벗어나면 비율 기반 폴백
+          const maxTop = el.scrollHeight - el.clientHeight;
+          el.scrollTop = (s.top <= maxTop) ? s.top : Math.round(s.ratio * el.scrollHeight);
+          if(s.ratioX){ el.scrollLeft = Math.round(s.ratioX * el.scrollWidth); }
+        }
+      }
+      for(const c of el.children) walk(c);
+    };
+    walk(holder);
+    // iframe 처리
+    const iframe = holder.querySelector('iframe');
+    const ifs = snaps.filter(s=>s.iframe);
+    if(iframe && ifs.length){
+      try{
+        const w = iframe.contentWindow; const doc = iframe.contentDocument;
+        if(w && doc){
+          const s = ifs[0];
+          const maxTop = doc.documentElement.scrollHeight - doc.documentElement.clientHeight;
+          const target = (s.top <= maxTop) ? s.top : Math.round(s.ratio * doc.documentElement.scrollHeight);
+          w.scrollTo(0, target);
+        }
+      }catch(e){}
+    }
+  };
+  // 엔진 렌더링 타이밍이 불확실해서 3번 재시도 (100/400/900ms)
+  setTimeout(applyOnce, 100);
+  setTimeout(applyOnce, 400);
+  setTimeout(applyOnce, 900);
+}
+
+// 리로드: 사용자가 🔄 버튼 클릭 — 디스크 상태를 강제로 다시 불러옴, 자동저장 안 함
+async function docInlineReload(n){
+  const state=_DOC_INLINE.get(n.id);
+  if(state && state.dirty && !state._suppressAutoSave){
+    if(!confirm('이 노드에 저장되지 않은 변경사항이 있습니다.\n\n저장하지 않고 디스크 최신본으로 다시 불러올까요?\n(확인: 변경사항 버리고 리로드 / 취소: 아무 것도 안 함)')) return;
+  }
+  // 스크롤 위치 캡처 (엔진 destroy 전)
+  const holder = n.el && n.el.querySelector('[data-doc-editor]');
+  const scrollSnaps = _docCaptureScroll(holder);
+  docInlineUnmount(n, {skipSave:true});
+  await docInlineMount(n);
+  // 복원 시도
+  const newHolder = n.el && n.el.querySelector('[data-doc-editor]');
+  _docRestoreScroll(newHolder, scrollSnaps);
+}
+
+// ═══ 스크롤 박스 (region CE 확장) ═══
+// 영역을 그리고 "스크롤 박스 모드"로 켜면, 그 안에 걸친 노드들이 멤버가 되고
+// 영역 안에서 마우스 휠로 멤버들을 상하 이동시켜 볼 수 있음. 모델 좌표(n.x,n.y)는
+// "스크롤 오프셋 0일 때의 위치"를 유지하고, 시각적 위치는 n.y-scrollOffsetY 로 표시.
+
+// 주어진 node가 속한 스크롤 영역 반환 (없으면 null)
+function _nodeScrollRegion(n){
+  if(!n) return null;
+  for(const ce of canvasEls){
+    if(ce && ce.type==='region' && ce.scrollable && (ce.memberIds||[]).includes(n.id)) return ce;
+  }
+  return null;
+}
+
+// 주어진 영역에 "센터가 속한" 노드들 반환
+function _regionFindInsideNodes(ce){
+  if(!ce || ce.type!=='region') return [];
+  const rx=ce.x, ry=ce.y, rR=ce.x+ce.w, rB=ce.y+ce.h;
+  return nodes.filter(n=>{
+    const cx=n.x+(n.w||280)/2, cy=n.y+(n.h||240)/2;
+    return cx>=rx && cx<=rR && cy>=ry && cy<=rB;
+  });
+}
+
+// 멤버 노드의 시각적 위치/클리핑 적용
+function _regionApplyScroll(ce){
+  if(!ce || !ce.scrollable) return;
+  const off = ce.scrollOffsetY||0;
+  const rx=ce.x, ry=ce.y, rR=ce.x+ce.w, rB=ce.y+ce.h;
+  (ce.memberIds||[]).forEach(id=>{
+    const n = nodes.find(x=>x.id===id);
+    if(!n || !n.el) return;
+    const visY = n.y - off;
+    n.el.style.top = visY + 'px';
+    // 영역 경계에 클리핑 — 노드 box 좌표 기준으로 inset 계산
+    const nL=n.x, nT=visY, nR=n.x+(n.w||280), nB=visY+(n.h||240);
+    if(nR<=rx || nL>=rR || nB<=ry || nT>=rB){
+      n.el.style.visibility='hidden';
+      n.el.style.clipPath='';
+    } else {
+      n.el.style.visibility='';
+      const topIn = Math.max(0, ry - nT);
+      const leftIn = Math.max(0, rx - nL);
+      const bottomIn = Math.max(0, nB - rB);
+      const rightIn = Math.max(0, nR - rR);
+      n.el.style.clipPath = `inset(${topIn}px ${rightIn}px ${bottomIn}px ${leftIn}px)`;
+    }
+  });
+  drawConns();
+}
+
+// 스크롤 박스 모드 켜기 — 영역 내부 노드를 멤버로 캡처
+function regionEnableScroll(ce){
+  if(!ce || ce.type!=='region') return;
+  const inside = _regionFindInsideNodes(ce);
+  if(inside.length===0){
+    if(!confirm('이 영역 안에 노드가 없습니다. 그래도 스크롤 박스 모드를 켤까요?\n(나중에 영역을 이동/확장해서 노드들을 담으세요)')) return;
+  }
+  ce.scrollable = true;
+  ce.scrollOffsetY = 0;
+  ce.memberIds = inside.map(n=>n.id);
+  ce.el.classList.add('region-scroll');
+  // 영역 위에 스크롤 배지
+  let badge = ce.el.querySelector('.region-scroll-badge');
+  if(!badge){
+    badge = document.createElement('div');
+    badge.className='region-scroll-badge';
+    badge.textContent='🔭 스크롤';
+    badge.style.cssText='position:absolute;right:28px;top:4px;padding:2px 8px;background:rgba(139,92,246,.5);color:#fff;border-radius:3px;font-size:10px;font-weight:600;pointer-events:none;z-index:3';
+    ce.el.appendChild(badge);
+  }
+  // 휠 이벤트 바인딩 (이미 있으면 중복 방지)
+  if(!ce._scrollWheelBound){
+    ce.el.addEventListener('wheel', _regionOnWheel, {passive:false});
+    ce._scrollWheelBound = true;
+  }
+  _regionApplyScroll(ce);
+  autoSave();
+  showCopyToast(`🔭 스크롤 박스 모드 ON · 멤버 ${inside.length}개`);
+}
+
+// 스크롤 박스 모드 끄기 — 멤버 노드들의 DOM 상태 복원
+function regionDisableScroll(ce){
+  if(!ce || !ce.scrollable) return;
+  (ce.memberIds||[]).forEach(id=>{
+    const n = nodes.find(x=>x.id===id);
+    if(!n || !n.el) return;
+    n.el.style.top = n.y + 'px';
+    n.el.style.clipPath = '';
+    n.el.style.visibility = '';
+  });
+  ce.scrollable = false;
+  ce.scrollOffsetY = 0;
+  ce.memberIds = [];
+  ce.el.classList.remove('region-scroll');
+  const badge = ce.el.querySelector('.region-scroll-badge');
+  if(badge) badge.remove();
+  drawConns();
+  autoSave();
+  showCopyToast('🔭 스크롤 박스 모드 OFF');
+}
+
+// 휠 이벤트 핸들러 — 이 CE에 attach됨, ce는 target에서 역추적
+function _regionOnWheel(e){
+  const ceEl = e.currentTarget;
+  const ceId = ceEl.dataset.ceId;
+  const ce = canvasEls.find(x=>x.id===ceId);
+  if(!ce || !ce.scrollable) return;
+  // Ctrl은 영역 내부에서도 zoom용 예외로 통과 (텍스트 폰트 크기 등 기존 동작)
+  if(e.ctrlKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  // 멤버 컨텐츠의 높이 범위 계산
+  const ry = ce.y, rB = ce.y + ce.h;
+  let minY = Infinity, maxY = -Infinity;
+  (ce.memberIds||[]).forEach(id=>{
+    const n = nodes.find(x=>x.id===id);
+    if(!n) return;
+    if(n.y < minY) minY = n.y;
+    if((n.y + (n.h||240)) > maxY) maxY = n.y + (n.h||240);
+  });
+  if(!isFinite(minY)){ minY = ry; maxY = rB; }
+  // 스크롤 범위: 0 ~ (멤버 영역 하단까지 볼 수 있도록)
+  // offset=0 일 때 첫 멤버가 원래 자리. 최대 offset은 멤버 하단이 region 하단과 맞도록
+  const maxOff = Math.max(0, (maxY - ry) - ce.h);
+  const minOff = Math.min(0, (minY - ry)); // 음수 스크롤 허용 (멤버 상단이 region 위에 있으면)
+  const delta = e.deltaY;
+  const newOff = Math.max(minOff, Math.min(maxOff, (ce.scrollOffsetY||0) + delta));
+  if(newOff === ce.scrollOffsetY) return;
+  ce.scrollOffsetY = newOff;
+  _regionApplyScroll(ce);
+}
+
+// 영역이 드래그되어 이동할 때 멤버들을 같이 움직임 (모델 좌표도 같이 이동)
+function _regionShiftMembers(ce, dx, dy){
+  if(!ce || !ce.scrollable) return;
+  (ce.memberIds||[]).forEach(id=>{
+    const n = nodes.find(x=>x.id===id);
+    if(!n) return;
+    n.x += dx; n.y += dy;
+    if(n.el){ n.el.style.left = n.x + 'px'; }
+  });
+  _regionApplyScroll(ce);
+}
+
+// ═══ 영역 실행 오케스트레이션 ═══
+// region에 execOrder를 지정하면 순서대로 영역별로 묶어서 실행.
+// 영역 내부 노드들은 intra-region connection DAG 순서로 실행 (영역 밖 의존성은 기존 output 사용).
+
+// 영역 안 센터 기준 노드 목록 (E① 센터 기준)
+function _regionMemberNodesByCenter(ce){
+  if(!ce || ce.type!=='region') return [];
+  const rx=ce.x, ry=ce.y, rR=ce.x+ce.w, rB=ce.y+ce.h;
+  return nodes.filter(n=>{
+    const cx=n.x+(n.w||280)/2, cy=n.y+(n.h||240)/2;
+    return cx>=rx && cx<=rR && cy>=ry && cy<=rB;
+  });
+}
+
+// execOrder 가 있는 region들을 오름차순 반환
+function _orderedRegions(){
+  return canvasEls.filter(ce=>ce.type==='region' && typeof ce.execOrder==='number')
+    .sort((a,b)=>a.execOrder-b.execOrder);
+}
+
+// region에 다음 번호 부여 (현재 max+1)
+function _regionAssignNextOrder(ce){
+  const ordered = _orderedRegions();
+  const maxOrder = ordered.length ? Math.max(...ordered.map(r=>r.execOrder)) : 0;
+  ce.execOrder = maxOrder + 1;
+  _regionRefreshExecBadge(ce);
+  execProgressRefresh();
+  autoSave();
+}
+
+function _regionClearOrder(ce){
+  ce.execOrder = null;
+  _regionRefreshExecBadge(ce);
+  // 나머지 region들의 번호를 연속되게 재정렬
+  const rest = _orderedRegions();
+  rest.forEach((r,i)=>{ r.execOrder = i+1; _regionRefreshExecBadge(r); });
+  execProgressRefresh();
+  autoSave();
+}
+
+// 번호 뱃지 DOM 갱신
+function _regionRefreshExecBadge(ce){
+  if(!ce || !ce.el) return;
+  let badge = ce.el.querySelector('.region-exec-badge');
+  if(typeof ce.execOrder==='number'){
+    if(!badge){
+      badge = document.createElement('div');
+      badge.className='region-exec-badge';
+      badge.style.cssText='position:absolute;left:6px;top:-14px;padding:2px 10px;color:#fff;border-radius:11px;font-size:11px;font-weight:700;pointer-events:auto;cursor:pointer;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;gap:6px';
+      badge.title='클릭해서 이 영역 실행 · 우클릭 메뉴에서 순서 바꾸기';
+      badge.onclick=(e)=>{e.stopPropagation();if(confirm(`#${ce.execOrder} 영역만 실행할까요?`)) executeRegion(ce);};
+      ce.el.appendChild(badge);
+    }
+    // 순서별 색상 (hue rotation)
+    const hue = (ce.execOrder-1)*60 % 360;
+    badge.style.background = `hsl(${hue} 70% 45%)`;
+    const label = ce.execLabel ? ` · ${ce.execLabel}` : '';
+    badge.textContent = `#${ce.execOrder}${label}`;
+  } else {
+    if(badge) badge.remove();
+  }
+}
+
+// 영역 실행 상태 시각 표시
+function _regionSetRunning(ce, on){
+  if(!ce || !ce.el) return;
+  ce.el.classList.toggle('region-exec-running', !!on);
+}
+
+// 노드 IDs 의 완료(complete/error) 대기 — 2초 폴링
+function _awaitNodesComplete(nodeIds, timeoutMs){
+  timeoutMs = timeoutMs || 15*60*1000; // 기본 15분
+  const start = Date.now();
+  return new Promise((resolve)=>{
+    const tick = () => {
+      const pending = nodeIds.filter(id=>{
+        const n = nodes.find(x=>x.id===id);
+        if(!n) return false;
+        return !(n.status==='complete' || n.status==='error');
+      });
+      execProgressRefresh();
+      if(pending.length===0){ resolve({ok:true}); return; }
+      if(Date.now()-start > timeoutMs){ resolve({ok:false, reason:'timeout', pending}); return; }
+      setTimeout(tick, 500);
+    };
+    tick();
+  });
+}
+
+// region 내부 DAG의 소스 노드 (intra-region incoming edge 없음) 추출
+function _regionIntraSources(memberSet){
+  const memberIdArr = [...memberSet];
+  return memberIdArr.map(id=>nodes.find(n=>n.id===id)).filter(Boolean)
+    .filter(n=>{
+      const parents = conns.filter(c=>c.tid===n.id && memberSet.has(c.sid));
+      return parents.length === 0;
+    });
+}
+
+// 단일 영역 실행 — 내부 DAG 순서로 실행, 완료까지 대기
+async function executeRegion(ce){
+  if(!ce || ce.type!=='region'){ return {ok:false, error:'region 아님'}; }
+  const members = _regionMemberNodesByCenter(ce);
+  if(!members.length){
+    showCopyToast('⚠ 영역 안에 실행할 노드가 없습니다');
+    return {ok:false, error:'empty'};
+  }
+  const memberSet = new Set(members.map(n=>n.id));
+  // 실행 전 멤버 상태 초기화 (이 영역 실행 = 새 run)
+  members.forEach(n=>{
+    // 문서/메모/트리거/이미지CE는 초기화 안 하는게 자연스러움 — 정적 노드
+    if(n.type==='agent' || n.type==='agent-gemini' || n.type==='downloader'){
+      n.outputCapture=''; n.inputResolved=''; n.status='idle';
+      const oc=n.el.querySelector('.out-c'); if(oc) oc.textContent='';
+      engine.setSt(n,'idle');
+    }
+  });
+  _regionSetRunning(ce, true);
+  execProgressRefresh();
+  engine.running = true;
+  // 소스 노드부터 실행 (memberSet으로 clamp)
+  const sources = _regionIntraSources(memberSet);
+  if(!sources.length){
+    // DAG 사이클/고립 노드 — 모든 멤버를 개별 실행 시도
+    members.forEach(n=>engine.executeNode(n, 0, memberSet));
+  } else {
+    sources.forEach(n=>engine.executeNode(n, 0, memberSet));
+  }
+  // 모든 멤버가 complete/error 될 때까지 대기
+  const result = await _awaitNodesComplete(members.map(n=>n.id));
+  _regionSetRunning(ce, false);
+  execProgressRefresh();
+  const errorCount = members.filter(n=>n.status==='error').length;
+  return {ok: errorCount===0, errorCount, totalCount: members.length, timeout: result.reason==='timeout'};
+}
+
+// 순서 지정된 영역들을 차례로 실행
+async function executeOrderedRegions(){
+  const ordered = _orderedRegions();
+  if(!ordered.length){
+    alert('순서가 지정된 영역이 없습니다.\n\n툴바의 🔢 버튼으로 영역 순서를 지정하세요.');
+    return;
+  }
+  const confirmRun = confirm(`${ordered.length}개 영역을 순서대로 실행합니다:\n\n${ordered.map(r=>`#${r.execOrder} ${r.execLabel||'(이름없음)'}`).join('\n')}\n\n계속할까요?`);
+  if(!confirmRun) return;
+  execProgressShow();
+  let aborted = false;
+  for(const ce of ordered){
+    showCopyToast(`▶ #${ce.execOrder} ${ce.execLabel||'영역'} 실행 중...`);
+    const res = await executeRegion(ce);
+    if(res.timeout){
+      if(!confirm(`#${ce.execOrder} 영역이 타임아웃. 계속할까요?`)){ aborted=true; break; }
+    } else if(!res.ok){
+      const decision = confirm(`#${ce.execOrder} 영역에 ${res.errorCount}개 에러 발생.\n\n확인=다음 영역 계속 / 취소=여기서 중단`);
+      if(!decision){ aborted=true; break; }
+    }
+  }
+  execProgressRefresh();
+  if(!aborted) showCopyToast('✅ 모든 영역 실행 완료');
+  else showCopyToast('⏸ 중간 중단됨');
+}
+
+// ═══ 순서 지정 모드 ═══
+let _execOrderMode = false;
+function toggleExecOrderMode(){
+  _execOrderMode = !_execOrderMode;
+  document.body.classList.toggle('exec-order-mode', _execOrderMode);
+  const rail = document.querySelector('[data-rail-exec-order]');
+  if(rail) rail.classList.toggle('active', _execOrderMode);
+  if(_execOrderMode){
+    showCopyToast('🔢 순서 지정 모드 — 영역을 원하는 순서대로 클릭 · ESC 또는 버튼 재클릭으로 종료');
+  } else {
+    showCopyToast('🔢 순서 지정 모드 종료');
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && _execOrderMode){ toggleExecOrderMode(); }
+});
+
+// ═══ 진행 상태 패널 ═══
+function _ensureExecProgressPanel(){
+  let p = document.getElementById('exec-progress-panel');
+  if(p) return p;
+  p = document.createElement('div');
+  p.id='exec-progress-panel';
+  p.style.cssText='position:fixed;top:80px;right:16px;width:260px;background:var(--bg-1);border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.5);z-index:90;font-size:11.5px;display:none;max-height:60vh;overflow:auto';
+  document.body.appendChild(p);
+  return p;
+}
+function execProgressShow(){ const p=_ensureExecProgressPanel(); p.style.display='block'; execProgressRefresh(); }
+function execProgressHide(){ const p=_ensureExecProgressPanel(); p.style.display='none'; }
+function execProgressRefresh(){
+  const p = document.getElementById('exec-progress-panel');
+  if(!p) return;
+  const ordered = _orderedRegions();
+  if(!ordered.length){ p.style.display='none'; return; }
+  const rows = ordered.map(ce=>{
+    const members = _regionMemberNodesByCenter(ce);
+    const done = members.filter(n=>n.status==='complete').length;
+    const err = members.filter(n=>n.status==='error').length;
+    const running = members.some(n=>n.status==='running');
+    const isActive = ce.el && ce.el.classList.contains('region-exec-running');
+    const bar = members.length ? Math.round((done+err)/members.length*100) : 0;
+    const hue = (ce.execOrder-1)*60 % 360;
+    const status = isActive||running ? '🔄' : (err>0 ? '⚠' : (done===members.length && members.length ? '✅' : '⏸'));
+    const label = ce.execLabel || '(이름없음)';
+    const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    return `<div class="epp-row" data-ce-id="${ce.id}" style="padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <span style="display:inline-block;width:18px;height:18px;border-radius:50%;background:hsl(${hue} 70% 45%);color:#fff;text-align:center;line-height:18px;font-size:10px;font-weight:700">${ce.execOrder}</span>
+        <span style="flex:1;color:var(--text);font-weight:600">${esc(label)}</span>
+        <span style="font-size:11px">${status}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="flex:1;height:4px;background:var(--bg-3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;background:${err>0?'#ef4444':'#4CAF50'};width:${bar}%;transition:width .3s"></div>
+        </div>
+        <span style="font-size:10px;color:var(--text-dim)">${done}/${members.length}${err?` ⚠${err}`:''}</span>
+      </div>
+    </div>`;
+  }).join('');
+  p.innerHTML = `<div style="padding:8px 10px;font-weight:600;color:var(--accent);background:var(--bg-2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px">
+      <span style="flex:1">🎬 영역 실행 진행</span>
+      <button onclick="executeOrderedRegions()" title="순서대로 실행" style="background:rgba(76,175,80,.2);color:#a3be8c;border:1px solid rgba(76,175,80,.4);border-radius:3px;padding:2px 8px;cursor:pointer;font-size:11px">▶ 전체</button>
+      <button onclick="execProgressHide()" title="숨김" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px">×</button>
+    </div>${rows}`;
+  p.style.display='block';
+  // 행 클릭: 해당 영역으로 카메라 이동
+  p.querySelectorAll('.epp-row').forEach(row=>{
+    row.onclick=()=>{
+      const ce = canvasEls.find(c=>c.id===row.dataset.ceId);
+      if(!ce) return;
+      // 카메라 이동
+      cx = cw.clientWidth/2 - (ce.x + ce.w/2)*zoom;
+      cy = cw.clientHeight/2 - (ce.y + ce.h/2)*zoom;
+      applyTx();
+    };
+  });
+}
+
+// 문서 노드 이름을 파일명으로 동기화 (사용자가 이미 커스텀 이름 지정했으면 존중)
+function _docSyncNodeNameToFilename(n){
+  if(!n || n.type!=='document' || !n.doc || !n.doc.filename) return;
+  // 사용자가 수동으로 바꾼 이름(기본 레이블 패턴이 아닌 경우)은 덮어쓰지 않음
+  const ti = TYPES[n.type]; const labelPrefix = ti && ti.label || 'Documents';
+  const isDefaultName = !n.name || new RegExp('^'+labelPrefix.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\d+$').test(n.name);
+  const wasFilename = n._prevFilename && n.name === n._prevFilename;
+  if(!isDefaultName && !wasFilename) return;
+  n.name = n.doc.filename;
+  n._prevFilename = n.doc.filename;
+  if(n.el){
+    const lbl = n.el.querySelector('[data-role="name"]');
+    if(lbl) lbl.textContent = n.name;
+    const inp = n.el.querySelector('.nd-name-edit');
+    if(inp) inp.value = n.name;
+  }
+}
+
+// 한 노드에서 저장 후 같은 파일을 가진 다른 모든 문서 노드를 자동 리로드
+// - 저장 안 된 변경사항이 있는 노드는 스킵 + 경고 (사용자가 수동으로 선택하도록)
+function _docBroadcastReload(filename, excludeNodeId, delayMs){
+  if(!filename)return;
+  delayMs = delayMs==null ? 800 : delayMs;
+  setTimeout(()=>{
+    const targets = nodes.filter(x =>
+      x && x.id !== excludeNodeId &&
+      (x.type === 'document') &&
+      x.doc && x.doc.filename === filename
+    );
+    const skipped = [];
+    targets.forEach(t=>{
+      const st = _DOC_INLINE.get(t.id);
+      // 마운트된 노드만 대상. 마운트 안 된 건 다음에 열릴 때 자연스레 fresh 로드됨
+      if(!st) return;
+      if(st.dirty && !st._suppressAutoSave){ skipped.push(t); return; }
+      docInlineReload(t).catch(e=>console.warn('broadcast reload 실패',e));
+    });
+    if(skipped.length){
+      const names = skipped.map(t=>t.name||('노드#'+t.id)).join(', ');
+      showCopyToast(`⚠️ ${skipped.length}개 노드(${names})에 저장 안 된 변경사항이 있어 자동 리로드 스킵됨`);
+    }
+  }, delayMs);
 }
 
 async function docInlineRender(state, holder){
@@ -6297,7 +7110,7 @@ async function docInlineRender(state, holder){
     const text=new TextDecoder('utf-8').decode(new Uint8Array(state.buffer));
     holder.innerHTML=`<textarea class="doc-plain-inline">${text.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</textarea>`;
     const ta=holder.querySelector('textarea');
-    ta.addEventListener('input',()=>{state.dirty=true;_docUpdateStatusInline(state.node,'dirty');});
+    ta.addEventListener('input',()=>{if(state._suppressAutoSave)return;state.dirty=true;_docUpdateStatusInline(state.node,'dirty');});
     state._getBuffer=()=>new TextEncoder().encode(ta.value).buffer;
     state._getText=()=>ta.value;
     return;
@@ -6322,7 +7135,7 @@ async function docInlineRender(state, holder){
       state.engine=new window.SuperDoc({
         selector:'#doc-sd-'+state.node.id,
         documents:[{id:'main', type:'docx', data:state.buffer}],
-        onDocumentChange:()=>{state.dirty=true;_docUpdateStatusInline(state.node,'dirty');},
+        onDocumentChange:()=>{if(state._suppressAutoSave)return;state.dirty=true;_docUpdateStatusInline(state.node,'dirty');},
       });
       state._getBuffer=async()=>{
         try{
@@ -6352,8 +7165,8 @@ async function docInlineRender(state, holder){
     }
     holder.innerHTML='<div class="doc-engine-root" id="doc-rh-'+state.node.id+'"></div>';
     try{
-      state.engine=await window.rhwpEditor.createEditor('#doc-rh-'+state.node.id, {initialData: state.buffer});
-      if(state.engine.on)state.engine.on('change',()=>{state.dirty=true;_docUpdateStatusInline(state.node,'dirty');});
+      state.engine=await _rhwpCreateAndLoad('#doc-rh-'+state.node.id, state.buffer);
+      if(state.engine.on)state.engine.on('change',()=>{if(state._suppressAutoSave)return;state.dirty=true;_docUpdateStatusInline(state.node,'dirty');});
       state._getBuffer=async()=>{
         if(state.engine.save){const out=await state.engine.save();return out instanceof ArrayBuffer ? out : (out.buffer||out);}
         return state.buffer;
@@ -6386,10 +7199,11 @@ async function docInlineSave(n){
       _docUpdateStatusInline(n,'saved');
       autoSave();
       try{fpRefresh(true)}catch(e){}
+      _docBroadcastReload(n.doc.filename, n.id);
     } else if(r && r.errorKind==='external_modified'){
       if(confirm('외부에서 수정 흔적이 있어요.\n확인=덮어쓰기 / 취소=외부 버전 불러오기')){
         const r2=await api('POST','/api/doc/write',{projectId:workflowId, filename:n.doc.filename, data:b64, clientMtime:state.mtime||0, force:true});
-        if(r2&&r2.ok){state.mtime=r2.mtime;state.dirty=false;_docUpdateStatusInline(n,'saved');}
+        if(r2&&r2.ok){state.mtime=r2.mtime;state.dirty=false;_docUpdateStatusInline(n,'saved');_docBroadcastReload(n.doc.filename, n.id);}
       } else {
         docInlineUnmount(n);await docInlineMount(n);
       }
@@ -6419,6 +7233,7 @@ async function docInlineImportApply(file){
     const r=await api('POST','/api/doc/write',{projectId:workflowId, filename:file.name, data:b64});
     if(!r||!r.ok){alert('업로드 실패: '+((r&&r.error)||''));return;}
     n.doc.filename=file.name;
+    _docSyncNodeNameToFilename(n);
     autoSave();docRenderMini(n);
     docInlineUnmount(n);
     await docInlineMount(n);
@@ -6432,14 +7247,16 @@ async function docConvertHwpInlineFor(nodeId){
   if(!workflowId)return alert('프로젝트를 먼저 저장해주세요');
   const r=await api('POST','/api/doc/hwp-to-docx',{projectId:workflowId, filename:n.doc.filename});
   if(!r||!r.ok){alert('변환 실패: '+((r&&r.error)||''));return;}
-  n.doc.filename=r.filename;autoSave();docRenderMini(n);
+  n.doc.filename=r.filename;
+  _docSyncNodeNameToFilename(n);
+  autoSave();docRenderMini(n);
   docInlineUnmount(n);await docInlineMount(n);
 }
 
 // 툴바 버튼 클릭 라우팅 (buildDom 에서 이벤트 위임)
 function _docInlineToolbarAction(n, act){
   if(act==='save')docInlineSave(n);
-  else if(act==='reload'){docInlineUnmount(n);docInlineMount(n);}
+  else if(act==='reload'){docInlineReload(n);}
   else if(act==='import')docInlineImportFor(n.id);
   else if(act==='milestone'){
     if(!n.doc||!n.doc.filename)return;
@@ -6707,9 +7524,7 @@ async function docLoadRhwpEngine(active, holder){
   }
   holder.innerHTML='<div id="doc-rhwp-root" style="width:100%;height:100%;background:#fff"></div>';
   try{
-    active.engineInstance = await window.rhwpEditor.createEditor('#doc-rhwp-root', {
-      initialData: active.buffer,
-    });
+    active.engineInstance = await _rhwpCreateAndLoad('#doc-rhwp-root', active.buffer);
     if(active.engineInstance.on){
       active.engineInstance.on('change', ()=>{if(_docActive){_docActive.dirty=true;docUpdateStatus('dirty');}});
     }
@@ -6810,11 +7625,12 @@ async function docMbSave(){
       autoSave();
       docUpdateStatus('saved');
       showCopyToast('💾 저장 완료');
+      _docBroadcastReload(_docActive.node.doc.filename, _docActive.node.id);
     } else if(r && r.errorKind==='external_modified'){
       if(confirm('외부에서 파일이 수정된 흔적이 있어요.\n\n확인 = 내 변경사항으로 덮어쓰기\n취소 = 디스크 버전 다시 불러오기')){
         // force=true 재시도
         const r2=await api('POST','/api/doc/write',{projectId:workflowId, filename:_docActive.node.doc.filename, data:b64, clientMtime:_docActive.mtime||0, force:true});
-        if(r2&&r2.ok){_docActive.mtime=r2.mtime;_docActive.dirty=false;_docActive.node.doc.lastSeenMtime=r2.mtime;docUpdateStatus('saved');showCopyToast('💾 저장 (외부 버전은 .versions/ 에 보관)');}
+        if(r2&&r2.ok){_docActive.mtime=r2.mtime;_docActive.dirty=false;_docActive.node.doc.lastSeenMtime=r2.mtime;docUpdateStatus('saved');showCopyToast('💾 저장 (외부 버전은 .versions/ 에 보관)');_docBroadcastReload(_docActive.node.doc.filename, _docActive.node.id);}
         else alert('저장 실패: '+((r2&&r2.error)||''));
       } else {
         await docLoadFromDisk();
@@ -6983,15 +7799,131 @@ async function docEnsureMammoth(){
   if(window.mammoth)return;
   await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js','mammoth');
 }
+// rhwp/editor 다양한 API 형태 대응 — createEditor 옵션 이름 & post-init 로드 메서드가 버전마다 다름
+// rhwp 에디터 root에 실제 문서가 렌더됐는지 휴리스틱 감지
+function _rhwpLooksEmpty(selector){
+  const root = document.querySelector(selector);
+  if(!root) return true;
+  // iframe 기반이면 contentDocument의 body 텍스트 확인
+  const iframe = root.querySelector('iframe');
+  if(iframe){
+    try{
+      const doc = iframe.contentDocument;
+      if(!doc) return true;
+      const txt = (doc.body && (doc.body.innerText||doc.body.textContent||'').trim()) || '';
+      // 페이지 컨테이너 요소 존재 유무도 확인
+      const hasPage = doc.querySelector('.page, .hwp-page, [class*="page"], section');
+      return !txt && !hasPage;
+    }catch(e){ return false; } // cross-origin이면 렌더된 걸로 간주
+  }
+  // iframe이 아니면 root의 가시 요소 확인
+  const hasContent = root.querySelector('.page, .hwp-page, [class*="page"], section, article, [contenteditable]');
+  const txt = (root.innerText||root.textContent||'').trim();
+  return !hasContent && txt.length < 10;
+}
+
+async function _rhwpTryLoadInto(editor, ab, u8){
+  const loadCandidates = ['load','loadDocument','loadHwp','loadFile','loadBuffer','open','openDocument','openFile','setDocument','setHwp','setData','setBuffer','read','parse'];
+  for(const name of loadCandidates){
+    if(typeof editor[name] === 'function'){
+      try{ await editor[name](ab); console.log('[rhwp] loaded via',name); return true; }
+      catch(e1){
+        try{ await editor[name](u8); console.log('[rhwp] loaded via',name,'(Uint8Array)'); return true; }
+        catch(e2){ /* 다음 후보 */ }
+      }
+    }
+  }
+  return false;
+}
+
+async function _rhwpCreateAndLoad(selector, buffer){
+  const rh = window.rhwpEditor;
+  if(!rh || !rh.createEditor) throw new Error('rhwp API 로드 안 됨');
+  const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const ab = buffer instanceof ArrayBuffer ? buffer : (buffer.buffer || u8.buffer);
+
+  // 1) createEditor 에 데이터 옵션 여러 키 동시 전달 (라이브러리가 알아서 인식)
+  let editor;
+  try{
+    editor = await rh.createEditor(selector, {
+      initialData: ab, data: ab, document: ab, buffer: ab,
+      file: ab, hwp: ab,
+    });
+  }catch(e){
+    console.warn('[rhwp] createEditor(options) 실패, 옵션 없이 재시도:', e.message);
+    editor = await rh.createEditor(selector);
+  }
+  if(!editor) throw new Error('rhwp createEditor 가 null 반환');
+
+  // 2) post-init 로드 시도
+  let loaded = await _rhwpTryLoadInto(editor, ab, u8);
+
+  // 3) 폴백: hidden file input 주입
+  if(!loaded){
+    try{
+      const rootEl = document.querySelector(selector);
+      const fileInp = rootEl && rootEl.querySelector('input[type="file"]');
+      if(fileInp){
+        const blob = new Blob([ab], {type:'application/x-hwp'});
+        const file = new File([blob], 'document.hwp', {type:'application/x-hwp'});
+        const dt = new DataTransfer(); dt.items.add(file); fileInp.files = dt.files;
+        fileInp.dispatchEvent(new Event('change',{bubbles:true}));
+        console.log('[rhwp] loaded via hidden file input injection');
+        loaded=true;
+      }
+    }catch(e){console.warn('[rhwp] file-input 주입 실패:',e);}
+  }
+
+  // 4) 렌더 확인 후 비어보이면 자동 재주입 (첫 드래그 시 라이브러리 초기화 레이스 대비)
+  //    rhwp가 내부 초기화에 시간이 걸려서 첫 load가 먹히지 않는 경우를 커버
+  const verifyAndRetry = async (waitMs, attemptLabel) => {
+    await new Promise(r => setTimeout(r, waitMs));
+    if(_rhwpLooksEmpty(selector)){
+      console.log(`[rhwp] ${attemptLabel} — 화면이 비어보임, 자동 재주입 시도`);
+      const ok = await _rhwpTryLoadInto(editor, ab, u8);
+      if(!ok){
+        // 파일 인풋 주입도 한 번 더
+        try{
+          const rootEl = document.querySelector(selector);
+          const fileInp = rootEl && rootEl.querySelector('input[type="file"]');
+          if(fileInp){
+            const blob = new Blob([ab], {type:'application/x-hwp'});
+            const file = new File([blob], 'document.hwp', {type:'application/x-hwp'});
+            const dt = new DataTransfer(); dt.items.add(file); fileInp.files = dt.files;
+            fileInp.dispatchEvent(new Event('change',{bubbles:true}));
+          }
+        }catch(e){}
+      }
+    }
+  };
+  verifyAndRetry(600, '1차 검증').then(()=>verifyAndRetry(1500, '2차 검증')).catch(e=>console.warn('[rhwp] verify 실패',e));
+
+  if(!loaded){
+    console.warn('[rhwp] 초기 자동 로드 실패 — 검증 단계에서 재시도됩니다');
+  }
+  return editor;
+}
+
 async function docEnsureRhwp(){
   if(window.rhwpEditor)return;
+  // 이미 preload가 진행 중이면 그 Promise를 기다림 (중복 import 방지)
+  if(window._rhwpPreloadPromise){ await window._rhwpPreloadPromise; return; }
   try{
-    const mod = await import('https://esm.sh/@rhwp/editor@latest');
+    window._rhwpPreloadPromise = import('https://esm.sh/@rhwp/editor@latest');
+    const mod = await window._rhwpPreloadPromise;
     window.rhwpEditor = mod;
     if(!mod.createEditor)throw new Error('rhwp createEditor not found');
   }catch(e){
+    window._rhwpPreloadPromise = null;
     throw new Error('rhwp CDN 로드 실패: '+e.message);
   }
+}
+
+// 페이지 로드 직후 백그라운드 preload — 첫 드래그 시 블랙아웃 예방
+if(typeof requestIdleCallback === 'function'){
+  requestIdleCallback(()=>{ docEnsureRhwp().catch(e=>console.warn('[rhwp preload]',e.message)); }, {timeout:3000});
+} else {
+  setTimeout(()=>{ docEnsureRhwp().catch(e=>console.warn('[rhwp preload]',e.message)); }, 2000);
 }
 
 // 파일 input change — 인라인 import 타겟이 있으면 그쪽, 아니면 모달
@@ -7040,10 +7972,10 @@ function detectMediaUrl(urlRaw){
   // 직접 이미지 파일
   if(/\.(jpe?g|png|webp|gif|bmp|svg)(\?|$|#)/i.test(u))
     return {kind:'image',src:u};
-  // YouTube
+  // YouTube — controls=1 로 시크바·볼륨 노출 (🔓 모드에서 조작 가능)
   const yt=u.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{10,14})/);
   if(yt)return {kind:'video',videoKind:'embed',videoProvider:'youtube',src:u,
-    embedUrl:`https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&loop=1&playlist=${yt[1]}&controls=0&rel=0&playsinline=1`};
+    embedUrl:`https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=1&loop=1&playlist=${yt[1]}&controls=1&rel=0&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`};
   // Vimeo — background=1 이면 자동 loop + mute + controls off
   const vm=u.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if(vm)return {kind:'video',videoKind:'embed',videoProvider:'vimeo',src:u,
@@ -7137,7 +8069,62 @@ function _ceVideoAction(ce, act, btn){
     _downloadVideoCeToLocal(ce, btn);
   } else if(act==='bookmark'){
     _addVideoBookmark(ce);
+  } else if(act==='subtitle'){
+    _generateVideoSubtitle(ce, btn);
   }
+}
+
+async function _generateVideoSubtitle(ce, btn){
+  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Alt+S)');return;}
+  const url=ce.src || ce.embedUrl;
+  if(!url){alert('영상 URL 없음');return;}
+  const orig=btn?btn.textContent:'';
+  if(btn){btn.textContent='⏳';btn.disabled=true;}
+  try{
+    const r=await api('POST','/api/media/subtitle',{
+      url, projectId:workflowId, method:'auto',
+      videoTitle: ce.nodeName || '',
+    });
+    if(!r||!r.ok){alert('자막 생성 실패: '+((r&&r.error)||''));return;}
+    showCopyToast(`📝 자막 생성 (${r.source} / ${r.language}) · ${r.segmentCount}개 세그먼트 → ${r.srtPath}`);
+    // 메모리에 자막 경로 보관 (video CE 에 track 추가용)
+    ce.subtitlePath=r.srtPath;
+    ce.subtitlePreview=r.preview;
+    autoSave();
+    // 파일 패널 갱신
+    try{fpRefresh(true)}catch(e){}
+    // direct video 면 <track> 추가
+    if(ce.videoKind==='direct'){
+      const vid=ce.el.querySelector('video.ce-video');
+      if(vid){
+        // 기존 track 제거
+        vid.querySelectorAll('track').forEach(t=>t.remove());
+        const track=document.createElement('track');
+        track.kind='subtitles';track.label=r.language||'ko';track.srclang=r.language||'ko';
+        // SRT 는 브라우저가 직접 못 읽음 → 서버에서 WebVTT 로 변환해 서빙하거나, 클라에서 변환
+        // 간단히: /api/project/file 로 SRT 가져와서 WebVTT 로 변환한 blob URL 로 주입
+        try{
+          const resp=await fetch(`/api/project/file?projectId=${encodeURIComponent(workflowId)}&path=${encodeURIComponent(r.srtPath)}`);
+          const srtText=await resp.text();
+          const vtt=_srtToVtt(srtText);
+          const blob=new Blob([vtt],{type:'text/vtt'});
+          track.src=URL.createObjectURL(blob);
+          track.default=true;
+          vid.appendChild(track);
+        }catch(e){console.warn('자막 track 주입 실패:',e);}
+      }
+    }
+  }catch(e){
+    alert('오류: '+e.message);
+  }finally{
+    if(btn){btn.textContent=orig;btn.disabled=false;}
+  }
+}
+
+// SRT → WebVTT 변환 (브라우저 <track> 호환)
+function _srtToVtt(srt){
+  // 콤마 → 점 (시간 구분자)
+  return 'WEBVTT\n\n'+srt.replace(/(\d\d:\d\d:\d\d),(\d\d\d)/g,'$1.$2');
 }
 
 async function _addVideoBookmark(ce){
@@ -7209,18 +8196,22 @@ function _renderVideoBookmarks(ce, duration){
 }
 
 // 🔒/🔓 락 토글 — overlay off 하면 native controls 사용 가능, 노드 드래그는 비활성
+// direct <video> 는 controls 속성, iframe (YouTube 등) 은 자체 내장 컨트롤 노출
 function _toggleVideoLock(ce, btn){
   ce._unlocked=!ce._unlocked;
   const overlay=ce.el.querySelector('[data-ce-overlay]');
   const video=ce.el.querySelector('video.ce-video');
+  const iframe=ce.el.querySelector('iframe.ce-video');
   if(ce._unlocked){
     if(overlay)overlay.style.pointerEvents='none';
     if(video){video.setAttribute('controls','');video.style.pointerEvents='auto';}
+    if(iframe)iframe.style.pointerEvents='auto';  // YouTube 시크바/볼륨 등 네이티브 컨트롤
     if(btn)btn.textContent='🔓';
     ce.el.classList.add('ce-unlocked');
   } else {
     if(overlay)overlay.style.pointerEvents='auto';
     if(video){video.removeAttribute('controls');video.style.pointerEvents='none';}
+    if(iframe)iframe.style.pointerEvents='none';
     if(btn)btn.textContent='🔒';
     ce.el.classList.remove('ce-unlocked');
   }
@@ -7406,6 +8397,152 @@ function promptAddVideoCe(x, y){
 }
 
 // ═══════════════════════════════════════════════
+// 📋 표 메모 CE (장식용 미니 테이블)
+// ═══════════════════════════════════════════════
+function addCeMinitable(x, y){
+  document.getElementById('ctx').classList.remove('show');
+  const ce=mkCe({
+    type:'minitable',
+    x: x-160, y: y-80,
+    w: 320, h: 180,
+    table:{
+      rows:[
+        ['항목','값'],
+        ['',''],
+        ['',''],
+      ],
+      colWidths:[120, 180],
+      style:{
+        bgColor:'rgba(20,20,30,.92)',
+        headerBgColor:'rgba(94,129,172,.25)',
+        textColor:'#e0e0e0',
+        borderColor:'rgba(167,139,250,.55)',
+        borderWidth:1,
+        borderStyle:'solid',
+        fontSize:12,
+        cellAlign:'left',
+        cellPadding:6,
+      }
+    }
+  });
+  selCe(ce);autoSave();
+}
+
+function _renderMinitable(ce){
+  const body=ce.el.querySelector('[data-mt-body]');
+  if(!body)return;
+  const t=ce.table||{rows:[],style:{}};
+  const s=t.style||{};
+  const bw=s.borderWidth!=null?s.borderWidth:1;
+  const bs=s.borderStyle||'solid';
+  const bc=s.borderColor||'rgba(167,139,250,.55)';
+  const fs=s.fontSize||12;
+  const align=s.cellAlign||'left';
+  const pad=s.cellPadding||6;
+  const textColor=s.textColor||'#e0e0e0';
+  const headerBg=s.headerBgColor||'rgba(94,129,172,.25)';
+  const esc=v=>(v==null?'':String(v)).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const colW=t.colWidths||[];
+  const rows=t.rows||[];
+  const ncols=(rows[0]||[]).length;
+  // colgroup 으로 열 너비 설정
+  let html='<table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:'+fs+'px;color:'+textColor+';font-family:inherit">';
+  html+='<colgroup>';
+  for(let ci=0;ci<ncols;ci++){
+    const w=colW[ci]||100;
+    html+=`<col style="width:${w}px">`;
+  }
+  html+='</colgroup>';
+  rows.forEach((row,ri)=>{
+    const isHeader=ri===0;
+    html+='<tr>';
+    for(let ci=0;ci<ncols;ci++){
+      const v=row[ci]||'';
+      html+=`<td data-r="${ri}" data-c="${ci}" contenteditable="true" spellcheck="false"
+        style="border:${bw}px ${bs} ${bc};padding:${pad}px;vertical-align:middle;text-align:${align};
+               ${isHeader?`background:${headerBg};font-weight:700;`:''}
+               outline:none;min-height:${fs+pad*2}px;word-break:break-word">${esc(v)}</td>`;
+    }
+    html+=`<td style="width:26px;border:none;padding:0;vertical-align:middle;text-align:center">
+      <button data-mt-delrow="${ri}" title="행 삭제" style="background:none;border:none;color:#bf616a;cursor:pointer;font-size:11px;opacity:0;transition:.1s">×</button>
+    </td>`;
+    html+='</tr>';
+  });
+  // 맨 마지막 행: 열 삭제 버튼
+  if(ncols>0){
+    html+='<tr>';
+    for(let ci=0;ci<ncols;ci++){
+      html+=`<td style="border:none;padding:0;text-align:center"><button data-mt-delcol="${ci}" title="이 열 삭제" style="background:none;border:none;color:#bf616a;cursor:pointer;font-size:10px;opacity:0;transition:.1s;padding:1px 4px">삭제</button></td>`;
+    }
+    html+='<td style="border:none"></td>';
+    html+='</tr>';
+  }
+  html+='</table>';
+  body.innerHTML=html;
+
+  // 호버 시 삭제 버튼 노출
+  body.querySelectorAll('button[data-mt-delrow],button[data-mt-delcol]').forEach(b=>{
+    b.addEventListener('mousedown',e=>e.stopPropagation());
+    const parentTr=b.closest('tr');
+    if(parentTr){
+      parentTr.addEventListener('mouseenter',()=>{b.style.opacity='.6'});
+      parentTr.addEventListener('mouseleave',()=>{b.style.opacity='0'});
+    }
+  });
+
+  // 셀 편집 커밋
+  body.querySelectorAll('td[contenteditable]').forEach(td=>{
+    td.addEventListener('mousedown',e=>e.stopPropagation());
+    td.addEventListener('input',()=>{
+      const r=+td.dataset.r, c=+td.dataset.c;
+      if(!t.rows[r])return;
+      t.rows[r][c]=td.innerText||td.textContent||'';
+      autoSave();
+    });
+    td.addEventListener('keydown',e=>{
+      // Tab → 다음 셀, Enter → 다음 행 동일 열
+      if(e.key==='Tab'){
+        e.preventDefault();
+        const r=+td.dataset.r, c=+td.dataset.c;
+        let nr=r, nc=c+(e.shiftKey?-1:1);
+        if(nc>=ncols){nc=0;nr++;}
+        if(nc<0){nc=ncols-1;nr--;}
+        const next=body.querySelector(`td[data-r="${nr}"][data-c="${nc}"]`);
+        if(next)next.focus();
+      }
+      if(e.key==='Enter'&&!e.shiftKey){
+        e.preventDefault();
+        const r=+td.dataset.r, c=+td.dataset.c;
+        const next=body.querySelector(`td[data-r="${r+1}"][data-c="${c}"]`);
+        if(next)next.focus();
+      }
+    });
+  });
+
+  // 행 삭제
+  body.querySelectorAll('[data-mt-delrow]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();e.preventDefault();
+      const r=+btn.dataset.mtDelrow;
+      if(t.rows.length<=1){alert('최소 1개 행은 있어야 합니다');return;}
+      t.rows.splice(r,1);
+      _renderMinitable(ce);autoSave();
+    });
+  });
+  // 열 삭제
+  body.querySelectorAll('[data-mt-delcol]').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();e.preventDefault();
+      const c=+btn.dataset.mtDelcol;
+      if(ncols<=1){alert('최소 1개 열은 있어야 합니다');return;}
+      t.rows.forEach(r=>r.splice(c,1));
+      if(t.colWidths)t.colWidths.splice(c,1);
+      _renderMinitable(ce);autoSave();
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════
 // ☑ 체크리스트 CE
 // ═══════════════════════════════════════════════
 function addCeChecklist(x, y){
@@ -7498,6 +8635,7 @@ function openCeStylePopover(ce, x, y){
   const isRegion=ce.type==='region';
   const isText=ce.type==='text';
   const isChecklist=ce.type==='checklist';
+  const isMinitable=ce.type==='minitable';
   const toHex=v=>{
     if(!v)return '#ffffff';
     if(v.startsWith('#'))return v;
@@ -7506,8 +8644,34 @@ function openCeStylePopover(ce, x, y){
     if(m)return '#'+((+m[1]<<16)|(+m[2]<<8)|+m[3]).toString(16).padStart(6,'0');
     return '#ffffff';
   };
-  let html=`<div class="csp-hd">${isRegion?'🟦 영역 스타일':isText?'📝 텍스트 스타일':'☑ 체크리스트 스타일'}</div>`;
-  if(isChecklist){
+  let html=`<div class="csp-hd">${isRegion?'🟦 영역 스타일':isText?'📝 텍스트 스타일':isMinitable?'📋 표 메모 스타일':'☑ 체크리스트 스타일'}</div>`;
+  if(isMinitable){
+    const s=(ce.table&&ce.table.style)||{};
+    html+=`
+      <div class="csp-row"><label>배경 색</label><input type="color" value="${toHex(s.bgColor||'#14141e')}" data-csp="mt-bgColor"></div>
+      <div class="csp-row"><label>헤더 배경</label><input type="color" value="${toHex(s.headerBgColor||'#5e81ac')}" data-csp="mt-headerBgColor"></div>
+      <div class="csp-row"><label>텍스트 색</label><input type="color" value="${toHex(s.textColor||'#e0e0e0')}" data-csp="mt-textColor"></div>
+      <div class="csp-row"><label>테두리 색</label><input type="color" value="${toHex(s.borderColor||'#a78bfa')}" data-csp="mt-borderColor"></div>
+      <div class="csp-row"><label>테두리 두께</label><input type="range" min="0" max="4" value="${s.borderWidth!=null?s.borderWidth:1}" data-csp="mt-borderWidth"><span class="v" data-csp-v="mt-borderWidth">${s.borderWidth!=null?s.borderWidth:1}px</span></div>
+      <div class="csp-row"><label>선 스타일</label>
+        <select data-csp="mt-borderStyle">
+          <option value="solid"${(s.borderStyle||'solid')==='solid'?' selected':''}>실선</option>
+          <option value="dashed"${s.borderStyle==='dashed'?' selected':''}>파선</option>
+          <option value="dotted"${s.borderStyle==='dotted'?' selected':''}>점선</option>
+          <option value="double"${s.borderStyle==='double'?' selected':''}>이중선</option>
+        </select>
+      </div>
+      <div class="csp-row"><label>글자 크기</label><input type="range" min="9" max="20" value="${s.fontSize||12}" data-csp="mt-fontSize"><span class="v" data-csp-v="mt-fontSize">${s.fontSize||12}px</span></div>
+      <div class="csp-row"><label>셀 정렬</label>
+        <select data-csp="mt-cellAlign">
+          <option value="left"${(s.cellAlign||'left')==='left'?' selected':''}>왼쪽</option>
+          <option value="center"${s.cellAlign==='center'?' selected':''}>가운데</option>
+          <option value="right"${s.cellAlign==='right'?' selected':''}>오른쪽</option>
+        </select>
+      </div>
+      <div class="csp-row"><label>셀 여백</label><input type="range" min="2" max="16" value="${s.cellPadding||6}" data-csp="mt-cellPadding"><span class="v" data-csp-v="mt-cellPadding">${s.cellPadding||6}px</span></div>
+    `;
+  } else if(isChecklist){
     const s=ce.checkStyle||{};
     html+=`
       <div class="csp-row"><label>배경 색</label><input type="color" value="${toHex(s.bgColor||'#14141e')}" data-csp="cl-bgColor"></div>
@@ -7538,7 +8702,27 @@ function openCeStylePopover(ce, x, y){
   pop.classList.add('show');
 
   const apply=()=>{
-    if(isChecklist){
+    if(isMinitable){
+      if(!ce.table)ce.table={rows:[['']],style:{}};
+      if(!ce.table.style)ce.table.style={};
+      const s=ce.table.style;
+      s.bgColor=pop.querySelector('[data-csp="mt-bgColor"]').value;
+      s.headerBgColor=pop.querySelector('[data-csp="mt-headerBgColor"]').value;
+      s.textColor=pop.querySelector('[data-csp="mt-textColor"]').value;
+      s.borderColor=pop.querySelector('[data-csp="mt-borderColor"]').value;
+      s.borderWidth=+pop.querySelector('[data-csp="mt-borderWidth"]').value;
+      s.borderStyle=pop.querySelector('[data-csp="mt-borderStyle"]').value;
+      s.fontSize=+pop.querySelector('[data-csp="mt-fontSize"]').value;
+      s.cellAlign=pop.querySelector('[data-csp="mt-cellAlign"]').value;
+      s.cellPadding=+pop.querySelector('[data-csp="mt-cellPadding"]').value;
+      // 전체 DOM 교체 (래퍼 + 내부 테이블)
+      const old=ce.el;
+      const fresh=buildCeDom(ce);
+      fresh.style.left=old.style.left;fresh.style.top=old.style.top;
+      fresh.style.width=old.style.width;fresh.style.height=old.style.height;
+      old.replaceWith(fresh);ce.el=fresh;
+      if(selectedCe===ce)fresh.classList.add('sel');
+    } else if(isChecklist){
       if(!ce.checkStyle)ce.checkStyle={};
       ce.checkStyle.bgColor=pop.querySelector('[data-csp="cl-bgColor"]').value;
       ce.checkStyle.titleColor=pop.querySelector('[data-csp="cl-titleColor"]').value;
@@ -7600,6 +8784,248 @@ function openCeStylePopover(ce, x, y){
 }
 
 // ═══════════════════════════════════════════════
+// 🎥 YouTube 검색 모달
+// ═══════════════════════════════════════════════
+const _YT={items:[], selected:new Set(), sort:{col:'hot_score',dir:'desc'}};
+
+function ytSearchOpen(){
+  document.getElementById('yt-modal').style.display='flex';
+  document.getElementById('yt-query').focus();
+  // Enter 키로 검색
+  const q=document.getElementById('yt-query');
+  q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ytSearchRun()}};
+}
+function ytSearchClose(){
+  document.getElementById('yt-modal').style.display='none';
+}
+document.addEventListener('keydown',e=>{
+  const m=document.getElementById('yt-modal');
+  if(!m||m.style.display==='none')return;
+  if(e.key==='Escape'){e.preventDefault();ytSearchClose();}
+});
+
+async function ytSearchRun(){
+  const query=document.getElementById('yt-query').value.trim();
+  if(!query){alert('검색어를 입력하세요');return;}
+  const maxResults=+document.getElementById('yt-max').value;
+  const order=document.getElementById('yt-order').value;
+  const duration=document.getElementById('yt-duration').value;
+  const period=document.getElementById('yt-period').value;
+  let publishedAfter='';
+  if(period){
+    const d=new Date();d.setDate(d.getDate()-parseInt(period));
+    publishedAfter=d.toISOString();
+  }
+  const st=document.getElementById('yt-status');
+  st.textContent='🔍 검색 중…';
+  const body=document.getElementById('yt-table');
+  body.innerHTML='<tr><td colspan="99" style="padding:40px;text-align:center;color:var(--text-dim)">YouTube API 호출 중… (1~3초)</td></tr>';
+  try{
+    const r=await api('POST','/api/youtube/search',{query,maxResults,order,duration,publishedAfter});
+    if(!r||!r.ok){
+      if(r&&r.errorKind==='no_api_key'){
+        body.innerHTML=`<tr><td colspan="99" style="padding:40px;text-align:center;line-height:1.8">
+          <div style="font-size:40px;margin-bottom:10px">🔑</div>
+          <div style="color:#fbbd2c;font-weight:700;margin-bottom:8px">YouTube API 키가 필요해요</div>
+          <div style="font-size:11.5px;color:var(--text-dim);max-width:540px;margin:0 auto">
+            <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" style="color:#7ecfff">Google Cloud Console</a> 에서 YouTube Data API v3 를 활성화하고 API 키 발급<br>
+            → 아래 버튼 클릭 → 시스템 설정 창의 <b style="color:#fca5a5">🎬 YouTube Data API 키</b> 섹션에 붙여넣기 → 저장<br>
+            <span style="color:var(--text-muted)">무료 할당량: 일 10,000 units (검색 1회 ≈ 100 units)</span>
+          </div>
+          <div style="margin-top:14px">
+            <button onclick="ytSearchClose();setTimeout(openSettings,150)" style="padding:8px 18px;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600">⚙️ 설정 열기 → API 키 등록</button>
+          </div>
+        </td></tr>`;
+      } else {
+        body.innerHTML=`<tr><td colspan="99" style="padding:40px;text-align:center;color:#fca5a5">❌ ${(r&&r.error)||'알 수 없는 오류'}</td></tr>`;
+      }
+      st.textContent='실패';
+      return;
+    }
+    _YT.items=r.items||[];
+    _YT.selected.clear();
+    _YT.sort={col:'hot_score',dir:'desc'};
+    ytRender();
+    st.textContent=`${_YT.items.length}개 · ${r.query}`;
+  }catch(e){
+    body.innerHTML=`<tr><td colspan="99" style="padding:40px;text-align:center;color:#fca5a5">❌ ${e.message}</td></tr>`;
+    st.textContent='실패';
+  }
+}
+
+function ytRender(){
+  const tbl=document.getElementById('yt-table');
+  const items=_YT.items;
+  const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtN=n=>(n==null?'':n.toLocaleString());
+  const cols=[
+    {k:'_chk', l:'', sortable:false, w:30},
+    {k:'thumbnail', l:'썸네일', sortable:false, w:110},
+    {k:'title', l:'제목 / 채널', sortable:true},
+    {k:'duration_sec', l:'길이', sortable:true, w:60},
+    {k:'views', l:'조회수', sortable:true, w:80},
+    {k:'daily_views', l:'일평균', sortable:true, w:80},
+    {k:'engagement', l:'참여율%', sortable:true, w:70},
+    {k:'hot_score', l:'🔥 핫', sortable:true, w:70},
+    {k:'days', l:'경과일', sortable:true, w:60},
+    {k:'_actions', l:'', sortable:false, w:120},
+  ];
+  // 정렬 적용
+  const s=_YT.sort;
+  if(s.col){
+    items.sort((a,b)=>{
+      const av=a[s.col]||0, bv=b[s.col]||0;
+      if(typeof av==='string')return av.localeCompare(bv)*(s.dir==='asc'?1:-1);
+      return (av-bv)*(s.dir==='asc'?1:-1);
+    });
+  }
+  // thead
+  let html='<thead><tr>';
+  cols.forEach(c=>{
+    const sortCls = c.sortable ? (s.col===c.k ? 'sortable '+s.dir : 'sortable') : '';
+    const w = c.w ? `style="width:${c.w}px"` : '';
+    const onClick = c.sortable ? `onclick="ytSortBy('${c.k}')"` : '';
+    html+=`<th class="${sortCls}" ${w} ${onClick}>${c.l}</th>`;
+  });
+  html+='</tr></thead><tbody>';
+  if(items.length===0){
+    html+='<tr><td colspan="99" style="padding:40px;text-align:center;color:var(--text-muted)">검색 결과가 없습니다</td></tr>';
+  }
+  items.forEach((it,i)=>{
+    const checked=_YT.selected.has(it.video_id);
+    html+=`<tr data-vid="${it.video_id}" class="${checked?'sel':''}">
+      <td style="text-align:center"><input type="checkbox" ${checked?'checked':''} onchange="ytToggleSel('${it.video_id}',this.checked)"></td>
+      <td><img class="yt-thumb" src="${esc(it.thumbnail)}" loading="lazy" onerror="this.style.display='none'"></td>
+      <td>
+        <div class="yt-title" onclick="ytPreview('${esc(it.url)}')">${esc(it.title)}</div>
+        <div class="yt-channel">${esc(it.channel_name)} · ${esc(it.published||'').substring(0,10)}</div>
+      </td>
+      <td class="yt-num">${esc(it.duration_str)}</td>
+      <td class="yt-num">${fmtN(it.views)}</td>
+      <td class="yt-num">${fmtN(it.daily_views)}</td>
+      <td class="yt-num">${it.engagement||0}%</td>
+      <td class="yt-hot">${fmtN(it.hot_score)}</td>
+      <td class="yt-num">${it.days}일</td>
+      <td class="yt-actions">
+        <button onclick="ytAddOneToCanvas('${esc(it.url)}')" title="캔버스에 추가">🎬</button>
+        <button onclick="ytOpenOriginal('${esc(it.url)}')" title="YouTube에서 열기">▶</button>
+        <button onclick="ytPreview('${esc(it.url)}')" title="프리뷰">⤢</button>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+  document.getElementById('yt-total').textContent=items.length;
+  ytUpdateSelCount();
+}
+function ytSortBy(col){
+  if(_YT.sort.col===col)_YT.sort.dir=_YT.sort.dir==='asc'?'desc':'asc';
+  else { _YT.sort.col=col; _YT.sort.dir=(col==='days'?'asc':'desc'); }
+  ytRender();
+}
+function ytToggleSel(vid, checked){
+  if(checked)_YT.selected.add(vid);
+  else _YT.selected.delete(vid);
+  const tr=document.querySelector(`#yt-table tr[data-vid="${vid}"]`);
+  if(tr)tr.classList.toggle('sel', checked);
+  ytUpdateSelCount();
+}
+function ytToggleAll(on){
+  _YT.selected.clear();
+  if(on)_YT.items.forEach(it=>_YT.selected.add(it.video_id));
+  ytRender();
+}
+function ytUpdateSelCount(){
+  document.getElementById('yt-sel-count').textContent=_YT.selected.size;
+  document.getElementById('yt-selectall').checked = _YT.selected.size===_YT.items.length && _YT.items.length>0;
+}
+
+// 선택된 영상들 → 그리드로 캔버스에 배치
+function ytAddSelectedToCanvas(){
+  const selected=_YT.items.filter(it=>_YT.selected.has(it.video_id));
+  if(selected.length===0){alert('선택된 영상이 없어요');return;}
+  // 그리드 계산: 4열, CE 크기 360×203, gap 20
+  const cols=4, w=360, h=203, gap=20;
+  const center=s2c(cw.clientWidth/2, cw.clientHeight/2);
+  const totalW = cols*w + (cols-1)*gap;
+  const startX = Math.round(center.x - totalW/2);
+  const startY = Math.round(center.y - 100);
+  selected.forEach((it,i)=>{
+    const row=Math.floor(i/cols), col=i%cols;
+    const x=startX + col*(w+gap);
+    const y=startY + row*(h+40);
+    const media=detectMediaUrl(it.url);
+    if(!media)return;
+    mkCe({type:'video', src:it.url, embedUrl:media.embedUrl||'', videoKind:media.videoKind,
+          videoProvider:media.videoProvider||'youtube', x, y, w, h,
+          muted:true, loop:true, autoplay:true, nodeName:(it.title||'').substring(0,40)});
+  });
+  autoSave();
+  showCopyToast(`🎬 ${selected.length}개 영상 추가됨 — ${cols}열 그리드`);
+  ytSearchClose();
+}
+
+function ytAddOneToCanvas(url){
+  const media=detectMediaUrl(url);
+  if(!media){alert('인식 못한 URL');return;}
+  const c=s2c(cw.clientWidth/2, cw.clientHeight/2);
+  mkCe({type:'video', src:url, embedUrl:media.embedUrl||'', videoKind:media.videoKind,
+        videoProvider:media.videoProvider||'youtube',
+        x:c.x-180, y:c.y-101, w:360, h:203,
+        muted:true, loop:true, autoplay:true});
+  autoSave();
+  showCopyToast(`🎬 캔버스에 추가됨`);
+}
+function ytOpenOriginal(url){ window.open(url, '_blank'); }
+function ytPreview(url){
+  _DL_PREVIEW.urls=[url];_DL_PREVIEW.idx=0;
+  document.getElementById('dl-preview-modal').style.display='flex';
+  dlPreviewRender();
+}
+
+// 선택된 것들 일괄 다운로드 (다운로더 노드 생성 대안)
+async function ytDownloadSelected(){
+  const selected=_YT.items.filter(it=>_YT.selected.has(it.video_id));
+  if(selected.length===0){alert('선택된 영상이 없어요');return;}
+  if(!workflowId){alert('프로젝트를 먼저 저장해주세요');return;}
+  if(!confirm(`${selected.length}개 영상을 ${`{프로젝트}/videos/`} 로 다운로드합니다.\n(720p MP4, 순차 진행, 영상마다 30초~2분)`))return;
+  const st=document.getElementById('yt-status');
+  let done=0, fail=0;
+  for(const it of selected){
+    st.textContent=`📥 ${done+fail+1}/${selected.length} 다운 중… ${(it.title||'').substring(0,30)}`;
+    const r=await api('POST','/api/media/download',{
+      url:it.url, projectId:workflowId,
+      format:'mp4', quality:'720', audioOnly:false, subtitles:false
+    });
+    if(r&&r.ok)done++;else fail++;
+  }
+  st.textContent=`✅ ${done} 성공 / ❌ ${fail} 실패`;
+  showCopyToast(`다운로드 완료 — 성공 ${done} · 실패 ${fail}`);
+  try{fpRefresh(true)}catch(e){}
+}
+
+// 선택 영상 자막 일괄 생성
+async function ytSubtitleSelected(){
+  const selected=_YT.items.filter(it=>_YT.selected.has(it.video_id));
+  if(selected.length===0){alert('선택된 영상이 없어요');return;}
+  if(!workflowId){alert('프로젝트를 먼저 저장해주세요');return;}
+  if(!confirm(`${selected.length}개 영상의 자막을 생성합니다.\nYouTube 네이티브 자막이 있으면 즉시, 없으면 Whisper 전사 (10분 영상 ≈ 5분).`))return;
+  const st=document.getElementById('yt-status');
+  let done=0, fail=0;
+  for(const it of selected){
+    st.textContent=`📝 ${done+fail+1}/${selected.length} 자막 중… ${(it.title||'').substring(0,30)}`;
+    const r=await api('POST','/api/media/subtitle',{
+      url:it.url, projectId:workflowId, method:'auto',
+      videoTitle:(it.title||'').substring(0,80),
+    });
+    if(r&&r.ok)done++;else fail++;
+  }
+  st.textContent=`✅ 자막 ${done} 성공 / ❌ ${fail} 실패`;
+  showCopyToast(`자막 생성 — 성공 ${done} · 실패 ${fail}`);
+  try{fpRefresh(true)}catch(e){}
+}
+
+// ═══════════════════════════════════════════════
 // 📍 앵커 연결 — 캔버스 요소의 임의 지점에서 다른 노드로 선 긋기
 // ═══════════════════════════════════════════════
 let _anchorConnect=null; // { ceId, anchorId } — 지금 "대상을 고르는 중"
@@ -7615,6 +9041,35 @@ function showCeCtxMenu(x, y, ce, dx, dy){
   const items=[
     {label:'📍 이 지점에서 연결선 시작', fn:()=>startAnchorConnect(ce, dx, dy)},
     ce.type==='region' ? {label:'🎨 배경색 변경', fn:()=>{const ev={clientX:x,clientY:y};showColorPicker(ev,ce)}} : null,
+    ce.type==='region' && !ce.scrollable ? {label:'🔭 스크롤 박스 모드 켜기', fn:()=>regionEnableScroll(ce)} : null,
+    ce.type==='region' && ce.scrollable ? {label:'🔭 스크롤 박스 모드 끄기', fn:()=>regionDisableScroll(ce)} : null,
+    ce.type==='region' && ce.scrollable ? {label:'🔄 멤버 재스캔 (현재 영역 안 노드 다시 담기)', fn:()=>{
+      const inside=_regionFindInsideNodes(ce);
+      ce.memberIds=inside.map(n=>n.id);
+      _regionApplyScroll(ce);autoSave();showCopyToast(`🔭 멤버 ${inside.length}개 재설정`);
+    }} : null,
+    ce.type==='region' ? {label:'▶ 이 영역만 실행', fn:()=>executeRegion(ce)} : null,
+    ce.type==='region' ? {label:(typeof ce.execOrder==='number'?`🔢 실행 순서 변경 (현재 #${ce.execOrder})`:'🔢 실행 순서 부여'), fn:()=>{
+      const cur = (typeof ce.execOrder==='number')?String(ce.execOrder):'';
+      const v = prompt('실행 순서 번호 입력 (숫자) · 빈 값 = 순서 해제:', cur);
+      if(v===null) return;
+      const s = (v||'').trim();
+      if(s==='') { _regionClearOrder(ce); return; }
+      const n = parseInt(s,10);
+      if(isNaN(n) || n<1){ alert('1 이상의 숫자를 입력하세요'); return; }
+      ce.execOrder = n;
+      _regionRefreshExecBadge(ce);
+      execProgressRefresh();
+      autoSave();
+    }} : null,
+    ce.type==='region' ? {label:'🏷 단계 이름 설정', fn:()=>{
+      const v = prompt('이 영역의 단계 이름 (예: 전처리, 분석, 요약):', ce.execLabel||'');
+      if(v===null) return;
+      ce.execLabel = (v||'').trim();
+      _regionRefreshExecBadge(ce);
+      execProgressRefresh();
+      autoSave();
+    }} : null,
     {label:'🗑 이 요소 삭제', fn:()=>delCe(ce.id), danger:true},
   ].filter(Boolean);
   items.forEach(it=>{
@@ -8835,8 +10290,114 @@ document.addEventListener('keydown',(e)=>{
   }
 }, true);
 
+// 초기 로드 시 auto-recover 토글 상태 (localStorage)
+window._autoRecoverAuth = (localStorage.getItem('autoRecoverAuth')!=='0');
+
+// ═══ Auth credential cache (IndexedDB) — 이 PC에만 저장, 인증실패 시 자동 재업로드 ═══
+const AUTH_CACHE_DB='flowdesk_auth_cache_v1';
+const AUTH_CACHE_STORE='creds';
+function _authCacheOpen(){
+  return new Promise((res,rej)=>{
+    if(!window.indexedDB){rej(new Error('IndexedDB 미지원'));return;}
+    const req=indexedDB.open(AUTH_CACHE_DB,1);
+    req.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(AUTH_CACHE_STORE))
+        db.createObjectStore(AUTH_CACHE_STORE,{keyPath:'key'});
+    };
+    req.onsuccess=()=>res(req.result);
+    req.onerror=()=>rej(req.error);
+  });
+}
+async function authCacheSet(provider,name,type,content){
+  // provider:'claude'|'gemini'  type:'oauth_json'|'apikey'|'token'
+  try{
+    const db=await _authCacheOpen();
+    return new Promise((res,rej)=>{
+      const tx=db.transaction(AUTH_CACHE_STORE,'readwrite');
+      tx.objectStore(AUTH_CACHE_STORE).put({
+        key:provider+':'+(name||'').trim(),
+        provider, name:(name||'').trim(), type, content,
+        savedAt:Date.now()
+      });
+      tx.oncomplete=()=>res(true);
+      tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){console.warn('[authCache] set 실패',e);return false;}
+}
+async function authCacheGet(provider,name){
+  try{
+    const db=await _authCacheOpen();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(AUTH_CACHE_STORE,'readonly');
+      const r=tx.objectStore(AUTH_CACHE_STORE).get(provider+':'+(name||'').trim());
+      r.onsuccess=()=>res(r.result||null);
+      r.onerror=()=>rej(r.error);
+    });
+  }catch(e){return null;}
+}
+async function authCacheList(){
+  try{
+    const db=await _authCacheOpen();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(AUTH_CACHE_STORE,'readonly');
+      const r=tx.objectStore(AUTH_CACHE_STORE).getAll();
+      r.onsuccess=()=>res(r.result||[]);
+      r.onerror=()=>rej(r.error);
+    });
+  }catch(e){return [];}
+}
+async function authCacheClearAll(){
+  try{
+    const db=await _authCacheOpen();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(AUTH_CACHE_STORE,'readwrite');
+      tx.objectStore(AUTH_CACHE_STORE).clear();
+      tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){return false;}
+}
+
+// 인증 실패 감지 시 IndexedDB 캐시에서 자동 재업로드 시도
+async function tryAutoRecoverAuth(h){
+  if(!h)return {attempted:0,recovered:0};
+  const recovered=[];
+  const attempted=[];
+  // Claude: 실패한 계정들을 name으로 캐시에서 찾아 재업로드
+  const failedClaude=(h.claude&&h.claude.accounts||[]).filter(a=>!a.ok);
+  for(const acc of failedClaude){
+    const cached=await authCacheGet('claude',acc.name);
+    if(!cached||!cached.content){attempted.push({name:acc.name,ok:false,reason:'캐시 없음'});continue;}
+    try{
+      const body={id:acc.id,name:acc.name,credentials:cached.content};
+      const r=await api('POST','/api/claude/accounts/save',body);
+      if(r&&r.ok){
+        recovered.push({provider:'claude',name:acc.name});
+        attempted.push({name:acc.name,ok:true});
+      } else attempted.push({name:acc.name,ok:false,reason:(r&&r.error)||'저장 실패'});
+    }catch(e){attempted.push({name:acc.name,ok:false,reason:e.message});}
+  }
+  // Gemini: auth_type 별도 보존
+  const failedGemini=(h.gemini&&h.gemini.accounts||[]).filter(a=>!a.ok);
+  for(const acc of failedGemini){
+    const cached=await authCacheGet('gemini',acc.name);
+    if(!cached||!cached.content){attempted.push({name:acc.name,ok:false,reason:'캐시 없음'});continue;}
+    const auth_type = cached.type==='apikey' ? 'apikey' : 'oauth';
+    try{
+      const body={id:acc.id,name:acc.name,auth_type,credentials:cached.content};
+      const r=await api('POST','/api/gemini/accounts/save',body);
+      if(r&&r.ok){
+        recovered.push({provider:'gemini',name:acc.name});
+        attempted.push({name:acc.name,ok:true});
+      } else attempted.push({name:acc.name,ok:false,reason:(r&&r.error)||'저장 실패'});
+    }catch(e){attempted.push({name:acc.name,ok:false,reason:e.message});}
+  }
+  return {attempted:attempted.length,recovered:recovered.length,recoveredList:recovered,details:attempted};
+}
+
 // ═══ 인증 헬스체크 배지 ═══
 let _authHealthTimer=null;
+let _authRecoverInFlight=false;
 async function runAuthHealthCheck(quick){
   const badge=document.getElementById('auth-health-badge');
   const txt=document.getElementById('auth-health-text');
@@ -8868,6 +10429,23 @@ async function runAuthHealthCheck(quick){
     const claudeBad = cTotal>0 && cOk===0;
     const geminiBad = gTotal>0 && gOk===0;
     const someBad = cTotal>0 && cOk<cTotal || gTotal>0 && gOk<gTotal;
+    // ── 자동 복구: 설정 ON이고 실패 계정 있고 recovery 진행중 아니면 1회 시도
+    if((claudeBad||geminiBad||someBad) && !_authRecoverInFlight && window._autoRecoverAuth!==false){
+      _authRecoverInFlight=true;
+      badge.className='auth-badge auth-loading';
+      txt.textContent='🔄 내 PC 캐시로 자동 복구 시도…';
+      try{
+        const rec=await tryAutoRecoverAuth(r);
+        if(rec.recovered>0){
+          badge.className='auth-badge auth-loading';
+          txt.textContent=`🔧 ${rec.recovered}개 계정 재업로드 완료 — 재점검 중…`;
+          _authRecoverInFlight=false;
+          setTimeout(()=>runAuthHealthCheck(quick),600); // 재검사
+          return;
+        }
+      }catch(e){console.warn('[auto-recover]',e);}
+      _authRecoverInFlight=false;
+    }
     if(claudeBad && geminiBad){
       badge.className='auth-badge auth-fail';
       txt.textContent=`🔴 모든 인증 실패 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
@@ -11331,9 +12909,83 @@ async function openSettings(){
   document.querySelectorAll('input[name="s-wf-sub"]').forEach(r => r.checked = (r.value === wfSub));
   document.querySelectorAll('input[name="s-wf-folder"]').forEach(r => r.checked = (r.value === wfFold));
   updateWfPreview();
+  // 인증 자동 복구 토글 상태 로드 + 캐시 요약
+  const autoRec = (localStorage.getItem('autoRecoverAuth')!=='0'); // 기본 ON
+  window._autoRecoverAuth = autoRec;
+  const arChk = document.getElementById('s-auto-recover-auth'); if(arChk) arChk.checked = autoRec;
+  try{
+    const list = await authCacheList();
+    const st = document.getElementById('s-auth-cache-status');
+    if(st){
+      if(!list.length) st.innerHTML = '<span style="color:var(--text-muted)">캐시 없음 — 계정을 한 번 업로드하면 이 PC에 저장됩니다</span>';
+      else {
+        const claudeNames = list.filter(x=>x.provider==='claude').map(x=>x.name);
+        const geminiNames = list.filter(x=>x.provider==='gemini').map(x=>x.name);
+        const parts=[];
+        if(claudeNames.length) parts.push(`🤖 Claude: ${claudeNames.join(', ')}`);
+        if(geminiNames.length) parts.push(`✨ Gemini: ${geminiNames.join(', ')}`);
+        st.innerHTML = `<span style="color:#a3e635">✓</span> 캐시된 계정: ${parts.join(' · ')}`;
+      }
+    }
+  }catch(e){}
+
+  // YouTube API key 상태 표시 (값은 masked)
+  const ytKey = (s.youtube_api_key || '').trim();
+  const ytEnvHint = s.youtube_api_key_source === 'env' ? ' <span style="color:var(--text-muted)">(컨테이너 환경변수)</span>' : '';
+  const ytStatus = document.getElementById('s-youtube-status');
+  const ytInput = document.getElementById('s-youtube-key');
+  if(ytKey){
+    const masked = ytKey.length > 8 ? ytKey.slice(0,6)+'…'+ytKey.slice(-4) : '••••';
+    ytStatus.innerHTML = `<span style="color:#a3e635">✓ 저장됨</span> <code style="color:var(--text-muted);font-family:var(--mono)">${masked}</code>${ytEnvHint}`;
+    ytInput.value=''; ytInput.placeholder = '새 키로 교체하려면 여기에 붙여넣기';
+  } else {
+    ytStatus.innerHTML = '<span style="color:#ebcb8b">⚠ 미설정</span> — YouTube 검색 기능이 작동하지 않습니다';
+    ytInput.value=''; ytInput.placeholder = 'AIzaSy... (붙여넣기)';
+  }
   document.getElementById('settings-modal').style.display = 'flex';
   loadClaudeAccounts();
   loadGeminiAccounts();
+}
+
+function saveAutoRecoverAuth(on){
+  localStorage.setItem('autoRecoverAuth', on?'1':'0');
+  window._autoRecoverAuth = !!on;
+}
+
+async function showAuthCacheList(){
+  const list = await authCacheList();
+  if(!list.length){alert('캐시된 인증 정보가 없습니다.\n\n계정을 업로드/저장하면 자동으로 캐시됩니다.');return;}
+  const rows = list.map(x=>{
+    const ts = new Date(x.savedAt).toLocaleString();
+    const typeLabel = x.type==='apikey'?'API 키':(x.type==='token'?'토큰':'OAuth JSON');
+    const len = (x.content||'').length;
+    return `• [${x.provider}] ${x.name} — ${typeLabel} (${len}자) · ${ts}`;
+  }).join('\n');
+  alert('📋 IndexedDB 캐시 목록 (이 PC 전용)\n\n'+rows);
+}
+
+async function clearAuthCache(){
+  if(!confirm('이 PC 브라우저의 인증 캐시를 전부 삭제할까요?\n\n서버 측 계정은 영향받지 않습니다.')) return;
+  await authCacheClearAll();
+  openSettings();
+}
+
+async function saveYoutubeApiKey(){
+  const key = document.getElementById('s-youtube-key').value.trim();
+  if(!key){ alert('API 키를 입력하세요'); return; }
+  if(!/^AIza[0-9A-Za-z_-]{30,}$/.test(key)){
+    if(!confirm('일반적인 Google API 키 형식이 아닙니다 (AIzaSy...). 그래도 저장하시겠어요?')) return;
+  }
+  const r = await api('POST','/api/settings/set',{key:'youtube_api_key', value:key});
+  if(r&&r.ok){ openSettings(); }
+  else alert('저장 실패: '+(r&&r.error||''));
+}
+
+async function deleteYoutubeApiKey(){
+  if(!confirm('저장된 YouTube API 키를 삭제할까요?')) return;
+  const r = await api('POST','/api/settings/delete',{key:'youtube_api_key'});
+  if(r&&r.ok){ openSettings(); }
+  else alert('삭제 실패: '+(r&&r.error||''));
 }
 
 function populateDefaultModelSelect(provider, current){
@@ -11599,6 +13251,7 @@ async function saveClaudeToken(){
   });
   const r=await api('POST','/api/claude/accounts/save',{name,credentials:creds});
   if(r.ok){
+    authCacheSet('claude',name,'token',creds);
     document.getElementById('claude-token-form').style.display='none';
     loadClaudeAccounts();
     alert(`저장 완료: ${name}\n토큰 길이: ${token.length}자\n\n활성화 버튼을 눌러 사용하세요.`);
@@ -11617,6 +13270,7 @@ async function saveClaudeAccount(){
   try { JSON.parse(creds); } catch(e){ return alert('유효한 JSON이 아닙니다'); }
   const r = await api('POST', '/api/claude/accounts/save', {name, credentials: creds});
   if(r && r.ok){
+    authCacheSet('claude',name,'oauth_json',creds);
     document.getElementById('claude-paste-form').style.display = 'none';
     loadClaudeAccounts();
     alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
@@ -11701,6 +13355,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         try { JSON.parse(reader.result); } catch(err){ alert('유효한 JSON이 아닙니다'); return; }
         const r = await api('POST', '/api/claude/accounts/save', {name, credentials: reader.result});
         if(r && r.ok){
+          authCacheSet('claude',name,'oauth_json',reader.result);
           loadClaudeAccounts();
           alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
         } else alert('실패: ' + ((r && r.error) || ''));
@@ -11761,6 +13416,7 @@ async function saveGeminiApikey(){
   }
   const r = await api('POST', '/api/gemini/accounts/save', {name, auth_type:'apikey', credentials:key});
   if(r && r.ok){
+    authCacheSet('gemini',name,'apikey',key);
     document.getElementById('gemini-apikey-form').style.display='none';
     loadGeminiAccounts();
     alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
@@ -11774,6 +13430,7 @@ async function saveGeminiOauth(){
   try { JSON.parse(creds); } catch(e){ return alert('유효한 JSON이 아닙니다'); }
   const r = await api('POST', '/api/gemini/accounts/save', {name, auth_type:'oauth', credentials:creds});
   if(r && r.ok){
+    authCacheSet('gemini',name,'oauth_json',creds);
     document.getElementById('gemini-oauth-form').style.display='none';
     loadGeminiAccounts();
     alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
@@ -11819,6 +13476,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         try { JSON.parse(reader.result); } catch(err){ alert('유효한 JSON이 아닙니다'); fi.value=''; return; }
         const r = await api('POST', '/api/gemini/accounts/save', {name, auth_type:'oauth', credentials: reader.result});
         if(r && r.ok){
+          authCacheSet('gemini',name,'oauth_json',reader.result);
           loadGeminiAccounts();
           alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
         } else alert('실패: ' + ((r && r.error) || ''));
