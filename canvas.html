@@ -1021,6 +1021,11 @@ body.focus-mode #fp-panel:not(.fp-user-pinned){display:none!important}
 .fp-hd .fp-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px;transition:.12s}
 .fp-hd .fp-btn:hover{color:var(--text);background:rgba(255,255,255,.08)}
 .fp-body{flex:1;overflow-y:auto;padding:2px 0;min-height:0}
+.fp-item .fp-chk{opacity:0;width:12px;height:12px;margin-right:4px;cursor:pointer;accent-color:#3b82f6;transition:opacity .1s}
+.fp-item:hover .fp-chk,.fp-item.sel .fp-chk{opacity:1}
+.fp-item.sel{background:rgba(59,130,246,.15);outline:1px solid rgba(59,130,246,.4)}
+.fp-sel-btn{padding:3px 8px;background:rgba(59,130,246,.18);color:#7ecfff;border:1px solid rgba(59,130,246,.4);border-radius:3px;cursor:pointer;font-size:10px;white-space:nowrap}
+.fp-sel-btn:hover{background:rgba(59,130,246,.3)}
 .fp-body::-webkit-scrollbar{width:5px}
 .fp-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px}
 .fp-group{margin-bottom:2px}
@@ -1486,12 +1491,22 @@ body.focus-mode #canvas-controls{display:none}
     <span class="fp-title">파일</span>
     <span class="fp-count" id="fp-total">0</span>
     <span style="flex:1"></span>
+    <button class="fp-btn" onclick="event.stopPropagation();fpMkdir()" title="새 폴더 만들기">➕</button>
     <button class="fp-btn" onclick="event.stopPropagation();fpRefresh(true)" title="새로고침">🔄</button>
     <button class="fp-btn" onclick="event.stopPropagation();fpToggleSystem()" id="fp-sys-btn" title="시스템 폴더 표시/숨김" style="opacity:.5">⚙</button>
     <button class="fp-btn" onclick="event.stopPropagation();fpCollapse()" title="접기">▼</button>
   </div>
   <div class="fp-body" id="fp-body">
     <div class="fp-empty">로딩 중…</div>
+  </div>
+  <div class="fp-sel-bar" id="fp-sel-bar" style="display:none;padding:5px 6px;background:rgba(59,130,246,.12);border-top:1px solid rgba(59,130,246,.3);font-size:10.5px">
+    <span id="fp-sel-count" style="color:#7ecfff;font-weight:700">0개 선택</span>
+    <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">
+      <button onclick="fpSelAction('copy-project')" class="fp-sel-btn" title="다른 프로젝트로 복사">📋 복사</button>
+      <button onclick="fpSelAction('new-project')" class="fp-sel-btn" title="이 파일들로 새 프로젝트 시작">🆕 새 프로젝트</button>
+      <button onclick="fpSelAction('move-folder')" class="fp-sel-btn" title="다른 폴더로 이동">➡ 이동</button>
+      <button onclick="fpSelClear()" class="fp-sel-btn" style="margin-left:auto">✕</button>
+    </div>
   </div>
   <div class="fp-foot" id="fp-foot"></div>
 </div>
@@ -5667,8 +5682,27 @@ function startCeCreate(type){
 function addCeText(x,y){
   const ce=mkCe({type:'text',x:x-50,y:y-10,content:'메모',fontSize:18});
   selCe(ce);autoSave();
-  setTimeout(()=>{ce.el.focus();document.execCommand('selectAll',false,null)},50);
+  setTimeout(()=>{
+    // contenteditable body에 포커스 + 전체 선택
+    const body = ce.el.querySelector('.ce-text-body') || ce.el;
+    body.focus();
+    try{
+      const range=document.createRange(); range.selectNodeContents(body);
+      const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    }catch(e){}
+  },50);
 }
+
+// 캔버스 빈 곳 더블클릭 → 해당 위치에 텍스트 메모 즉시 생성
+cw.addEventListener('dblclick', e=>{
+  // 진짜 빈 영역(캔버스 배경/cvs/svg)인지 확인
+  const onBg = e.target===cw || e.target===cvs || e.target.tagName==='svg' || e.target.id==='svg' || e.target.id==='canvas';
+  if(!onBg) return;
+  // 선택된 연결선의 dblclick → 웨이포인트 추가 핸들러가 이미 등록됨 (그건 hit path 에서 처리)
+  e.preventDefault(); e.stopPropagation();
+  const cp = s2c(e.clientX, e.clientY);
+  addCeText(cp.x, cp.y);
+});
 // 이미지 업로드 처리
 document.getElementById('ce-img-input').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
@@ -6470,6 +6504,19 @@ function _restoreVideoPlaybackState(snap){
   }, 50);
 }
 
+// 문서 노드는 undo/redo 후 엔진이 깨져서 검게 나오는 경우가 있음
+// → 강제로 전부 unmount + remount 해서 깔끔하게 복구
+function _forceRemountAllDocs(){
+  setTimeout(()=>{
+    nodes.forEach(n=>{
+      if(n.type!=='document' || !n.el) return;
+      if(n.collapsed) return; // 접힌 문서는 mini 만 표시
+      try{ docInlineUnmount(n); }catch(e){}
+      setTimeout(()=>{ try{ docInlineMount(n); }catch(e){} }, 80);
+    });
+  }, 150);
+}
+
 function undo(){
   if(undoStack.length===0)return;
   const videoSnap = _captureVideoPlaybackState();
@@ -6478,6 +6525,7 @@ function undo(){
   loadState(JSON.parse(prev));
   lastSavedState=prev;
   _restoreVideoPlaybackState(videoSnap);
+  _forceRemountAllDocs();
   console.log('[UNDO] '+undoStack.length+' 남음');
   _updateUndoRedoBar();
   showCopyToast('⟲ 뒤로가기');
@@ -6490,6 +6538,7 @@ function redo(){
   loadState(JSON.parse(next));
   lastSavedState=next;
   _restoreVideoPlaybackState(videoSnap);
+  _forceRemountAllDocs();
   console.log('[REDO]');
   _updateUndoRedoBar();
   showCopyToast('⟳ 앞으로가기');
@@ -12733,21 +12782,49 @@ async function delMemoTab(id){
   const isTemp=memo?memo.is_temp:true;
 
   if(hasContent&&isTemp){
-    // 내용이 있는 임시 메모 → 저장/삭제/취소 선택
-    const action=confirm(`"${memo?.name||'무제'}" 메모에 내용이 있습니다.\n\n[확인] = 저장하고 닫기\n[취소] = 삭제하고 닫기`);
-    if(action){
-      // 저장하고 닫기
-      const name=prompt('저장할 이름:',memo?.name||'')||memo?.name||'무제';
+    // 내용이 있는 임시 메모 → 3가지 선택지 (저장 / 닫기만 / 편집 계속)
+    const action = await _memoCloseChoice(memo?.name||'무제', content);
+    if(action==='cancel') return; // 편집 계속
+    if(action==='save'){
+      const name = prompt('저장할 이름:', memo?.name||'') || memo?.name || '무제';
       await api('POST','/api/memo/save',{id,name,content,isTemp:false});
-    } else {
-      if(!confirm('정말 삭제할까요?'))return;
-      await api('POST','/api/memo/delete',{id});
     }
+    // action==='close' 면 저장도 삭제도 안 함 — 그냥 탭만 닫음
+    // 삭제는 별도 🗑 버튼으로만 가능 (실수 방지)
   }
   // 빈 임시 메모 또는 저장된 메모 → 그냥 탭에서 닫기 (삭제 안 함)
   if(activeMemoId==id)closeMemoTab();
   openMemos=openMemos.filter(m=>m.id!=id);
   renderMemoBar();
+}
+
+// 3-버튼 닫기 다이얼로그 — 저장 / 닫기만 / 편집 계속
+function _memoCloseChoice(name, content){
+  return new Promise(res=>{
+    const bg = document.createElement('div');
+    bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:800;display:flex;align-items:center;justify-content:center';
+    const esc=s=>(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    const preview = esc((content||'').substring(0,120)) + ((content||'').length>120?'…':'');
+    bg.innerHTML = `<div style="width:440px;background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;padding:18px;box-shadow:0 8px 32px rgba(0,0,0,.6)">
+      <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:8px">📝 "${esc(name)}" 메모 처리</div>
+      <div style="font-size:11.5px;color:var(--text-dim);margin-bottom:6px">내용이 있는 임시 메모입니다. 어떻게 할까요?</div>
+      <div style="padding:8px 10px;background:var(--bg-0);border-radius:4px;font-size:11px;color:var(--text-muted);max-height:80px;overflow:hidden;margin-bottom:14px;white-space:pre-wrap">${preview}</div>
+      <div style="display:flex;gap:6px;flex-direction:column">
+        <button data-act="save" style="padding:9px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:700;font-size:12.5px">💾 저장하고 닫기</button>
+        <button data-act="close" style="padding:9px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">✖ 닫기만 (저장 X · 삭제 X)</button>
+        <button data-act="cancel" style="padding:7px;background:transparent;color:var(--text-muted);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">↩ 편집 계속</button>
+      </div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text-muted);text-align:center">※ 삭제는 상단 🗑 버튼으로만 가능 — 여기선 실수 방지로 삭제 옵션 없음</div>
+    </div>`;
+    document.body.appendChild(bg);
+    bg.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{
+      const act = b.dataset.act; bg.remove(); res(act);
+    }));
+    bg.addEventListener('click',e=>{ if(e.target===bg){ bg.remove(); res('cancel'); } });
+    document.addEventListener('keydown', function onKey(e){
+      if(e.key==='Escape'){ bg.remove(); res('cancel'); document.removeEventListener('keydown', onKey); }
+    });
+  });
 }
 async function deleteMemo(){
   if(!activeMemoId||!confirm('이 메모를 삭제할까요?'))return;
@@ -14483,7 +14560,40 @@ document.addEventListener('keydown',function(e){
     if(ae&&ae.id==='sb-input'){e.preventDefault();openModal('input');return}
     else if(ae&&ae.id==='sb-output'){e.preventDefault();openModal('output');return}
   }
-  // Shift+Space + I/O: Input/Output 확대 (텍스트 입력 중에도 안전, shiftKey 항상 요구)
+  // Shift+Space — 확대 토글 (열려있으면 닫기) · 대상 자동 판정
+  //  · 이미 모달이 열려있으면 → 그 모달 닫기
+  //  · 선택된 CE 가 video → 전체화면 프리뷰 토글
+  //  · 선택된 노드가 document → 문서 모달 토글
+  //  · 그 외 에이전트류 노드 → Input 확대 (포커스가 sb-output 이면 Output)
+  if(e.shiftKey && e.code==='Space' && !e.ctrlKey && !e.altKey && !e.metaKey){
+    // 이미 열려있는 모달 체크 (있으면 닫기)
+    const agentModal = document.getElementById('modal');
+    if(agentModal && agentModal.classList.contains('show')){ e.preventDefault(); closeModal(); return; }
+    const docModal = document.getElementById('doc-modal');
+    if(docModal && docModal.style.display==='flex' && typeof docMbClose==='function'){ e.preventDefault(); docMbClose(); return; }
+    const videoOverlay = document.getElementById('ce-video-fs');
+    if(videoOverlay && videoOverlay.style.display!=='none'){
+      e.preventDefault();
+      videoOverlay.style.display='none';
+      // 정리 로직 호출 (있으면)
+      if(typeof _closeCeVideoFullscreen==='function') _closeCeVideoFullscreen();
+      return;
+    }
+    // 열어야 할 대상 판정
+    if(selectedCe && selectedCe.type==='video' && typeof _openCeVideoFullscreen==='function'){
+      e.preventDefault(); _openCeVideoFullscreen(selectedCe); return;
+    }
+    if(selectedNode && selectedNode.type==='document' && typeof docOpenModal==='function'){
+      e.preventDefault(); docOpenModal(selectedNode); return;
+    }
+    if(selectedNode && typeof isAgentType==='function' && isAgentType(selectedNode.type)){
+      e.preventDefault();
+      const ae = document.activeElement;
+      openModal(ae && ae.id==='sb-output' ? 'output' : 'input');
+      return;
+    }
+  }
+  // Shift+Space + I/O: 기존 호환 — 명시적으로 Input/Output 지정
   if(_spaceDown&&e.shiftKey&&selectedNode&&(e.code==='KeyI'||e.code==='KeyO')){
     e.preventDefault();
     openModal(e.code==='KeyI'?'input':'output');

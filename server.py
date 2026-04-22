@@ -2063,6 +2063,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/doc/read": self._doc_read,
             "/api/doc/write": self._doc_write,
             "/api/project/file/upload": self._project_file_upload,
+            "/api/project/mkdir": self._project_mkdir,
+            "/api/project/copy-files": self._project_copy_files,
+            "/api/project/move-files": self._project_move_files,
             "/api/doc/delete": self._doc_delete,
             "/api/doc/restore": self._doc_restore,
             "/api/doc/milestone": self._doc_milestone,
@@ -3566,6 +3569,105 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try: os.remove(p); pruned += 1
             except Exception: pass
         if pruned: log(f"[DOC_THIN] {filename}: {pruned}개 자동 정리")
+
+    def _project_mkdir(self, body):
+        """프로젝트 폴더 안에 임의 하위 폴더 생성.
+        body: {projectId, folderName (상대경로 허용, 예: 'refs' 또는 'archive/2024')}"""
+        pid = (body.get("projectId") or "").strip()
+        folder = (body.get("folderName") or "").strip()
+        if not pid or not folder:
+            return {"ok": False, "error": "projectId, folderName 필요"}
+        # 상위 이동(..) / 절대경로 차단
+        folder = folder.replace("\\", "/").strip("/")
+        if ".." in folder.split("/") or folder.startswith("/"):
+            return {"ok": False, "error": "유효하지 않은 경로"}
+        try:
+            row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        except Exception as e:
+            return {"ok": False, "error": f"DB 오류: {e}"}
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트 미저장"}
+        target = os.path.join(row["work_dir"], folder)
+        if not os.path.abspath(target).startswith(os.path.abspath(row["work_dir"])):
+            return {"ok": False, "error": "경로 침범"}
+        try:
+            os.makedirs(target, exist_ok=True)
+            return {"ok": True, "path": target, "relPath": folder}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _project_copy_files(self, body):
+        """프로젝트 폴더 내 파일들을 다른 목적지로 복사.
+        body: {projectId (source), files (relpaths), targetProjectId?, targetAbsPath?, subfolder?}
+        - targetProjectId 우선 (해당 프로젝트 work_dir 로)
+        - 아니면 targetAbsPath (/volume1/... 절대 경로)
+        - subfolder 지정하면 그 밑으로 (없으면 루트)
+        return: {ok, copied:[{src,dst}], failed:[]}"""
+        return self._project_copy_or_move(body, move=False)
+
+    def _project_move_files(self, body):
+        """동일하지만 원본 제거 (move)."""
+        return self._project_copy_or_move(body, move=True)
+
+    def _project_copy_or_move(self, body, move=False):
+        import shutil as _sh
+        pid = (body.get("projectId") or "").strip()
+        files = body.get("files") or []
+        target_pid = (body.get("targetProjectId") or "").strip()
+        target_abs = (body.get("targetAbsPath") or "").strip()
+        subfolder = (body.get("subfolder") or "").strip().replace("\\","/").strip("/")
+        if not pid or not files:
+            return {"ok": False, "error": "projectId, files 필요"}
+        # 소스 work_dir
+        try:
+            row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        except Exception as e:
+            return {"ok": False, "error": f"DB 오류: {e}"}
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "소스 프로젝트 미저장"}
+        src_root = row["work_dir"]
+        # 목적지 결정
+        if target_pid:
+            try:
+                trow = db_exec("SELECT work_dir FROM projects WHERE id=?", (target_pid,), fetchone=True)
+            except Exception as e:
+                return {"ok": False, "error": f"타겟 DB 오류: {e}"}
+            if not trow or not trow.get("work_dir"):
+                return {"ok": False, "error": "타겟 프로젝트 미저장"}
+            dst_root = trow["work_dir"]
+        elif target_abs:
+            dst_root = target_abs
+        else:
+            return {"ok": False, "error": "타겟 경로 필요 (targetProjectId 또는 targetAbsPath)"}
+        if subfolder:
+            if ".." in subfolder.split("/"): return {"ok": False, "error": "유효하지 않은 subfolder"}
+            dst_root = os.path.join(dst_root, subfolder)
+        try: os.makedirs(dst_root, exist_ok=True)
+        except Exception as e: return {"ok": False, "error": f"타겟 폴더 생성 실패: {e}"}
+        copied = []; failed = []
+        for rel in files:
+            rel = (rel or "").replace("\\","/").lstrip("/")
+            if ".." in rel.split("/"):
+                failed.append({"file":rel,"error":"경로 침범"}); continue
+            src = os.path.join(src_root, rel)
+            if not os.path.isfile(src):
+                failed.append({"file":rel,"error":"원본 없음"}); continue
+            fname = os.path.basename(rel)
+            dst = os.path.join(dst_root, fname)
+            # 중복 시 (2), (3) ... 번호
+            if os.path.exists(dst):
+                stem, ext = os.path.splitext(fname)
+                for i in range(2, 1000):
+                    cand = os.path.join(dst_root, f"{stem} ({i}){ext}")
+                    if not os.path.exists(cand): dst = cand; break
+            try:
+                if move: _sh.move(src, dst)
+                else: _sh.copy2(src, dst)
+                copied.append({"src":rel,"dst":os.path.relpath(dst, dst_root)})
+            except Exception as e:
+                failed.append({"file":rel,"error":str(e)})
+        return {"ok": True, "copied": copied, "failed": failed,
+                "dstRoot": dst_root, "moved": move}
 
     def _project_file_upload(self, body):
         """로컬 파일을 프로젝트 폴더로 직접 저장 (싱크 스타일).
