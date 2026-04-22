@@ -261,13 +261,16 @@ body > nav.nav, body > div.tb{display:none!important}
 /* NODE RESIZE */
 .nd-resize{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:4}
 .nd-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:6px;height:6px;border-right:2px solid var(--text-muted);border-bottom:2px solid var(--text-muted)}
-/* 엣지 리사이즈 핸들 — 가로(E)/세로(S) 단독 변경용 */
+/* 엣지 리사이즈 핸들 — 4방향 단독 변경 (E/W/S/N) */
 .nd-resize-e{position:absolute;right:0;top:18px;bottom:18px;width:6px;cursor:ew-resize;z-index:3;opacity:0;transition:opacity .12s}
+.nd-resize-w{position:absolute;left:0;top:18px;bottom:18px;width:6px;cursor:ew-resize;z-index:3;opacity:0;transition:opacity .12s}
 .nd-resize-s{position:absolute;left:18px;right:18px;bottom:0;height:6px;cursor:ns-resize;z-index:3;opacity:0;transition:opacity .12s}
-.nd:hover .nd-resize-e,.nd.sel .nd-resize-e{opacity:1;background:rgba(76,175,80,.25)}
-.nd:hover .nd-resize-s,.nd.sel .nd-resize-s{opacity:1;background:rgba(76,175,80,.25)}
-.nd-resize-e:hover{background:rgba(76,175,80,.5)!important}
-.nd-resize-s:hover{background:rgba(76,175,80,.5)!important}
+.nd-resize-n{position:absolute;left:18px;right:18px;top:0;height:6px;cursor:ns-resize;z-index:3;opacity:0;transition:opacity .12s}
+.nd:hover .nd-resize-e,.nd.sel .nd-resize-e,
+.nd:hover .nd-resize-w,.nd.sel .nd-resize-w,
+.nd:hover .nd-resize-s,.nd.sel .nd-resize-s,
+.nd:hover .nd-resize-n,.nd.sel .nd-resize-n{opacity:1;background:rgba(76,175,80,.25)}
+.nd-resize-e:hover,.nd-resize-w:hover,.nd-resize-s:hover,.nd-resize-n:hover{background:rgba(76,175,80,.5)!important}
 /* PORTS — 4방향 (T/R/B/L), 하이브리드 표시 */
 .port{position:absolute;width:12px;height:12px;border-radius:50%;border:2px solid var(--text-muted);background:var(--bg-0);cursor:crosshair;z-index:10;transition:transform .12s,background .12s,box-shadow .12s,opacity .18s,border-color .12s;opacity:0;pointer-events:auto}
 /* 사용 중 포트는 항상 보임 */
@@ -474,9 +477,14 @@ body.exec-order-mode .ce.region:hover{outline-color:rgba(255,200,80,1);backgroun
 .ce-resize{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;background:var(--accent);border-radius:50%;cursor:nwse-resize;opacity:0;z-index:4}
 .ce.sel .ce-resize{opacity:.8}
 .ce-resize-e{position:absolute;right:-3px;top:18px;bottom:18px;width:6px;background:rgba(76,175,80,.25);cursor:ew-resize;opacity:0;transition:opacity .12s;border-radius:3px;z-index:3}
+.ce-resize-w{position:absolute;left:-3px;top:18px;bottom:18px;width:6px;background:rgba(76,175,80,.25);cursor:ew-resize;opacity:0;transition:opacity .12s;border-radius:3px;z-index:3}
 .ce-resize-s{position:absolute;left:18px;right:18px;bottom:-3px;height:6px;background:rgba(76,175,80,.25);cursor:ns-resize;opacity:0;transition:opacity .12s;border-radius:3px;z-index:3}
-.ce:hover .ce-resize-e,.ce.sel .ce-resize-e,.ce:hover .ce-resize-s,.ce.sel .ce-resize-s{opacity:1}
-.ce-resize-e:hover,.ce-resize-s:hover{background:rgba(76,175,80,.6)}
+.ce-resize-n{position:absolute;left:18px;right:18px;top:-3px;height:6px;background:rgba(76,175,80,.25);cursor:ns-resize;opacity:0;transition:opacity .12s;border-radius:3px;z-index:3}
+.ce:hover .ce-resize-e,.ce.sel .ce-resize-e,
+.ce:hover .ce-resize-w,.ce.sel .ce-resize-w,
+.ce:hover .ce-resize-s,.ce.sel .ce-resize-s,
+.ce:hover .ce-resize-n,.ce.sel .ce-resize-n{opacity:1}
+.ce-resize-e:hover,.ce-resize-w:hover,.ce-resize-s:hover,.ce-resize-n:hover{background:rgba(76,175,80,.6)}
 .ce-del{position:absolute;right:-10px;top:-10px;width:18px;height:18px;background:var(--red);color:#fff;border-radius:50%;text-align:center;line-height:16px;font-size:13px;cursor:pointer;opacity:0}
 .ce.sel .ce-del{opacity:.9}
 /* SELECTION BOX */
@@ -2812,12 +2820,12 @@ function providerOfType(t){return t==='agent-gemini'?'gemini':'claude'}
 let nodes=[],conns=[],canvasEls=[],selectedNode=null,selectedCe=null,multiSel=[],multiCeSel=[],workflowId=null,paneList=[];
 let isCeCreate=null,ceCreateSX=0,ceCreateSY=0,ceCreateEl=null;
 let isCeDrag=false,ceDragNd=null,ceDragOX=0,ceDragOY=0;
-let isCeResize=false,ceResNd=null,ceResSX=0,ceResSY=0,ceResSW=0,ceResSH=0,ceResDir='se';
+let isCeResize=false,ceResNd=null,ceResSX=0,ceResSY=0,ceResSW=0,ceResSH=0,ceResSNX=0,ceResSNY=0,ceResDir='se';
 let cx=0,cy=0,zoom=1,isPan=false,panSX=0,panSY=0;
 let isDrag=false,dragNd=null,dragOX=0,dragOY=0;
 let isConn=false,connSrc=null,connMX=0,connMY=0;
 let isDiv=false,divNd=null,divSY=0,divSH=0;
-let isResize=false,resNd=null,resSX=0,resSY=0,resSW=0,resSH=0,resDir='se';
+let isResize=false,resNd=null,resSX=0,resSY=0,resSW=0,resSH=0,resSNX=0,resSNY=0,resDir='se';
 let isSelBox=false,selBSX=0,selBSY=0;
 let selectedConn=null,isWpDrag=false,wpDrag=null;
 let ncnt=0,ctxPos={x:0,y:0};
@@ -2935,11 +2943,23 @@ window.addEventListener('mousemove',e=>{
   }
   if(isDiv&&divNd){const ta=divNd.el.querySelector('.nd-in textarea');if(ta)ta.style.height=Math.max(20,divSH+(e.clientY-divSY))+'px'}
   if(isResize&&resNd){
-    let w=resNd.w, h=resNd.h;
-    if(resDir==='se'||resDir==='e') w = Math.max(180, resSW+(e.clientX-resSX));
-    if(resDir==='se'||resDir==='s') h = Math.max(120, resSH+(e.clientY-resSY));
-    resNd.w=w; resNd.h=h;
+    let w=resNd.w, h=resNd.h, nx=resNd.x, ny=resNd.y;
+    const dx = e.clientX - resSX, dy = e.clientY - resSY;
+    if(resDir==='se'||resDir==='e') w = Math.max(180, resSW+dx);
+    if(resDir==='se'||resDir==='s') h = Math.max(120, resSH+dy);
+    if(resDir==='w'){
+      const newW = Math.max(180, resSW - dx);
+      nx = resSNX + (resSW - newW);  // 오른쪽 엣지 고정
+      w = newW;
+    }
+    if(resDir==='n'){
+      const newH = Math.max(120, resSH - dy);
+      ny = resSNY + (resSH - newH);  // 아래 엣지 고정
+      h = newH;
+    }
+    resNd.w=w; resNd.h=h; resNd.x=nx; resNd.y=ny;
     resNd.el.style.width=w+'px'; resNd.el.style.height=h+'px';
+    resNd.el.style.left=nx+'px'; resNd.el.style.top=ny+'px';
     drawConns();
   }
   if(isSelBox){const sb=document.getElementById('sel-box');const wr=cw.getBoundingClientRect();const mx=e.clientX-wr.left,my=e.clientY-wr.top;const x=Math.min(selBSX,mx),y=Math.min(selBSY,my);sb.style.left=x+'px';sb.style.top=y+'px';sb.style.width=Math.abs(mx-selBSX)+'px';sb.style.height=Math.abs(my-selBSY)+'px'}
@@ -2958,11 +2978,23 @@ window.addEventListener('mousemove',e=>{
     if(ceDragNd.type==='region'&&ceDragNd.scrollable){_regionShiftMembers(ceDragNd, _dx, _dy);}
     drawConns()}
   if(isCeResize&&ceResNd){
-    let w = ceResNd.w, h = ceResNd.h;
-    if(ceResDir==='se'||ceResDir==='e') w = Math.max(20, ceResSW+(e.clientX-ceResSX)/zoom);
-    if(ceResDir==='se'||ceResDir==='s') h = Math.max(20, ceResSH+(e.clientY-ceResSY)/zoom);
-    ceResNd.w=w; ceResNd.h=h;
+    let w = ceResNd.w, h = ceResNd.h, nx = ceResNd.x, ny = ceResNd.y;
+    const dx=(e.clientX-ceResSX)/zoom, dy=(e.clientY-ceResSY)/zoom;
+    if(ceResDir==='se'||ceResDir==='e') w = Math.max(20, ceResSW+dx);
+    if(ceResDir==='se'||ceResDir==='s') h = Math.max(20, ceResSH+dy);
+    if(ceResDir==='w'){
+      const newW = Math.max(20, ceResSW - dx);
+      nx = ceResSNX + (ceResSW - newW);
+      w = newW;
+    }
+    if(ceResDir==='n'){
+      const newH = Math.max(20, ceResSH - dy);
+      ny = ceResSNY + (ceResSH - newH);
+      h = newH;
+    }
+    ceResNd.w=w; ceResNd.h=h; ceResNd.x=nx; ceResNd.y=ny;
     ceResNd.el.style.width=w+'px'; ceResNd.el.style.height=h+'px';
+    ceResNd.el.style.left=nx+'px'; ceResNd.el.style.top=ny+'px';
     if(ceResNd.type==='region'&&ceResNd.scrollable){_regionApplyScroll(ceResNd);}
     drawConns();
   }
@@ -3808,8 +3840,10 @@ function buildDom(n){
     <div class="port port-t" data-node="${n.id}" data-side="t"></div>
     <div class="port port-b" data-node="${n.id}" data-side="b"></div>
     <div class="nd-resize"></div>
-    <div class="nd-resize-e" title="가로 크기 조정"></div>
-    <div class="nd-resize-s" title="세로 크기 조정"></div>`;
+    <div class="nd-resize-e" title="오른쪽 엣지"></div>
+    <div class="nd-resize-w" title="왼쪽 엣지"></div>
+    <div class="nd-resize-s" title="아래 엣지"></div>
+    <div class="nd-resize-n" title="위 엣지"></div>`;
   // EVENTS
   const hd=d.querySelector('.nd-hd');
   function startDrag(e){
@@ -3888,9 +3922,18 @@ function buildDom(n){
     drawTmpConn();
   }));
   // RESIZE
-  const rh=d.querySelector('.nd-resize');if(rh)rh.addEventListener('mousedown',e=>{e.stopPropagation();isResize=true;resNd=n;resSX=e.clientX;resSY=e.clientY;resSW=n.w;resSH=n.h;resDir='se'});
-  const rhE=d.querySelector('.nd-resize-e');if(rhE)rhE.addEventListener('mousedown',e=>{e.stopPropagation();isResize=true;resNd=n;resSX=e.clientX;resSY=e.clientY;resSW=n.w;resSH=n.h;resDir='e'});
-  const rhS=d.querySelector('.nd-resize-s');if(rhS)rhS.addEventListener('mousedown',e=>{e.stopPropagation();isResize=true;resNd=n;resSX=e.clientX;resSY=e.clientY;resSW=n.w;resSH=n.h;resDir='s'});
+  const _startResize=(dir)=>e=>{
+    e.stopPropagation(); isResize=true; resNd=n;
+    resSX=e.clientX; resSY=e.clientY;
+    resSW=n.w; resSH=n.h;
+    resSNX=n.x; resSNY=n.y;
+    resDir=dir;
+  };
+  const rh=d.querySelector('.nd-resize');if(rh)rh.addEventListener('mousedown',_startResize('se'));
+  const rhE=d.querySelector('.nd-resize-e');if(rhE)rhE.addEventListener('mousedown',_startResize('e'));
+  const rhW=d.querySelector('.nd-resize-w');if(rhW)rhW.addEventListener('mousedown',_startResize('w'));
+  const rhS=d.querySelector('.nd-resize-s');if(rhS)rhS.addEventListener('mousedown',_startResize('s'));
+  const rhN=d.querySelector('.nd-resize-n');if(rhN)rhN.addEventListener('mousedown',_startResize('n'));
   // CONTEXT MENU
   d.addEventListener('contextmenu',e=>{e.preventDefault();showCtx(e.clientX,e.clientY,'node',n)});
   // Document 노드 — 인라인 에디터 + 드롭존 + 이벤트 격리
@@ -5184,7 +5227,7 @@ function buildCeDom(ce){
   if(ce.type==='region'){
     d.style.background=ce.color;
     const labelColor=ce.labelColor||'#ffffff';
-    d.innerHTML=`<input class="ce-label" value="${ce.label||''}" placeholder="영역 이름" style="font-size:${ce.fontSize}px;color:${labelColor}"><button class="ce-style-btn" title="라벨 크기/색상" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+    d.innerHTML=`<input class="ce-label" value="${ce.label||''}" placeholder="영역 이름" style="font-size:${ce.fontSize}px;color:${labelColor}"><button class="ce-style-btn" title="라벨 크기/색상" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
     // 실행 순서 뱃지 (있으면 표시 — setTimeout으로 el 할당 이후 렌더)
     if(typeof ce.execOrder==='number'){
       setTimeout(()=>_regionRefreshExecBadge(ce), 0);
@@ -5207,7 +5250,7 @@ function buildCeDom(ce){
     d.style.cssText+=`;font-size:${ce.fontSize}px;min-width:60px;min-height:28px;color:${tc};background:${bg};border:${bw}px solid ${bc};padding:6px 10px;border-radius:4px;text-shadow:none`;
     d.setAttribute('data-text-ce','1');
     // 내부 편집 영역 + 스타일 버튼 + 리사이즈 핸들
-    d.innerHTML=`<div class="ce-text-body" contenteditable="true" spellcheck="false" style="outline:none;white-space:pre-wrap;word-break:break-word;min-height:16px">${(ce.content||'텍스트').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div><button class="ce-style-btn" title="스타일 조정" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+    d.innerHTML=`<div class="ce-text-body" contenteditable="true" spellcheck="false" style="outline:none;white-space:pre-wrap;word-break:break-word;min-height:16px">${(ce.content||'텍스트').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div><button class="ce-style-btn" title="스타일 조정" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
   } else if(ce.type==='checklist'){
     const s=ce.checkStyle||{};
     const bg=s.bgColor||'rgba(20,20,30,.92)';
@@ -5223,7 +5266,7 @@ function buildCeDom(ce){
         <button class="cl-add" data-cl-add title="항목 추가" style="flex:1;padding:3px 8px;background:rgba(250,204,21,.15);color:#facc15;border:1px solid rgba(250,204,21,.35);border-radius:3px;cursor:pointer;font-size:10.5px;font-weight:600">＋ 추가</button>
         <button class="ce-style-btn cl-style-btn" data-ce-style title="스타일" style="position:static;width:auto;height:auto;padding:3px 10px;border-radius:3px;background:rgba(34,197,94,.2);color:#a3e635;border:1px solid rgba(34,197,94,.3);font-weight:600;display:block">🎨</button>
       </div>
-      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
   } else if(ce.type==='minitable'){
     const tbl=ce.table||{rows:[['','']], style:{}};
     const s=tbl.style||{};
@@ -5244,7 +5287,7 @@ function buildCeDom(ce){
         <button class="ce-style-btn" data-ce-style title="스타일" style="position:static;width:auto;height:auto;padding:2px 8px;border-radius:3px;background:rgba(34,197,94,.2);color:#a3e635;border:1px solid rgba(34,197,94,.3);font-weight:600;display:block;font-size:10px">🎨</button>
       </div>
       <div data-mt-body style="flex:1;overflow:auto"></div>
-      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
     d.style.display='flex';
     d.style.flexDirection='column';
     // 임시 el 설정 후 렌더
@@ -5265,7 +5308,7 @@ function buildCeDom(ce){
       <div class="ce-port ce-port-r port-r" data-side="r"></div>
       <div class="ce-port ce-port-t port-t" data-side="t"></div>
       <div class="ce-port ce-port-b port-b" data-side="b"></div>
-      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
     // 텍스트 편집 — 기본 contenteditable=true (즉시 입력 가능)
     // CE mousedown 핸들러는 contenteditable 이 true 인 target 을 skip 하므로 드래그 간섭 없음
     const txt = d.querySelector('.shape-text');
@@ -5292,7 +5335,7 @@ function buildCeDom(ce){
       <div class="ce-port ce-port-r port-r" data-side="r"></div>
       <div class="ce-port ce-port-t port-t" data-side="t"></div>
       <div class="ce-port ce-port-b port-b" data-side="b"></div>
-      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
     if(ce.nodeType)d.classList.add('has-node-mode');
     // 포트 이벤트
     d.querySelectorAll('.ce-port').forEach(port=>port.addEventListener('mousedown',ev=>{
@@ -5333,7 +5376,7 @@ function buildCeDom(ce){
       <div class="ce-port ce-port-r port-r" data-side="r"></div>
       <div class="ce-port ce-port-t port-t" data-side="t"></div>
       <div class="ce-port ce-port-b port-b" data-side="b"></div>
-      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-s"></div><div class="ce-del">×</div>`;
+      <div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
     // 포트 이벤트
     d.querySelectorAll('.ce-port').forEach(port=>port.addEventListener('mousedown',ev=>{
       ev.stopPropagation();ev.preventDefault();
@@ -5449,9 +5492,20 @@ function buildCeDom(ce){
   }
   // 이벤트
   d.addEventListener('mousedown',e=>{
-    if(e.target.classList.contains('ce-resize')){e.stopPropagation();isCeResize=true;ceResNd=ce;ceResSX=e.clientX;ceResSY=e.clientY;ceResSW=ce.w;ceResSH=ce.h;ce._userResized=true;ceResDir='se';return}
-    if(e.target.classList.contains('ce-resize-e')){e.stopPropagation();isCeResize=true;ceResNd=ce;ceResSX=e.clientX;ceResSY=e.clientY;ceResSW=ce.w;ceResSH=ce.h;ce._userResized=true;ceResDir='e';return}
-    if(e.target.classList.contains('ce-resize-s')){e.stopPropagation();isCeResize=true;ceResNd=ce;ceResSX=e.clientX;ceResSY=e.clientY;ceResSW=ce.w;ceResSH=ce.h;ce._userResized=true;ceResDir='s';return}
+    const _startCeResize=(dir)=>{
+      e.stopPropagation();
+      isCeResize=true; ceResNd=ce;
+      ceResSX=e.clientX; ceResSY=e.clientY;
+      ceResSW=ce.w; ceResSH=ce.h;
+      ceResSNX=ce.x; ceResSNY=ce.y;
+      ce._userResized=true;
+      ceResDir=dir;
+    };
+    if(e.target.classList.contains('ce-resize')){_startCeResize('se');return}
+    if(e.target.classList.contains('ce-resize-e')){_startCeResize('e');return}
+    if(e.target.classList.contains('ce-resize-w')){_startCeResize('w');return}
+    if(e.target.classList.contains('ce-resize-s')){_startCeResize('s');return}
+    if(e.target.classList.contains('ce-resize-n')){_startCeResize('n');return}
     if(e.target.classList.contains('ce-del')){e.stopPropagation();delCe(ce.id);return}
     if(e.target.tagName==='INPUT'||e.target.contentEditable==='true'){return}
     e.stopPropagation();isCeDrag=true;ceDragNd=ce;
