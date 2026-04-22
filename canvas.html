@@ -6911,7 +6911,7 @@ async function refreshWfList(){const r=await api('GET','/api/project/list');cons
 // ═══════════════════════════════════════════════
 // 📂 프로젝트 파일 컴팩트 패널 (좌측 상단, 30s 폴링)
 // ═══════════════════════════════════════════════
-const _FP={lastHash:'', timer:null, showSystem:false, collapsedGroups:new Set()};
+const _FP={lastHash:'', timer:null, showSystem:false, collapsedGroups:new Set(), selected:new Set()};
 
 function fpShow(){
   if(!workflowId){fpHide();return;}
@@ -7037,9 +7037,11 @@ function fpRender(data){
       <div class="fp-items">`;
     files.forEach(f=>{
       const hasNode=nodeFiles.has(f.name);
-      html+=`<div class="fp-item ${hasNode?'has-node':'no-node'}" draggable="true"
+      const isSel=_FP.selected.has(f.path);
+      html+=`<div class="fp-item ${hasNode?'has-node':'no-node'} ${isSel?'sel':''}" draggable="true"
                  data-path="${esc(f.path)}" data-name="${esc(f.name)}" data-kind="${esc(f.kind)}" data-ext="${esc(f.ext||'')}"
                  title="${esc(f.path)} · ${fmt(f.size)} · ${new Date(f.mtime*1000).toLocaleString()}">
+        <input type="checkbox" class="fp-chk" ${isSel?'checked':''}>
         <span class="fp-badge">${hasNode?'🔗':'☁'}</span>
         <span class="fp-ico">${extIcon(f.ext)}</span>
         <span class="fp-name">${esc(f.name)}</span>
@@ -7062,13 +7064,145 @@ function fpRender(data){
     };
   });
   body.querySelectorAll('.fp-item').forEach(el=>{
-    el.onclick=ev=>{ev.stopPropagation();_fpItemClick(el);};
+    // 체크박스 → 선택 토글
+    const chk = el.querySelector('.fp-chk');
+    if(chk){
+      chk.onclick = ev=>{
+        ev.stopPropagation();
+        const p = el.dataset.path;
+        if(chk.checked) _FP.selected.add(p);
+        else _FP.selected.delete(p);
+        el.classList.toggle('sel', chk.checked);
+        _fpUpdateSelBar();
+      };
+    }
+    el.onclick=ev=>{
+      if(ev.target.classList.contains('fp-chk'))return; // 체크박스 클릭은 분리
+      ev.stopPropagation();_fpItemClick(el);
+    };
     el.oncontextmenu=ev=>{ev.preventDefault();ev.stopPropagation();_fpItemCtx(ev,el);};
     // 드래그 시작 — HTML5 drag API 대신 내부 상태로 (캔버스 좌표 변환 필요)
     el.addEventListener('mousedown',ev=>{
       if(ev.button!==0)return;
+      if(ev.target.classList.contains('fp-chk'))return;
       _fpStartDrag(ev,el);
     });
+  });
+  _fpUpdateSelBar();
+}
+
+// 선택 상태 바 갱신
+function _fpUpdateSelBar(){
+  const bar = document.getElementById('fp-sel-bar');
+  const cnt = document.getElementById('fp-sel-count');
+  if(!bar || !cnt) return;
+  const n = _FP.selected.size;
+  if(n > 0){ bar.style.display='block'; cnt.textContent = `${n}개 선택`; }
+  else bar.style.display='none';
+}
+
+// + 폴더 만들기
+async function fpMkdir(){
+  if(!workflowId){ alert('프로젝트를 먼저 저장해주세요'); return; }
+  const name = prompt('새 폴더 이름 (하위는 / 로 구분, 예: refs 또는 archive/2024):', 'refs');
+  if(!name || !name.trim()) return;
+  const r = await api('POST','/api/project/mkdir',{projectId:workflowId, folderName:name.trim()});
+  if(!r || !r.ok){ alert('폴더 생성 실패: '+((r&&r.error)||'')); return; }
+  showCopyToast(`📁 폴더 생성: ${r.relPath}`);
+  fpRefresh(true);
+}
+
+function fpSelClear(){
+  _FP.selected.clear();
+  document.querySelectorAll('.fp-item.sel').forEach(el=>{
+    el.classList.remove('sel');
+    const c = el.querySelector('.fp-chk'); if(c) c.checked = false;
+  });
+  _fpUpdateSelBar();
+}
+
+async function fpSelAction(act){
+  const files = Array.from(_FP.selected);
+  if(files.length === 0){ alert('선택된 파일 없음'); return; }
+  if(!workflowId){ alert('현재 프로젝트를 먼저 저장해주세요'); return; }
+  if(act === 'copy-project'){
+    // 프로젝트 목록 모달 → 선택
+    const target = await _fpPickProject();
+    if(!target) return;
+    const r = await api('POST','/api/project/copy-files',{
+      projectId: workflowId, targetProjectId: target.id, files,
+    });
+    if(!r || !r.ok){ alert('복사 실패: '+((r&&r.error)||'')); return; }
+    showCopyToast(`📋 ${r.copied.length}개 복사 완료 → "${target.name}"${r.failed.length?` (실패 ${r.failed.length})`:''}`);
+    fpSelClear();
+  } else if(act === 'new-project'){
+    const name = prompt('새 프로젝트 이름:', '');
+    if(!name || !name.trim()) return;
+    // 현재 새 프로젝트 저장 UI 재사용: svOpen 흐름이 복잡하니 직접 생성
+    // 먼저 새 프로젝트 저장 → 그 프로젝트에 파일 복사 → 새 프로젝트로 전환
+    const today = new Date();
+    const dateStr = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    // _project_save 엔드포인트에 name+date 로 요청
+    const saveRes = await api('POST','/api/project/create-empty',{name:name.trim(), date:dateStr});
+    if(!saveRes || !saveRes.ok){
+      alert('새 프로젝트 생성 실패 — 간단 방법: 상단 "📄 새 프로젝트" 로 먼저 생성 후 복사하세요.\n\n원인: '+((saveRes&&saveRes.error)||''));
+      return;
+    }
+    const copyRes = await api('POST','/api/project/copy-files',{
+      projectId: workflowId, targetProjectId: saveRes.id, files,
+    });
+    if(!copyRes || !copyRes.ok){ alert('복사 실패: '+((copyRes&&copyRes.error)||'')); return; }
+    showCopyToast(`🆕 새 프로젝트 "${name}" 생성 + ${copyRes.copied.length}개 파일 복사됨. 전환합니다…`);
+    fpSelClear();
+    // 새 프로젝트로 전환
+    setTimeout(()=>{ window.location.hash = 'wf='+saveRes.id; window.location.reload(); }, 800);
+  } else if(act === 'move-folder'){
+    const sub = prompt('이동할 하위 폴더 (현재 프로젝트 내, / 로 구분):', 'archive');
+    if(!sub || !sub.trim()) return;
+    // 먼저 폴더 생성 (없으면)
+    await api('POST','/api/project/mkdir',{projectId:workflowId, folderName:sub.trim()});
+    const r = await api('POST','/api/project/move-files',{
+      projectId: workflowId, targetProjectId: workflowId, subfolder: sub.trim(), files,
+    });
+    if(!r || !r.ok){ alert('이동 실패: '+((r&&r.error)||'')); return; }
+    showCopyToast(`➡ ${r.copied.length}개 → ${sub}/ 로 이동`);
+    fpSelClear();
+    fpRefresh(true);
+  }
+}
+
+// 프로젝트 선택 모달
+function _fpPickProject(){
+  return new Promise(async res=>{
+    const list = await api('GET','/api/project/list');
+    const projects = (list && list.ok && list.projects) ? list.projects : [];
+    const filtered = projects.filter(p=>p.id !== workflowId);
+    if(filtered.length === 0){ alert('다른 프로젝트가 없습니다'); res(null); return; }
+    const bg = document.createElement('div');
+    bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:800;display:flex;align-items:center;justify-content:center';
+    const esc=s=>(s||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    bg.innerHTML = `<div style="width:480px;max-height:70vh;background:var(--bg-1);border:1px solid var(--border-light);border-radius:8px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">📋 복사 대상 프로젝트 선택</div>
+      <div style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:4px">
+        ${filtered.map(p=>`<div class="_fpp-i" data-id="${p.id}" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px">
+          <div style="font-weight:600;color:var(--text)">${esc(p.name||'(무제)')}</div>
+          <div style="font-size:10px;color:var(--text-muted)">${esc(p.work_dir||'')}</div>
+        </div>`).join('')}
+      </div>
+      <div style="margin-top:10px;display:flex;justify-content:flex-end"><button data-cancel style="padding:6px 14px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer">취소</button></div>
+    </div>`;
+    document.body.appendChild(bg);
+    bg.querySelectorAll('._fpp-i').forEach(el=>{
+      el.onmouseenter = ()=>el.style.background='rgba(59,130,246,.15)';
+      el.onmouseleave = ()=>el.style.background='';
+      el.onclick = ()=>{
+        const id = el.dataset.id;
+        const p = filtered.find(x=>x.id===id);
+        bg.remove(); res(p);
+      };
+    });
+    bg.querySelector('[data-cancel]').onclick = ()=>{ bg.remove(); res(null); };
+    bg.addEventListener('click',e=>{ if(e.target===bg){ bg.remove(); res(null); } });
   });
 }
 

@@ -2066,6 +2066,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/mkdir": self._project_mkdir,
             "/api/project/copy-files": self._project_copy_files,
             "/api/project/move-files": self._project_move_files,
+            "/api/project/create-empty": self._project_create_empty,
             "/api/doc/delete": self._doc_delete,
             "/api/doc/restore": self._doc_restore,
             "/api/doc/milestone": self._doc_milestone,
@@ -3569,6 +3570,52 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try: os.remove(p); pruned += 1
             except Exception: pass
         if pruned: log(f"[DOC_THIN] {filename}: {pruned}개 자동 정리")
+
+    def _project_create_empty(self, body):
+        """빈 프로젝트 생성 (이름 + 날짜) — 파일 복사용 대상 프로젝트 빠른 생성.
+        body: {name, date? (YYYY-MM-DD)}
+        return: {ok, id, work_dir, name}"""
+        name = (body.get("name") or "").strip()
+        if not name:
+            return {"ok": False, "error": "name 필요"}
+        # 이름 검증
+        ok_name, name_err = validate_project_name(name)
+        if not ok_name:
+            return {"ok": False, "error": name_err}
+        # 날짜 오버라이드 파싱
+        date_override = None
+        date_str = (body.get("date") or "").strip()
+        if date_str:
+            for fmt in ("%Y-%m-%d", "%Y%m%d", "%Y/%m/%d"):
+                try: date_override = datetime.strptime(date_str, fmt); break
+                except ValueError: continue
+        # work_dir 계산 (기존 compute_work_dir 재사용)
+        try:
+            work_dir = compute_work_dir(name, date_override=date_override)
+        except Exception as e:
+            return {"ok": False, "error": f"경로 계산 실패: {e}"}
+        try:
+            os.makedirs(work_dir, exist_ok=True)
+        except Exception as e:
+            return {"ok": False, "error": f"폴더 생성 실패: {e}"}
+        # DB 등록
+        pid = hashlib.md5((work_dir+str(time.time())).encode()).hexdigest()[:8]
+        now_iso = datetime.now().isoformat()
+        empty_state = json.dumps({"nodes":[],"connections":[],"canvasElements":[],"wfName":name,"workDir":work_dir})
+        try:
+            db_exec(
+                "INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
+                (pid, name, empty_state, now_iso, now_iso, work_dir)
+            )
+        except Exception as e:
+            return {"ok": False, "error": f"DB INSERT 실패: {e}"}
+        # project.json 함께 생성
+        try:
+            with open(os.path.join(work_dir, "project.json"), "w", encoding="utf-8") as f:
+                f.write(empty_state)
+        except Exception: pass
+        log(f"[PROJECT_CREATE_EMPTY] {name} → {work_dir} (id={pid})")
+        return {"ok": True, "id": pid, "work_dir": work_dir, "name": name}
 
     def _project_mkdir(self, body):
         """프로젝트 폴더 안에 임의 하위 폴더 생성.
