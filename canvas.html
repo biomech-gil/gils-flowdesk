@@ -3027,6 +3027,25 @@ function showConnCtxMenu(x, y, c, ev){
       c.labels.push({id:'lb'+Date.now()+Math.random().toString(36).slice(2,5), text:text.trim(), t});
       drawConns(); autoSave();
     }},
+    {label:'↔ 화살표 방향 뒤집기', fn:()=>{
+      // src ↔ tgt, side 도 같이 스왑, 앵커도 스왑
+      const oSid=c.sid, oTid=c.tid, oFrom=c.fromSide, oTo=c.toSide;
+      c.sid = oTid; c.tid = oSid;
+      c.fromSide = oTo; c.toSide = oFrom;
+      const oSA=c.sourceAnchorId||null, oTA=c.targetAnchorId||null;
+      c.sourceAnchorId = oTA || undefined;
+      c.targetAnchorId = oSA || undefined;
+      // 라벨 t도 반전 (1-t)
+      if(Array.isArray(c.labels)){
+        c.labels.forEach(l=>{ if(typeof l.t==='number') l.t = 1 - l.t; });
+      }
+      // waypoints 도 순서 반전 (경로 방향 일치)
+      if(Array.isArray(c.waypoints) && c.waypoints.length>1){
+        c.waypoints.reverse();
+      }
+      drawConns(); autoSave();
+      showCopyToast('↔ 방향 뒤집음');
+    }},
     {label:'🗑 연결선 삭제', fn:()=>{
       conns = conns.filter(x=>x.id!==c.id);
       if(selectedConn===c.id) selectedConn=null;
@@ -3095,7 +3114,13 @@ function drawConns(){
     } else {
       s=portPos(sn,sSide);
     }
-    const e=portPos(tn,tSide);
+    // 타겟도 앵커가 있으면 앵커 좌표로 (화살표가 그 지점에 정확히 꽂힘)
+    let e;
+    if(c.targetAnchorId && tn.anchors){
+      e=anchorScreenPos(tn, c.targetAnchorId) || portPos(tn,tSide);
+    } else {
+      e=portPos(tn,tSide);
+    }
     // waypoints는 캔버스 좌표 → cw 화면 좌표로 변환
     const wpts=(c.waypoints||[]).map(wp=>({x:wp.x*zoom+cx,y:wp.y*zoom+cy}));
     const allPts=[s,...wpts,e];
@@ -3288,10 +3313,11 @@ function drawTmpConn(){
 function addConn(sid,did,fromSide,toSide,extra){
   fromSide=_shortSide(fromSide||'r');
   toSide=_shortSide(toSide||'l');
-  if(conns.find(c=>c.sid===sid&&c.tid===did&&(c.sourceAnchorId||null)===((extra&&extra.sourceAnchorId)||null)))return;
+  if(conns.find(c=>c.sid===sid&&c.tid===did&&(c.sourceAnchorId||null)===((extra&&extra.sourceAnchorId)||null)&&(c.targetAnchorId||null)===((extra&&extra.targetAnchorId)||null)))return;
   const c={id:'c'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
            sid,tid:did,fromSide,toSide,waypoints:[],curve:0.5};
   if(extra&&extra.sourceAnchorId)c.sourceAnchorId=extra.sourceAnchorId;
+  if(extra&&extra.targetAnchorId)c.targetAnchorId=extra.targetAnchorId;
   conns.push(c);
   // 템플릿 자동 주입 (node → node 일 때만, 이름이 있을 때)
   const srcNd=nodes.find(n=>n.id===sid) || canvasEls.find(x=>x.id===sid);
@@ -3341,11 +3367,27 @@ function finishConn(e){
     }
   }
 
-  // 연결 생성 — 소스가 CE 안커면 sourceAnchorId 포함
+  // 연결 생성 — 소스가 CE 앵커면 sourceAnchorId 포함
+  // 소스가 앵커면 타겟 드롭 지점에도 앵커를 생성해서 targetAnchorId 부여
+  // → 화살표가 사용자가 떨어뜨린 그 위치에 정확히 꽂힘 (핀포인트-to-핀포인트)
   if(tnd && tnd!==connSrc.node){
     const fromSide=connSrc.side||'r';
     const extra={};
-    if(connSrc.anchorId)extra.sourceAnchorId=connSrc.anchorId;
+    if(connSrc.anchorId){
+      extra.sourceAnchorId=connSrc.anchorId;
+      // 타겟이 CE 면 (anchors 배열 있음) 드롭 지점을 앵커로 추가
+      if(tnd.anchors !== undefined){
+        // 드롭 지점을 타겟 CE 로컬 좌표로 변환
+        const r = tnd.el.getBoundingClientRect();
+        const dx = Math.max(0, Math.min(tnd.w||r.width, (e.clientX - r.left)/zoom));
+        const dy = Math.max(0, Math.min(tnd.h||r.height, (e.clientY - r.top)/zoom));
+        if(!Array.isArray(tnd.anchors)) tnd.anchors = [];
+        const tid = 'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
+        tnd.anchors.push({id:tid, dx:Math.round(dx), dy:Math.round(dy), label:''});
+        try{ renderCeAnchors(tnd); }catch(err){}
+        extra.targetAnchorId = tid;
+      }
+    }
     const sources=multiSel.length>0&&multiSel.includes(connSrc.node)&&!connSrc.anchorId ? multiSel : [connSrc.node];
     sources.forEach(sn=>addConn(sn.id, tnd.id, fromSide, tside, extra));
     autoSave();
@@ -5788,7 +5830,7 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       outputFormat:(n.doc?.outputFormat)||'markdown',
     }:undefined,
   })),
-  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))})),
+  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))})),
   // YouTube 검색 탭 (여러 검색을 묶음으로 저장) — 프로젝트에 포함
   youtubeSearchTabs: (_YT.tabs||[]).map(t=>({
     id:t.id, name:t.name||'', query:t.query||'',
@@ -5991,7 +6033,7 @@ function loadState(st){
       mkNode({...nd, collapsed:true});
     }
   });
-  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))}));
+  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))}));
   // YouTube 검색 탭 복원
   _YT.tabs = (st.youtubeSearchTabs||[]).map(t=>({
     id:t.id||('yttab_'+Date.now()+'_'+Math.random().toString(36).slice(2,5)),
@@ -9964,7 +10006,11 @@ function renderCeAnchors(ce){
       ev.preventDefault();ev.stopPropagation();
       if(confirm('이 앵커와 연결된 선들도 함께 삭제됩니다. 삭제할까요?')){
         ce.anchors=ce.anchors.filter(x=>x.id!==a.id);
-        conns=conns.filter(c=>!(c.sid===ce.id&&c.sourceAnchorId===a.id));
+        conns=conns.filter(c=>{
+          const isSrcAnchor = (c.sid===ce.id && c.sourceAnchorId===a.id);
+          const isTgtAnchor = (c.tid===ce.id && c.targetAnchorId===a.id);
+          return !(isSrcAnchor || isTgtAnchor);
+        });
         renderCeAnchors(ce);drawConns();autoSave();
       }
     });
