@@ -4157,20 +4157,53 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             mime, _ = mimetypes.guess_type(full)
             if not mime: mime = 'application/octet-stream'
             size = os.path.getsize(full)
-            self.send_response(200)
-            self.send_header("Content-Type", mime)
-            self.send_header("Content-Length", str(size))
-            # 캐시: mtime 기반 ETag (브라우저가 변경 감지 가능)
             etag = f'"{int(os.path.getmtime(full))}-{size}"'
+            # HTTP Range 요청 처리 — HTML5 <video> 재생/시킹에 필수
+            range_hdr = self.headers.get("Range", "")
+            start, end = 0, size - 1
+            is_range = False
+            if range_hdr and range_hdr.startswith("bytes="):
+                try:
+                    rng = range_hdr[6:].split("-", 1)
+                    s = rng[0].strip()
+                    e = rng[1].strip() if len(rng) > 1 else ""
+                    if s:
+                        start = int(s)
+                        if e: end = int(e)
+                    elif e:
+                        # "bytes=-N" = 마지막 N 바이트
+                        n = int(e)
+                        start = max(0, size - n)
+                        end = size - 1
+                    start = max(0, min(start, size - 1))
+                    end = max(start, min(end, size - 1))
+                    is_range = True
+                except Exception:
+                    is_range = False
+            length = end - start + 1
+            if is_range:
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            else:
+                self.send_response(200)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(length))
             self.send_header("ETag", etag)
             self.send_header("Cache-Control", "private, max-age=60")
-            # 인라인 표시 (이미지/비디오/PDF 등)
             self.end_headers()
             with open(full, "rb") as f:
-                while True:
-                    chunk = f.read(65536)
+                f.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = f.read(min(65536, remaining))
                     if not chunk: break
-                    self.wfile.write(chunk)
+                    try:
+                        self.wfile.write(chunk)
+                    except (BrokenPipeError, ConnectionResetError):
+                        # 비디오 seek 시 클라이언트가 연결 끊는 정상 케이스
+                        return
+                    remaining -= len(chunk)
         except Exception as e:
             log(f"[PROJECT_FILE] 서빙 오류 {full}: {e}")
             try: self.send_error(500, str(e))
