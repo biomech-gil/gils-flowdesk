@@ -6551,8 +6551,14 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       c.w=w;c.h=h;
     }
     // text 는 contentEditable DOM 의 현재 내용 반영
+    // ⚠ .ce-text-body 내부만 읽기 — c.el 전체를 읽으면 스타일 버튼("A"), 닫기 버튼("×")
+    //   까지 content 에 섞여 저장→로드 반복 시 누적됨
     let content=c.content;
-    if(c.type==='text'&&c.el)content=c.el.innerText||c.el.textContent||c.content||'';
+    if(c.type==='text'&&c.el){
+      const body=c.el.querySelector('.ce-text-body');
+      if(body) content=body.innerText||body.textContent||c.content||'';
+      else content=c.content||'';
+    }
     return {id:c.id,type:c.type,x:c.x,y:c.y,w:w,h:h,color:c.color,label:c.label,content:content,fontSize:c.fontSize,src:c.src,originalSrc:c.originalSrc||undefined,
             // 이미지에 노드모드 부여한 경우의 전체 속성
             nodeType:c.nodeType||null,nodeName:c.nodeName||'',
@@ -6770,6 +6776,16 @@ function loadState(st){
     searchParams:t.searchParams||{},
   }));
   _YT.activeId = st.youtubeActiveTabId || (_YT.tabs.length ? _YT.tabs[0].id : null);
+  // 과거 버그 마이그레이션: text CE content 에 바깥 UI 버튼("A", "×") 이 섞여 저장된
+  //  프로젝트를 정리. 끝에 붙은 "A" 와 "×" 단독 라인을 반복적으로 제거.
+  (st.canvasElements||[]).forEach(ce=>{
+    if(ce.type==='text' && typeof ce.content==='string'){
+      let s=ce.content;
+      // 끝 줄이 "A" 또는 "×" 이거나 두 글자 "A×" 조합이면 반복적으로 제거
+      while(/\n\s*[A×]\s*$/.test(s) || /\n\s*A\s*×\s*$/.test(s)) s=s.replace(/\n\s*[A×]\s*$/, '').replace(/\n\s*A\s*×\s*$/, '');
+      ce.content=s;
+    }
+  });
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
   // 스크롤 박스 region 복원: 모든 노드 로드 완료 후 스크롤 상태 적용
   try{
