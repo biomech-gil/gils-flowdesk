@@ -1,257 +1,258 @@
 # Gil's FlowDesk
 
-**브라우저 기반 비주얼 AI 워크플로우 에디터**
+**브라우저 기반 멀티 에이전트 워크플로우 · 문서 편집 · 미디어 허브**
 
-다수의 Claude AI 에이전트를 노드로 배치하고, 연결선으로 워크플로우를 구성하여 자동 연쇄 작업을 수행하는 시스템입니다. `claude -p` (print 모드)를 통해 Claude Code CLI와 직접 통신하며, 별도의 터미널이나 tmux 없이 순수 웹 브라우저에서 모든 것을 제어합니다.
+Claude와 Gemini 등 여러 AI CLI를 노드로 배치·연결해 자동 연쇄 작업을 구성하고, 동시에 docx/hwp 문서 인라인 편집, YouTube 검색/자막 생성, 미디어 다운로드, Excel 시트 작성 등 **개인 연구실 수준의 복합 작업**을 단일 브라우저 캔버스에서 수행합니다.
+
+> 시놀로지 NAS에 Docker로 배포하고 여러 PC에서 접속하는 것을 기본 사용 시나리오로 설계되었습니다. 순수 웹 브라우저에서 모든 것을 제어하며 별도의 터미널이나 tmux 없이 `claude -p` / `gemini -p` print 모드로 통신합니다.
+
+## 시스템 개요
 
 ```
-브라우저 캔버스 (노드 연결/실행/메모)
-    ↓ HTTP API
-Python 서버 (server.py:8888)
-    ↓ subprocess (stdin)
-claude -p --dangerously-skip-permissions
-    ↓ Anthropic API
-Claude AI → 응답 → 다음 노드로 자동 전달
+┌──────────────── 브라우저 (canvas.html) ────────────────┐
+│  무한 캔버스 · 노드 워크플로우 · 문서/시트/비디오 인라인  │
+│  YouTube 검색 · 메모 시스템 · 파일 패널 · 인증 캐시       │
+└─────────────────────────┬──────────────────────────────┘
+                          │ HTTP JSON API
+                          ▼
+┌──────────────── server.py (Python, :8888) ─────────────┐
+│  PostgreSQL/SQLite · 파일 I/O · 버전 관리               │
+│  claude -p · gemini -p · yt-dlp · ffmpeg · whisper     │
+│  openpyxl · mammoth · googleapiclient                  │
+└────────────────────────────────────────────────────────┘
 ```
 
-## 주요 기능
+## 노드 타입
 
-### 캔버스 워크플로우
-- **무한 캔버스** — 마우스 드래그로 팬, 휠로 줌, 전체보기
-- **4가지 노드 타입** — 🤖 Agent (AI 실행), 📝 Memo (데이터), 📎 Input (입력), ⚡ Trigger (트리거)
-- **노드 연결** — 드래그로 연결선 생성, `{{노드명}}` 변수로 이전 결과 자동 주입
-- **노드 박스 드롭 연결** — 포트에 정확히 맞추지 않아도 노드 위에 놓으면 자동 연결
-- **워크플로우 실행** — 전체 실행 또는 개별 노드 실행, 자동 순차/병렬 처리
-- **실행 모드** — 대화전용 (💬) / CLI 도구 사용 (🔧) 모드 전환
-- **Output 편집** — 실행 결과를 직접 수정하여 다음 노드 입력 최적화
-- **토큰 제한 경고** — 23,000자 초과 시 접힌 노드에 빨간 펄싱 경고, 실행 전 확인
-- **치환 미리보기** — `{{변수}}`가 실제 내용으로 치환된 결과를 색상 구분하여 표시
+| 타입 | 아이콘 | 설명 |
+|---|---|---|
+| Agent (Claude) | 🤖 | Claude Code CLI 실행 — 대화 전용 또는 도구 사용 모드 |
+| Agent (Gemini) | ✨ | Gemini CLI 실행 — 동일하게 모드 전환 가능 |
+| Memo | 📝 | 정적 텍스트 · 프롬프트 템플릿 · 즐겨찾기 |
+| Input | 📎 | 외부 입력 · 수동 편집 · 트리거 대상 |
+| Trigger | ⚡ | 워크플로우 시작점 |
+| Downloader | 📥 | 여러 URL 일괄 → mp4/mp3/이미지/자막 다운로드 |
+| Sheet | 📊 | 엑셀식 그리드 · xlsx import/export · 시트 연산 |
+| Document | 📄 | docx (SuperDoc) · hwp (rhwp) · 텍스트/파일카드 인라인 편집 + 버전관리 |
 
-### 메모 시스템
-- **노트패드식 탭** — 여러 메모를 브라우저 탭처럼 관리, 가로 스크롤
-- **자동 저장** — 1초 디바운스로 DB에 자동 저장, 수동 저장 불필요
-- **날짜별 폴더** — 저장 시 자동으로 날짜 폴더(📅 2026-04-11)에 분류
-- **즐겨찾기** — 📌 고정 메모를 상단 네비게이션에 칩으로 표시, ⭐ 즐겨찾기 팝업
-- **폴더 트리** — 아이콘/색상 커스터마이징, 접기/펼치기, 일괄 삭제
-- **메모 ↔ 노드 전환** — 메모를 노드로 즉시 생성, 노드 Input/Output을 메모로 전환
+## 핵심 기능
 
-### 캔버스 이미지
-- **이미지 배치** — 캔버스에 이미지를 드래그앤드롭으로 배치
-- **노드 전환** — 이미지에 Agent/Memo/Input 타입을 부여하면 연결점 생성, 노드처럼 사용
-- **이미지 첨부** — 캔버스 이미지를 다른 Agent 노드에 이미지 인풋으로 전송
-- **연결선 기반 첨부** — 이미지와 연결된 모든 노드에 자동 이미지 첨부
+### 🔗 워크플로우
+- **연결선 기반 자동 연쇄** — 드래그로 연결, `{{노드명}}` / `{{@메모}}` 변수 치환, 23,000자 토큰 경고
+- **4방향 포트** — 상하좌우 어느 쪽으로도 연결. 노드 박스에 드롭하면 자동 연결
+- **영역(Region)** — 드래그로 사각형 영역 생성, 여러 노드 그룹화
+- **영역 스크롤 박스 🔭** — 영역을 스크롤 뷰포트로 변환 → 20페이지 문서를 세로로 펼쳐놓고 휠로 훑기
+- **영역 실행 오케스트레이션 🔢 🎬** — 영역마다 실행 순서 부여 → 순서대로 영역별 DAG 실행, 📊 진행 패널에서 실시간 모니터링
+- **치환 미리보기** — `{{변수}}` 가 실제 내용으로 치환된 결과를 색상 구분 표시
+- **Output 수동 편집** — 실행 결과를 직접 다듬어 다음 노드 입력 최적화
 
-### 프로젝트 관리
-- **프로젝트 저장/불러오기** — SQLite DB에 저장, 즐겨찾기, 이름 변경
-- **임시 자동 백업** — 작업 중 자동 임시 저장, 30일 자동 정리
-- **일괄 삭제** — 체크박스로 여러 프로젝트/메모 한번에 삭제
-- **실행 기록** — 모든 노드 실행 이력을 DB에 기록
+### 📄 문서 (Document 노드)
+- **docx 인라인 편집** — SuperDoc 엔진, A4 리본 편집
+- **hwp 인라인 편집** — rhwp 엔진 (CDN preload, 빈 화면 자동 재주입)
+- **Time Machine 버전 관리** — 저장마다 `.versions/` 자동 스냅샷 + 씨이어링 (24h 전부 → 시간당 → 일당 → 주당 → 월당)
+- **🏁 마일스톤** — 임의 시점 이름 붙은 영구 스냅샷
+- **자동 브로드캐스트 리로드** — 같은 파일을 가진 다른 노드들을 저장 시점에 자동 리로드 (스크롤 위치 보존)
+- **외부 수정 감지** — mtime 기반, 충돌 시 덮어쓰기/버전 보관 선택
+- **HWP → DOCX 변환** — 서버 측 자동 변환
 
-### UI/UX
-- **다크 테마** — Nord 색상 기반의 시각적으로 구분된 UI
-- **색상 코딩** — 기능별 버튼 색상 구분 (실행=초록, 정지=빨강, 메모=노랑, 시스템=보라, 이미지=청록)
-- **사이드바 압축** — Input/Output이 사이드바의 90% 이상 차지, 도구 버튼은 아이콘으로 축약
-- **리사이즈 구분선** — 사이드바/노드 내 Input↔Output 영역 드래그 조절
-- **확대 팝업** — Input/Output을 전체화면으로 확대, HTML 렌더링, 메모 전환
+### 📊 시트 (Sheet 노드)
+- **엑셀식 그리드** — 행/열 추가, 셀 편집, 정렬
+- **xlsx I/O** — openpyxl 기반 import/export, 다운로드 버튼
+- **출력 포맷** — Markdown/CSV/JSON/XLSX 선택
+
+### 🎬 미디어
+- **캔버스 비디오 임베드** — YouTube/Vimeo/TikTok/Instagram/직접 mp4 URL 자동 감지
+- **YouTube 검색** — Data API v3 · hot_score 분석 (참여율/일평균 조회수/경과일) · 체크박스 다중 선택 → 격자 배치
+- **자막 자동 생성** — YouTube 네이티브 API 우선, 없으면 faster-whisper CPU 폴백, SRT → WebVTT 변환 후 `<track>` 주입
+- **프레임 캡처** — yt-dlp `--download-sections` 로 3초 세그먼트 + ffmpeg 추출
+- **북마크** — 특정 시각에 라벨 저장, 타임라인 점프
+- **다운로드 노드 📥** — 여러 URL 일괄 mp4/mp3/이미지 + 자막을 프로젝트 폴더에 저장
+
+### 🔐 인증/계정
+- **Claude 다계정** — `.credentials.json` 파일 업로드 · 토큰 붙여넣기 · 웹 OAuth · 자동 로테이션 (round-robin / 우선순위 / 수동)
+- **Gemini 다계정** — API 키 · OAuth JSON · 격리된 홈 디렉토리
+- **🔄 인증 자동 복구** — 계정 업로드 시 브라우저 IndexedDB에 캐시, 서버 인증 실패 감지 시 조용히 재업로드 후 재점검
+- **YouTube Data API 키** — 설정 UI에서 저장 (DB 우선, env 폴백)
+- **인증 헬스 배지** — 상단 실시간 표시, 클릭하면 상세/재점검
+
+### 📁 프로젝트/파일
+- **프로젝트 = 폴더 모델** — `/synology/{년도}/{YYYYMMDD}_이름/` 고정 구조, 폴더 자체가 프로젝트
+- **Time Machine 임시 작업** — 저장 안 한 작업은 `/synology/_temp/` → 2일 후 휴지통 → 5일 후 영구 삭제
+- **폴더 탐색 패널** — 좌측 상단 실시간 파일 리스트 (docs/images/videos/audio/other 그룹), 드래그로 캔버스에 노드 생성
+- **DSM 딥링크** — 외부 DSM 파일 스테이션으로 바로 열기 (호스트 경로 ↔ 컨테이너 경로 자동 변환)
+- **시놀로지 브릿지** — `/synology` bind mount 로 컨테이너 루트 밖 임의 폴더 접근
+
+### 🧠 메모 시스템
+- 브라우저 탭식 다중 메모, 1초 디바운스 자동 저장
+- 날짜별 폴더 자동 분류 (📅 2026-04-11)
+- 📌 고정 메모 상단 네비게이션 칩, ⭐ 즐겨찾기 팝업
+- 폴더 트리 아이콘/색상 커스터마이징, 접기/펼치기, 일괄 삭제
+- 메모 ↔ 노드 양방향 전환
+
+### 🎨 UI/UX
+- Nord 기반 다크 테마, 기능별 색상 코딩
+- 캔버스 배경 클릭으로 노드+CE 통합 선택 해제
+- 캔버스 요소 (CE): 영역, 텍스트, 이미지, 비디오, 체크리스트, 미니 표
+- 사이드바 Input/Output 90%+ 차지, 리사이즈 가능한 구분선
+- 확대 팝업: Input/Output 전체화면 HTML 렌더링, 메모 전환
+- 4방향 포트 · 드롭 연결 · 방향 인식 곡선 베지어
 
 ## 아키텍처
 
 ```
-[캔버스 UI]  ──HTTP──  [server.py:8888]  ──subprocess──  [claude -p]
-                              │                               │
-                              ├─ /api/node-exec (실행)         ├─ stdin으로 프롬프트 전달
-                              ├─ /api/node-check (완료 확인)    ├─ stdout로 응답 수신
-                              ├─ /api/project/* (저장/불러오기)  └─ --dangerously-skip-permissions
-                              ├─ /api/memo/* (메모 CRUD)
-                              ├─ /api/upload (이미지 업로드)
-                              └─ /api/folder/* (폴더 관리)
+┌────────────────────── 브라우저 (canvas.html) ───────────────────┐
+│  ├─ 노드/CE 캔버스 + 연결선 SVG                                 │
+│  ├─ 메모 시스템 (탭·폴더·핀·즐겨찾기)                            │
+│  ├─ 문서 엔진 로더 (SuperDoc / rhwp / mammoth / plain)          │
+│  ├─ 미디어 (YouTube IFrame, 비디오 오버레이, WebVTT 자막)        │
+│  └─ IndexedDB 인증 캐시 + localStorage 설정                      │
+└──────────────────┬──────────────────────────────────────────────┘
+                   │ HTTP JSON API
+                   ▼
+┌────────────────────── server.py (Python stdlib) ────────────────┐
+│  :8888 HTTPServer                                                │
+│  ├─ PostgreSQL (메인) / SQLite (폴백) 이중 지원 · _pg_adapt_sql   │
+│  ├─ /api/node-exec → claude -p / gemini -p subprocess            │
+│  ├─ /api/doc/* → docx/hwp/txt 바이너리 I/O + 버전관리/씨이어링    │
+│  ├─ /api/sheet/* → openpyxl xlsx import/export                   │
+│  ├─ /api/media/* → yt-dlp + ffmpeg (다운로드/프레임/자막)         │
+│  ├─ /api/youtube/search → Data API v3 + hot_score                │
+│  ├─ /api/auth/health → 모든 계정 병렬 인증 테스트 (ThreadPool)    │
+│  └─ /api/project/* /memo/* /folder/* /upload /settings/*          │
+└──────────────────┬──────────────────────────────────────────────┘
+                   │
+   ┌───────────────┼──────────────┬─────────────────┬─────────────┐
+   ▼               ▼              ▼                 ▼             ▼
+ claude -p      gemini -p     yt-dlp+ffmpeg    faster-whisper   openpyxl
+ (Anthropic)   (Google AI)    (미디어)          (CPU 자막)       (엑셀)
 ```
-
-**핵심**: `claude -p` (print 모드)로 터미널 UI 없이 텍스트만 주고받습니다. tmux나 별도 터미널이 불필요합니다.
 
 ## 시놀로지 NAS Docker 배포 (권장)
 
-> **처음 배포하거나 Docker가 익숙하지 않다면**: [📖 DEPLOYMENT.md](./DEPLOYMENT.md) 문서에 단계별 전체 가이드, 포트 선택 기준, 외부 접속 방법, 트러블슈팅 등이 자세히 정리되어 있습니다.
+> 자세한 배포 가이드·포트 선택·외부 접속·트러블슈팅: [📖 DEPLOYMENT.md](./DEPLOYMENT.md)
 
-
-### 1. 시놀로지에 파일 업로드 (/volume1/docker/gils-flowdesk/)
-- Dockerfile, docker-compose.yml, .env (.env.example 복사), server.py, canvas.html 등
-
-### 2. 시놀로지에 데이터 폴더 미리 생성
+### 초기 1회 설정
 ```bash
-mkdir -p /volume1/FlowDesk/{db,workspace,creds,gemini-creds,uploads,whisper-cache}
-sudo chown -R 1000:1000 /volume1/FlowDesk/{workspace,creds,gemini-creds,uploads,whisper-cache}
-```
-- `db/` — PostgreSQL 데이터 (용량 커짐, SSD 권장)
-- `workspace/` — 각 노드가 파일 읽고 쓸 공간
-- `creds/` — Claude 인증 파일
-- `gemini-creds/` — Gemini 인증 파일
-- `uploads/` — 업로드된 이미지/PDF
-- `whisper-cache/` — YouTube 자막 Whisper 모델 캐시 (첫 사용 시 ~470MB 다운)
+# 시놀로지 SSH 접속 후:
 
-### 3. `.env` 작성
-```bash
+# 1. 필요한 모든 폴더를 uid 1000 권한으로 일괄 생성
+sudo bash setup-synology.sh
+#  → /volume1/FlowDesk/{db, workspace, creds, gemini-creds, uploads, whisper-cache}
+
+# 2. 앱 파일 배치
+mkdir -p /volume1/docker/gils-flowdesk
+# Dockerfile, docker-compose.yml, server.py, canvas.html, .env.example 등 업로드
+
+# 3. .env 작성
+cd /volume1/docker/gils-flowdesk
 cp .env.example .env
-# DB_PASSWORD 변경 필수
-# PORT 변경 가능 (기본 8888)
-# DB_DATA_HOST, WORKSPACE_HOST 등 경로 확인
-```
+# DB_PASSWORD (필수) · PORT (기본 9090) · YOUTUBE_API_KEY (선택) · WHISPER_MODEL (small) 등
 
-**포인트**: DB 파일이 `/volume1/FlowDesk/db/`에 실제 저장되므로
-- 도커 컨테이너 지워도 데이터 유지
-- 파일 탐색기/FTP로 직접 접근/백업 가능
-- 다른 시놀로지 서비스와 공유 가능
-
-### 3. 실행
-```bash
+# 4. 빌드 + 실행
 docker-compose up -d
 ```
 
-### 4. 첫 로그인
-- 브라우저: `http://시놀로지IP:8888`
-- 아이디: `gilhojong` / 비밀번호: `!!Il197119!!`
+### 첫 로그인
+- 브라우저: `http://시놀로지IP:포트`
+- ⚙️ 설정 → 🔑 Claude / Gemini 인증 업로드 → 사용 시작
+- (선택) 🎬 YouTube Data API 키 등록
 
-### 5. Claude 인증 업로드
-1. 본인 PC에서 `claude login` 후 `~/.claude/.credentials.json` 복사
-2. 웹에서 **⚙️ 설정** → **🔑 Claude Code 인증** → 파일에서 선택 → 저장
-3. DB에 영구 저장됨 (컨테이너 재시작해도 유지)
-
-### 6. 작업 폴더 설정
-- **⚙️ 설정** → **📁 작업 폴더 루트**: `/workspace` (컨테이너 내부 경로)
-- 이후 툴바의 📁 버튼으로 폴더 탐색 가능
-
-### 7. 외부 접근 (전국 어디서든)
-- 시놀로지 포트 포워딩 또는 DDNS + 리버스 프록시 (HTTPS)
+### 외부 접근
+시놀로지 포트 포워딩 또는 DDNS + 리버스 프록시(HTTPS) 권장. DSM 딥링크용 URL 은 ⚙️ 설정에서 DDNS 주소로 지정.
 
 ## 로컬 설치 (WSL Ubuntu)
 
 ### 요구사항
-
 | 항목 | 버전 |
 |------|------|
-| Windows 10/11 | WSL2 지원 |
-| WSL Ubuntu | 24.04 권장 |
+| WSL2 Ubuntu | 24.04 권장 |
 | Python 3 | 3.10+ |
-| Node.js | 18+ (Claude CLI용) |
-| Anthropic 계정 | Claude Max 또는 API Key |
+| Node.js | 18+ (Claude/Gemini CLI) |
 
-### 1단계: WSL + 프로젝트 클론
-
+### 자동 설치
 ```bash
-# WSL Ubuntu에서
 git clone https://github.com/biomech-gil/gils-flowdesk.git
 cd gils-flowdesk
+bash setup.sh      # tmux, nvm, node22, claude CLI 자동 설치
+claude             # 1회 Anthropic 로그인
+python3 server.py  # http://127.0.0.1:8888
 ```
 
-### 2단계: 자동 설치
-
-```bash
-bash setup.sh
-```
-
-setup.sh가 자동 설치하는 것:
-- tmux, python3, curl, lsof (apt)
-- nvm + Node.js 22 LTS
-- Claude Code CLI (`@anthropic-ai/claude-code`)
-
-### 3단계: Claude 인증
-
-```bash
-claude  # 첫 실행 시 Anthropic 로그인 (1회)
-```
-
-### 4단계: 실행
-
-**방법 A — 직접 실행:**
-```bash
-cd ~/gils-flowdesk
-python3 server.py
-# 브라우저에서 http://127.0.0.1:8888 접속
-```
-
-**방법 B — Windows 바탕화면 bat:**
-
-`claude_flow.bat` 파일을 바탕화면에 생성:
-```bat
-@echo off
-chcp 65001 >con
-title Gil's FlowDesk
-wsl -d Ubuntu -- bash ~/gils-flowdesk/launch-server.sh
-timeout /t 4 /nobreak >con
-start "" http://127.0.0.1:8888
-pause
-```
-
-### 5단계: 사용
-
-1. 브라우저에서 `http://127.0.0.1:8888` 접속
-2. 우클릭으로 Agent/Memo/Input 노드 생성
-3. 노드 연결 → Input에 프롬프트 작성 → ▶ 실행
-4. 워크플로우 저장 (💾)
-
-## 트러블슈팅
-
-### claude 명령을 못 찾음
-```
-해결: source ~/.nvm/nvm.sh && which claude
-서버가 자동으로 nvm/시스템 경로를 감지합니다.
-```
-
-### 긴 프롬프트 타임아웃
-```
-원인: claude -p는 약 23,000자(한국어) 이상에서 응답 지연 가능
-해결: 메모를 분할하고 중간 요약 Agent를 넣어 단계별 처리
-경고: 23,000자 초과 시 자동 경고 팝업 표시
-```
-
-### localhost 접속 안 됨
-```
-원인: localhost가 IPv6(::1)로 해석되어 서버(IPv4)에 연결 안 됨
-해결: 127.0.0.1:8888 으로 접속
-```
-
-### 포트 충돌
-```
-해결: lsof -i :8888 로 확인 후 kill, 서버에 allow_reuse_address 적용됨
-```
+## 자주 쓰는 단축키
+| 단축키 | 동작 |
+|---|---|
+| Alt+S | 프로젝트 저장 |
+| Alt+A | 전체 실행 |
+| Ctrl+Z / Ctrl+Y | 실행취소 / 재실행 |
+| Ctrl+휠 | 캔버스 줌 (영역 밖) / 영역 폰트 크기 (라벨 위) |
+| ESC | 모달/모드 종료 |
 
 ## 파일 구조
 
 ```
 gils-flowdesk/
-├── canvas.html          ← 메인 UI: 노드 캔버스 + 메모 시스템
-├── chat.html            ← 채팅 UI: 노드별 대화 인터페이스
-├── server.py            ← Python HTTP 서버 + Claude CLI 연동
-├── canvas.db            ← SQLite DB (프로젝트/메모/실행기록)
-├── setup.sh             ← 자동 설치 스크립트
-├── launch-server.sh     ← 서버 기동 스크립트 (tmux 백그라운드)
-├── uploads/             ← 업로드된 이미지 저장소
+├── canvas.html          ← 메인 UI (단일 파일, 10,000+ lines)
+├── chat.html            ← 채팅 전용 UI
+├── server.py            ← Python HTTP 서버 (6,000+ lines)
+├── Dockerfile           ← 빌드 이미지 (Python + Node + ffmpeg + yt-dlp)
+├── docker-compose.yml   ← Postgres + app 서비스 정의
+├── setup-synology.sh    ← 시놀로지 폴더/권한 초기 설정
+├── .env.example         ← 환경변수 템플릿
+├── DEPLOYMENT.md        ← 상세 배포 가이드
 └── README.md            ← 이 문서
 ```
 
-## API 엔드포인트
+## 주요 API 엔드포인트
 
 | Method | Path | 설명 |
-|--------|------|------|
-| POST | `/api/node-exec` | 노드 실행 (claude -p, stdin) |
-| GET | `/api/node-check?nodeId=` | 실행 완료 확인 + 결과 조회 |
-| POST | `/api/chat` | 채팅 메시지 전송 |
-| POST | `/api/project/save` | 프로젝트 저장 |
-| GET | `/api/project/load?id=` | 프로젝트 불러오기 |
-| GET | `/api/project/list` | 프로젝트 목록 |
-| POST | `/api/memo/save` | 메모 저장 |
-| GET | `/api/memo/list` | 메모 목록 |
-| GET | `/api/memo/pinned` | 고정 메모 목록 |
-| POST | `/api/folder/save` | 폴더 생성/수정 |
-| GET | `/api/folder/list` | 폴더 목록 |
-| POST | `/api/upload` | 이미지 업로드 |
+|---|---|---|
+| POST | /api/node-exec | 노드 실행 (Claude/Gemini subprocess) |
+| GET  | /api/node-check | 실행 결과 폴링 |
+| POST | /api/project/save | 프로젝트 저장 (폴더 = 프로젝트) |
+| GET  | /api/project/load | 프로젝트 불러오기 |
+| POST | /api/doc/read | 문서 바이너리 + mtime |
+| POST | /api/doc/write | 문서 저장 (외부 수정 감지 + 자동 스냅샷) |
+| GET  | /api/doc/versions | 버전 목록 |
+| POST | /api/doc/milestone | 영구 스냅샷 |
+| POST | /api/doc/hwp-to-docx | HWP → DOCX 변환 |
+| POST | /api/sheet/import | xlsx → JSON |
+| POST | /api/sheet/export | JSON → xlsx |
+| POST | /api/media/download | yt-dlp 다운로드 |
+| POST | /api/media/extract-frame | 특정 시각 프레임 |
+| POST | /api/media/subtitle | 자막 생성 (YouTube → Whisper) |
+| POST | /api/youtube/search | YouTube Data API v3 + hot_score |
+| GET  | /api/auth/health | 전체 계정 인증 상태 |
+| POST | /api/claude/accounts/* | Claude 계정 CRUD + 로테이션 |
+| POST | /api/gemini/accounts/* | Gemini 계정 CRUD |
+| GET/POST | /api/settings/* | system_settings (YouTube 키 등) |
+| POST | /api/memo/* /folder/* | 메모/폴더 CRUD |
+| POST | /api/upload | 이미지 업로드 |
 
-## 향후 계획
+## 트러블슈팅
 
-- Docker 컨테이너화 (시놀로지 NAS 배포)
-- 토큰 갱신 관리 UI
-- 워크플로우 템플릿 공유
-- 실시간 스트리밍 출력
+### 시놀로지 Bind mount 실패
+빌드 시 "`/volume1/FlowDesk/xxxx` does not exist" → `sudo bash setup-synology.sh` 재실행.
+
+### claude/gemini 명령 못 찾음 (로컬)
+`source ~/.nvm/nvm.sh && which claude` · 서버가 자동으로 nvm 경로 감지.
+
+### 긴 프롬프트 타임아웃
+23,000자 초과 시 펄싱 경고 · 메모 분할 + 중간 요약 Agent로 단계별 처리 권장.
+
+### localhost 접속 안 됨
+IPv6 해석 문제 · `127.0.0.1:8888` 로 접속.
+
+### rhwp 첫 드래그 빈 화면
+라이브러리 초기화 레이스 · 자동 2단계 재주입(600ms/1500ms)이 시도, 실패 시 노드의 🔄 리로드.
+
+### 인증 실패 배지
+토큰 만료 · ⚙️ 설정 → 🔄 자동 복구 토글 ON 이면 IndexedDB 캐시로 재업로드 시도. 그래도 실패 시 재로그인.
+
+### 같은 파일 여러 노드 편집 충돌
+한 노드 저장 → 나머지 노드 자동 리로드. 다른 노드도 편집 중이면 그 노드는 스킵 + 경고 토스트 (수동 🔄 로 해결).
+
+### 포트 충돌 (로컬)
+`lsof -i :8888` 로 확인 후 kill · 서버에 `allow_reuse_address` 적용돼 있음.
 
 ## 라이선스
 
