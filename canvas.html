@@ -1822,6 +1822,7 @@ body.focus-mode #canvas-controls{display:none}
           <span id="sh-speed-v" style="font-size:10.5px;color:var(--text);min-width:34px;text-align:center;font-family:var(--mono)">0.6×</span>
         </label>
         <button id="sh-game-start" onclick="shStartGame()" style="padding:6px 14px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#0a0a0a;border:none;border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700">▶ 시작</button>
+        <button id="sh-game-skip" onclick="shSkipCurrent()" title="현재 맨 아래 카드 건너뛰기 (감점 없음) — 브라우저가 단축키를 가로챌 때 사용" style="padding:6px 12px;background:rgba(251,189,44,.2);color:#fbbd2c;border:1px solid rgba(251,189,44,.4);border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700;display:none">⏭ 건너뛰기</button>
         <button id="sh-game-stop" onclick="shStopGame()" style="padding:6px 12px;background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(239,68,68,.4);border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:700;display:none">■ 종료</button>
         <div id="sh-hiscore" style="font-size:10.5px;color:var(--text-muted);min-width:90px;text-align:right"></div>
       </div>
@@ -12661,33 +12662,33 @@ const SH_KEY_LABELS = {
 };
 const SHORTCUTS = [
   // 노드 생성 — 핵심 (easy)
-  {g:'생성', code:'KeyQ', mod:'alt',      label:'🤖 Claude 노드', tier:1},
-  {g:'생성', code:'KeyT', mod:'alt',      label:'✨ Gemini 노드', tier:2},
-  {g:'생성', code:'KeyW', mod:'alt',      label:'📝 메모 노드',    tier:1},
-  {g:'생성', code:'KeyE', mod:'alt',      label:'📎 Input 노드',   tier:1},
-  {g:'생성', code:'KeyR', mod:'alt',      label:'⚡ Trigger 노드', tier:2},
-  {g:'생성', code:'KeyY', mod:'alt',      label:'⬇️ 다운로더 노드', tier:2},
-  {g:'생성', code:'KeyG', mod:'alt',      label:'📊 Sheet 노드',    tier:2},
-  {g:'생성', code:'KeyH', mod:'alt',      label:'📄 Document 노드', tier:2},
+  {g:'생성', code:'KeyQ', mod:'ctrlalt',      label:'🤖 Claude 노드', tier:1},
+  {g:'생성', code:'KeyT', mod:'ctrlalt',      label:'✨ Gemini 노드', tier:2},
+  {g:'생성', code:'KeyW', mod:'ctrlalt',      label:'📝 메모 노드',    tier:1},
+  {g:'생성', code:'KeyE', mod:'ctrlalt',      label:'📎 Input 노드',   tier:1},
+  {g:'생성', code:'KeyR', mod:'ctrlalt',      label:'⚡ Trigger 노드', tier:2},
+  {g:'생성', code:'KeyY', mod:'ctrlalt',      label:'⬇️ 다운로더 노드', tier:2},
+  {g:'생성', code:'KeyG', mod:'ctrlalt',      label:'📊 Sheet 노드',    tier:2},
+  {g:'생성', code:'KeyH', mod:'ctrlalt',      label:'📄 Document 노드', tier:2},
   // 실행/파일
-  {g:'실행', code:'KeyA', mod:'alt',      label:'▶ 전체 실행',      tier:1},
-  {g:'실행', code:'KeyX', mod:'alt',      label:'▶ 선택 실행',      tier:2},
-  {g:'파일', code:'KeyS', mod:'alt',      label:'💾 저장',           tier:1},
-  {g:'편집', code:'KeyD', mod:'alt',      label:'🗑 선택 삭제',      tier:2},
-  {g:'파일', code:'KeyF', mod:'alt',      label:'📁 파일 탐색',      tier:2},
-  {g:'편집', code:'KeyZ', mod:'alt',      label:'↶ 되돌리기',        tier:2},
+  {g:'실행', code:'KeyA', mod:'ctrlalt',      label:'▶ 전체 실행',      tier:1},
+  {g:'실행', code:'KeyX', mod:'ctrlalt',      label:'▶ 선택 실행',      tier:2},
+  {g:'파일', code:'KeyS', mod:'ctrlalt',      label:'💾 저장',           tier:1},
+  {g:'편집', code:'KeyD', mod:'ctrlalt',      label:'🗑 선택 삭제',      tier:2},
+  {g:'파일', code:'KeyF', mod:'ctrlalt',      label:'📁 파일 탐색',      tier:2},
+  {g:'편집', code:'KeyZ', mod:'ctrlalt',      label:'↶ 되돌리기',        tier:2},
   // 뷰
-  {g:'뷰',  code:'KeyC', mod:'alt',      label:'🔽 전체 접기',      tier:2},
-  {g:'뷰',  code:'KeyV', mod:'alt',      label:'🔼 전체 펼치기',    tier:2},
-  {g:'뷰',  code:'Backquote', mod:'alt', label:'🔲 집중 모드',      tier:2},
+  {g:'뷰',  code:'KeyC', mod:'ctrlalt',      label:'🔽 전체 접기',      tier:2},
+  {g:'뷰',  code:'KeyV', mod:'ctrlalt',      label:'🔼 전체 펼치기',    tier:2},
+  {g:'뷰',  code:'Backquote', mod:'ctrlalt', label:'🔲 집중 모드',      tier:2},
   // Alt+Shift 보조
-  {g:'요소', code:'KeyQ', mod:'altshift', label:'🟦 영역 그리기',   tier:3},
-  {g:'요소', code:'KeyW', mod:'altshift', label:'📝 캔버스 텍스트', tier:3},
-  {g:'요소', code:'KeyE', mod:'altshift', label:'🖼 이미지 추가',    tier:3},
-  {g:'요소', code:'KeyR', mod:'altshift', label:'📐 즉시 정렬',      tier:3},
-  {g:'패널', code:'KeyA', mod:'altshift', label:'📂 메모 폴더',      tier:3},
-  {g:'패널', code:'KeyS', mod:'altshift', label:'📝 새 메모 탭',     tier:3},
-  {g:'패널', code:'KeyD', mod:'altshift', label:'🗑 휴지통',         tier:3},
+  {g:'요소', code:'KeyQ', mod:'ctrlaltshift', label:'🟦 영역 그리기',   tier:3},
+  {g:'요소', code:'KeyW', mod:'ctrlaltshift', label:'📝 캔버스 텍스트', tier:3},
+  {g:'요소', code:'KeyE', mod:'ctrlaltshift', label:'🖼 이미지 추가',    tier:3},
+  {g:'요소', code:'KeyR', mod:'ctrlaltshift', label:'📐 즉시 정렬',      tier:3},
+  {g:'패널', code:'KeyA', mod:'ctrlaltshift', label:'📂 메모 폴더',      tier:3},
+  {g:'패널', code:'KeyS', mod:'ctrlaltshift', label:'📝 새 메모 탭',     tier:3},
+  {g:'패널', code:'KeyD', mod:'ctrlaltshift', label:'🗑 휴지통',         tier:3},
 ];
 
 function openShortcutsHub(){
@@ -12712,8 +12713,8 @@ function shSwitchTab(tab){
 }
 function _shKbdHtml(mod,code){
   const key=SH_KEY_LABELS[code]||code;
-  const parts=[`<span class="sh-kbd mod">Alt</span>`];
-  if(mod==='altshift')parts.push(`<span class="sh-kbd shift">Shift</span>`);
+  const parts=[`<span class="sh-kbd mod">Ctrl</span>`,`<span class="sh-kbd mod">Alt</span>`];
+  if(mod==='ctrlaltshift')parts.push(`<span class="sh-kbd shift">Shift</span>`);
   parts.push(`<span class="sh-kbd">${key}</span>`);
   return `<span class="sh-keys">${parts.join('+')}</span>`;
 }
@@ -12721,13 +12722,13 @@ function shRenderGuide(){
   const pane=document.getElementById('sh-pane-guide');
   // 그룹별 섹션
   const groups=[
-    {title:'🎯 Alt + 한 글자 — 주요 액션', mod:'alt'},
-    {title:'🎨 Alt + Shift + 한 글자 — 캔버스/패널', mod:'altshift'},
+    {title:'🎯 Ctrl + Alt + 한 글자 — 주요 액션', mod:'ctrlalt'},
+    {title:'🎨 Ctrl + Alt + Shift + 한 글자 — 보조 (캔버스/패널)', mod:'ctrlaltshift'},
   ];
   let html='';
   html+=`<div style="padding:10px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;font-size:12px;color:var(--text);margin-bottom:16px;line-height:1.7">
-    💡 <b style="color:#a7f3d0">Alt 한 손으로 모두 잡을 수 있도록</b> 왼손 영역(QWER/ASDF/ZXCV)에만 배치되어 있어요.<br>
-    캔버스를 클릭해서 입력 포커스를 빼고 눌러야 동작합니다. (텍스트 입력창에 포커스가 있으면 무시)
+    💡 <b style="color:#a7f3d0">Ctrl+Alt</b> 2-수식자 조합으로 브라우저 충돌을 최소화했습니다 (기존 Alt+ 단일은 크롬·웨일이 가끔 가로챘음).<br>
+    왼손 영역(QWER / ASDF / ZXCV) 으로 한 손 배치. 입력창에 포커스가 있으면 무시됩니다.
   </div>`;
   groups.forEach(grp=>{
     const rows=SHORTCUTS.filter(s=>s.mod===grp.mod);
@@ -12767,7 +12768,7 @@ const SH_STATE={
   },
   pool(){
     if(this.difficulty==='easy')return SHORTCUTS.filter(s=>s.tier===1);
-    if(this.difficulty==='medium')return SHORTCUTS.filter(s=>s.mod==='alt');
+    if(this.difficulty==='medium')return SHORTCUTS.filter(s=>s.mod==='ctrlalt');
     return SHORTCUTS.slice();
   },
 };
@@ -12824,6 +12825,7 @@ function shStartGame(){
   document.getElementById('sh-game-pause').style.display='none';
   document.getElementById('sh-game-start').style.display='none';
   document.getElementById('sh-game-stop').style.display='';
+  const skipBtn = document.getElementById('sh-game-skip'); if(skipBtn) skipBtn.style.display='';
   document.getElementById('sh-diff').disabled=true;
   clearShField();
   shRenderHud();
@@ -12839,6 +12841,7 @@ function shStopGame(){
   document.getElementById('sh-game-pause').style.display='none';
   document.getElementById('sh-game-start').style.display='';
   document.getElementById('sh-game-stop').style.display='none';
+  const skipBtn = document.getElementById('sh-game-skip'); if(skipBtn) skipBtn.style.display='none';
   document.getElementById('sh-diff').disabled=false;
   if(wasRunning){
     const final=SH_STATE.score;
@@ -12873,9 +12876,9 @@ function shSpawn(){
   const s=pool[Math.floor(Math.random()*pool.length)];
   const f=document.getElementById('sh-game-field');
   const c=document.createElement('div');
-  c.className='sh-card'+(s.mod==='altshift'?' shiftcard':'');
+  c.className='sh-card'+(s.mod==='ctrlaltshift'?' shiftcard':'');
   const keys=_shKbdHtml(s.mod,s.code);
-  c.innerHTML=`<div>${s.label}</div><div class="sh-card-hint">Alt${s.mod==='altshift'?' + Shift':''} + ${SH_KEY_LABELS[s.code]||s.code}</div>`;
+  c.innerHTML=`<div>${s.label}</div><div class="sh-card-hint">Ctrl + Alt${s.mod==='ctrlaltshift'?' + Shift':''} + ${SH_KEY_LABELS[s.code]||s.code}</div>`;
   // 좌우 random 위치
   const fw=f.clientWidth;
   const lx=60+Math.random()*(fw-200);
@@ -12909,6 +12912,23 @@ function shLoop(ts){
     }
   });
   SH_STATE.raf=requestAnimationFrame(shLoop);
+}
+// 현재 맨 아래 카드 건너뛰기 — 브라우저가 단축키 가로채서 입력 불가 시
+function shSkipCurrent(){
+  if(!SH_STATE.running||SH_STATE.paused)return;
+  // 가장 아래(가장 위험한) 카드 하나 찾아서 제거 (감점 없음, 콤보 유지)
+  let target=null, bestY=-1;
+  SH_STATE.cards.forEach(c=>{
+    if(c._missed)return;
+    const y=parseFloat(c.style.top)||0;
+    if(y>bestY){bestY=y;target=c;}
+  });
+  if(!target){ shSetFeedback('⚠ 건너뛸 카드가 없어요', '#aaa'); return; }
+  shSpawnFloat(target.offsetLeft+target.offsetWidth/2, target.offsetTop+target.offsetHeight, '⏭ SKIP', '#fbbd2c');
+  target.classList.add('hit');
+  setTimeout(()=>target.remove(),300);
+  SH_STATE.cards=SH_STATE.cards.filter(x=>x!==target);
+  shSetFeedback('⏭ 건너뜀 (브라우저 가로채기 회피)', '#fbbd2c');
 }
 function shMiss(c){
   // 카드 제거 + 점수 감산 + 생명 -1
@@ -13010,7 +13030,7 @@ function prPool(){
   const sel=document.getElementById('pr-range');
   const v=sel?sel.value:'alt';
   if(v==='easy')return SHORTCUTS.filter(s=>s.tier===1);
-  if(v==='alt')return SHORTCUTS.filter(s=>s.mod==='alt');
+  if(v==='alt')return SHORTCUTS.filter(s=>s.mod==='ctrlalt');
   return SHORTCUTS.slice();
 }
 function prRestart(){
@@ -13053,16 +13073,18 @@ function prRender(){
   const cur=PR_STATE.queue[PR_STATE.idx];
   const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const keyLabel=SH_KEY_LABELS[cur.code]||cur.code;
-  const modLabel=cur.mod==='altshift'?'Alt + Shift':'Alt';
-  const color=cur.mod==='altshift'?'#c4b5fd':'#7ecfff';
+  const modLabel=cur.mod==='ctrlaltshift'?'Ctrl + Alt + Shift':'Ctrl + Alt';
+  const color=cur.mod==='ctrlaltshift'?'#c4b5fd':'#7ecfff';
   cardEl.innerHTML=`
     <div style="padding:36px 48px;background:linear-gradient(180deg,rgba(14,24,44,.95),rgba(7,13,26,.95));border:2px solid ${color};border-radius:16px;box-shadow:0 10px 40px ${color}33,0 0 0 1px rgba(255,255,255,.04) inset;text-align:center;min-width:360px;max-width:720px">
       <div style="font-size:12px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">이 동작을</div>
       <div style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:24px;letter-spacing:-.5px">${esc(cur.label)}</div>
       <div style="font-size:12px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">이 단축키로</div>
-      <div style="display:flex;gap:8px;justify-content:center;align-items:center;font-size:18px;font-weight:700">
+      <div style="display:flex;gap:6px;justify-content:center;align-items:center;font-size:18px;font-weight:700;flex-wrap:wrap">
+        <span class="sh-kbd mod" style="padding:8px 16px;font-size:15px">Ctrl</span>
+        <span style="color:var(--text-muted);font-size:20px">+</span>
         <span class="sh-kbd mod" style="padding:8px 16px;font-size:15px">Alt</span>
-        ${cur.mod==='altshift'?`<span style="color:var(--text-muted);font-size:20px">+</span><span class="sh-kbd shift" style="padding:8px 16px;font-size:15px">Shift</span>`:''}
+        ${cur.mod==='ctrlaltshift'?`<span style="color:var(--text-muted);font-size:20px">+</span><span class="sh-kbd shift" style="padding:8px 16px;font-size:15px">Shift</span>`:''}
         <span style="color:var(--text-muted);font-size:20px">+</span>
         <span class="sh-kbd" style="padding:8px 18px;font-size:18px;min-width:36px">${keyLabel}</span>
       </div>
@@ -13072,12 +13094,12 @@ function prRender(){
   bar.style.width=`${(PR_STATE.idx/total)*100}%`;
 }
 function prHandleKey(e){
-  // Alt 조합만 인식
-  if(!e.altKey)return false;
+  // Ctrl+Alt 조합만 인식 (2개 이상 수식자)
+  if(!(e.ctrlKey && e.altKey))return false;
   const cur=PR_STATE.queue[PR_STATE.idx];
   if(!cur)return false;
   if(!SH_KEY_LABELS[e.code])return false;
-  const mod=e.shiftKey?'altshift':'alt';
+  const mod=e.shiftKey?'ctrlaltshift':'ctrlalt';
   if(mod===cur.mod && e.code===cur.code){
     // 정답
     if(PR_STATE.currentMistakeCount>0){
@@ -13095,7 +13117,7 @@ function prHandleKey(e){
     const fb=document.getElementById('pr-feedback');
     if(fb){
       const gotKey=SH_KEY_LABELS[e.code]||e.code;
-      const gotMod=mod==='altshift'?'Alt + Shift':'Alt';
+      const gotMod=mod==='ctrlaltshift'?'Ctrl + Alt + Shift':'Ctrl + Alt';
       fb.innerHTML=`❌ <b style="color:#fca5a5">${gotMod} + ${gotKey}</b> 는 "${prActionForKey(mod,e.code)||'등록 안 된 단축키'}"<br>다시 시도해보세요`;
     }
     try{shBeep(200,0.08);}catch{}
@@ -13135,8 +13157,8 @@ document.addEventListener('keydown',(e)=>{
     return;
   }
   if(inPractice){
-    // 연습 모드 — Alt 조합만 먹이고 나머지는 무시
-    if(!e.altKey)return;
+    // 연습 모드 — Ctrl+Alt 조합만 (2 수식자)
+    if(!(e.ctrlKey && e.altKey))return;
     if(!SH_KEY_LABELS[e.code])return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -13145,8 +13167,8 @@ document.addEventListener('keydown',(e)=>{
   }
   if(inGame){
     if(!SH_STATE.running||SH_STATE.paused)return;
-    if(!e.altKey)return;
-    const mod=e.shiftKey?'altshift':'alt';
+    if(!(e.ctrlKey && e.altKey))return;
+    const mod=e.shiftKey?'ctrlaltshift':'ctrlalt';
     const code=e.code;
     if(!SH_KEY_LABELS[code])return;
     e.preventDefault();
@@ -15290,8 +15312,13 @@ document.addEventListener('keydown',function(e){
     return;
   }
 
-  // Alt 조합 단축키 (입력 필드 포커스 시 비활성)
-  if(!e.altKey||e.ctrlKey||e.metaKey)return;
+  // Ctrl+Alt 조합 단축키 (2개 이상 수식자로 브라우저 충돌 회피)
+  //  기본:    Ctrl+Alt+[letter]
+  //  보조:    Ctrl+Alt+Shift+[letter]
+  //  (기존 Alt+[letter] 도 레거시 호환으로 유지)
+  const isCtrlAlt = e.ctrlKey && e.altKey && !e.metaKey;
+  const isPlainAlt = !e.ctrlKey && e.altKey && !e.metaKey;  // 레거시
+  if(!isCtrlAlt && !isPlainAlt) return;
   const ae=document.activeElement;
   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
 
