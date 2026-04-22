@@ -3625,8 +3625,13 @@ function mkNode(opts={}){
     sheet:opts.sheet||(type==='sheet'?_sheetDefault():null),
     // Document 노드 전용 — {filename, lastSeenMtime, engine('superdoc'|'rhwp')}
     doc:opts.doc||(type==='document'?{filename:'',lastSeenMtime:0,engine:null,outputFormat:'markdown',pdfPageMode:'all',pdfPageNumber:1}:null),
+    // 노드 앵커 (문서 노드 등에서 지점별 연결 시작)
+    anchors:Array.isArray(opts.anchors)?opts.anchors:[],
     el:null};
-  n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
+  n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);
+  // 앵커 복원
+  if(n.anchors && n.anchors.length) setTimeout(()=>renderCeAnchors(n), 50);
+  return n;
 }
 function buildDom(n){
   const ti=TYPES[n.type];const d=document.createElement('div');
@@ -3922,8 +3927,14 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item" onclick="collapseAll(true)">▶ 전체 접기</div>
       <div class="ctx-item" onclick="collapseAll(false)">▼ 전체 펼치기</div>`;
   } else {
+    // 노드 우클릭 메뉴 — 문서 노드면 앵커(핀포인트) 시작 옵션 추가
+    const isDoc = nd.type==='document';
+    const anchorOpt = isDoc
+      ? `<div class="ctx-item" onclick="_startNodeAnchorAt('${nd.id}',${x},${y})" style="color:#f472b6">📍 이 지점에서 연결선 시작</div>`
+      : '';
     html=`<div class="ctx-item" onclick="togCollapse(nodes.find(n=>n.id==='${nd.id}'))">접기/펼치기</div>
       <div class="ctx-item" onclick="dupNode('${nd.id}')">복제</div>
+      ${anchorOpt}
       <div class="ctx-sep"></div>
       <div class="ctx-item danger" onclick="delNode('${nd.id}')">삭제</div>`;
   }
@@ -6256,6 +6267,8 @@ const engine={
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,workDir:window._currentWorkDir||'',tabId:TAB_ID,appearance:{...appearance},
   nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history,
+    // 노드 앵커 (문서 노드 등에서 지점별 연결 시작)
+    anchors:(Array.isArray(n.anchors)&&n.anchors.length)?n.anchors.map(a=>({id:a.id,dx:a.dx,dy:a.dy,label:a.label||''})):undefined,
     // 다운로더 전용 — URL 리스트 + 옵션 (상태는 저장 시 대기/완료만 유지, 진행중은 대기로 되돌림)
     urls:n.type==='downloader'?(n.urls||[]).map(u=>({url:u.url||'',status:u.status==='running'?'pending':(u.status||'pending'),files:u.files||[],error:u.error||'',result:u.result||''})):undefined,
     dlOptions:n.type==='downloader'?(n.dlOptions||{format:'mp4',quality:'best',audioOnly:false,subtitles:false}):undefined,
@@ -9025,6 +9038,90 @@ async function docEnsureMammoth(){
   if(window.mammoth)return;
   await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js','mammoth');
 }
+async function docEnsureJsPdf(){
+  if(window.jspdf && window.jspdf.jsPDF) return;
+  await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js','jspdf');
+}
+
+// 이미지 CE 들을 페이지로 모아 PDF 생성 → 프로젝트 documents/ 저장 + Document 노드 생성
+async function combineImagesToPdf(imageCes, title){
+  if(!imageCes || imageCes.length===0){ alert('선택된 이미지가 없습니다'); return; }
+  showCopyToast(`📄 ${imageCes.length}장 PDF 생성 중…`);
+  try{ await docEnsureJsPdf(); }catch(e){ alert('jsPDF 로드 실패: '+e.message); return; }
+  const { jsPDF } = window.jspdf;
+  // 첫 이미지 로드 → jsPDF 방향/크기 결정
+  const first = imageCes[0];
+  const firstImg = await _loadImageElement(first.src);
+  const fw = firstImg.naturalWidth, fh = firstImg.naturalHeight;
+  const orient = fw >= fh ? 'l' : 'p';
+  const pdf = new jsPDF({orientation: orient, unit:'pt', format:[fw, fh]});
+  // 각 이미지를 페이지로 추가
+  for(let i=0; i<imageCes.length; i++){
+    const ce = imageCes[i];
+    const img = i===0 ? firstImg : await _loadImageElement(ce.src).catch(()=>null);
+    if(!img) continue;
+    if(i>0){
+      // 페이지 추가 — 이미지 크기대로
+      pdf.addPage([img.naturalWidth, img.naturalHeight], img.naturalWidth>=img.naturalHeight?'l':'p');
+    }
+    // 캔버스로 PNG 인코딩
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const ctx = c.getContext('2d');
+    try{ ctx.drawImage(img, 0, 0); }catch(err){ console.warn('이미지 drawImage 실패 (CORS?):', err); continue; }
+    let dataUrl;
+    try{ dataUrl = c.toDataURL('image/jpeg', 0.92); }
+    catch(err){
+      // tainted canvas → skip
+      showCopyToast(`⚠ 이미지 ${i+1}: CORS 차단으로 스킵됨`);
+      continue;
+    }
+    pdf.addImage(dataUrl, 'JPEG', 0, 0, img.naturalWidth, img.naturalHeight);
+  }
+  // Blob 변환 + 서버 저장
+  const blob = pdf.output('blob');
+  const dataUrl = await new Promise((res,rej)=>{
+    const fr = new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob);
+  });
+  const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+  const fname = (title||'images')+'_'+stamp+'.pdf';
+  if(!window._tempKey) window._tempKey = 'tk_'+(typeof TAB_ID!=='undefined'?TAB_ID:'')+'_'+Date.now().toString(36);
+  const r = await api('POST','/api/project/file/upload',{
+    projectId: workflowId||'', tempKey: window._tempKey,
+    filename: fname, data: dataUrl, category:'documents',
+  });
+  if(!r || !r.ok){ alert('PDF 업로드 실패: '+((r&&r.error)||'')); return; }
+  // Document 노드로 배치
+  const cx=imageCes.reduce((s,c)=>s+c.x,0)/imageCes.length;
+  const cy=imageCes.reduce((s,c)=>s+c.y,0)/imageCes.length + 200;
+  const n = await addNode('document', cx, cy);
+  if(n && n.doc){
+    n.doc.filename = r.filename;
+    _docSyncNodeNameToFilename(n);
+    docRenderMini(n);
+    if(!n.collapsed){ docInlineUnmount(n); setTimeout(()=>docInlineMount(n), 200); }
+    autoSave(); drawConns();
+  }
+  try{ fpRefresh(true); }catch(e){}
+  showCopyToast(`✅ PDF 생성 완료 — ${imageCes.length}장 → ${r.filename}`);
+}
+
+function _loadImageElement(src){
+  return new Promise((res,rej)=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>res(img);
+    img.onerror = ()=>{
+      // crossOrigin 실패 시 재시도 없이 로드 (tainted 가능)
+      const img2 = new Image();
+      img2.onload = ()=>res(img2);
+      img2.onerror = ()=>rej(new Error('image load 실패: '+src));
+      img2.src = src;
+    };
+    img.src = src;
+  });
+}
+
 async function docEnsurePdfjs(){
   if(window.pdfjsLib) return;
   // pdf.js 3.11 — UMD 빌드라 <script> 태그로 로드되며 window.pdfjsLib 노출 O
@@ -10704,6 +10801,13 @@ function showCeCtxMenu(x, y, ce, dx, dy){
     }} : null,
     (ce.type==='image' || ce.type==='video') ? {label:'📋 이미지로 클립보드 복사 (Ctrl+C)', fn:()=>copyCeAsImage(ce)} : null,
     (ce.type==='image') ? {label:'✂ 자르기 (Crop)', fn:()=>cropImageCe(ce)} : null,
+    (ce.type==='image') ? {label:'📄 모든 이미지를 PDF로 묶기', fn:()=>{
+      const imgs = canvasEls.filter(c=>c.type==='image' && c.src)
+        .sort((a,b)=>{ const dy=a.y-b.y; return Math.abs(dy)>100 ? dy : (a.x-b.x); });
+      if(imgs.length===0){alert('캔버스에 이미지가 없습니다');return;}
+      if(!confirm(`캔버스의 이미지 ${imgs.length}장을 PDF 페이지로 묶어 프로젝트 documents/ 에 저장합니다.\n\n순서: 위→아래, 왼쪽→오른쪽 (약 100px 기준)\n계속할까요?`)) return;
+      combineImagesToPdf(imgs, 'canvas_images');
+    }} : null,
     {label:'🗑 이 요소 삭제', fn:()=>delCe(ce.id), danger:true},
   ].filter(Boolean);
   items.forEach(it=>{
@@ -10718,6 +10822,25 @@ function showCeCtxMenu(x, y, ce, dx, dy){
   pop.style.left=x+'px';pop.style.top=y+'px';
   document.body.appendChild(pop);
   setTimeout(()=>document.addEventListener('click',()=>pop.remove(),{once:true}),10);
+}
+
+// 노드(문서 등)의 특정 지점에 앵커 생성 → 드래그로 연결 시작 가능
+function _startNodeAnchorAt(nodeId, screenX, screenY){
+  const n = nodes.find(x=>x.id===nodeId);
+  if(!n || !n.el) return;
+  if(!Array.isArray(n.anchors)) n.anchors = [];
+  // 클릭 화면 좌표 → 노드 로컬 좌표
+  const r = n.el.getBoundingClientRect();
+  const dx = Math.max(0, Math.min(n.w||r.width, (screenX - r.left)/zoom));
+  const dy = Math.max(0, Math.min(n.h||r.height, (screenY - r.top)/zoom));
+  const aid = 'a'+Date.now().toString(36);
+  n.anchors.push({id:aid, dx:Math.round(dx), dy:Math.round(dy), label:''});
+  renderCeAnchors(n); autoSave();
+  const hint = document.getElementById('anchor-connect-hint');
+  if(hint){
+    hint.style.display=''; hint.textContent='📍 앵커 추가됨 — 이 점을 드래그해 대상 노드로 연결하세요';
+    setTimeout(()=>{hint.style.display='none'},2600);
+  }
 }
 
 function startAnchorConnect(ce, dx, dy){
