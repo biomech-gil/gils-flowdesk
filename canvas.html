@@ -671,6 +671,7 @@ body.lt-select-mode .landing-item input[type="checkbox"].landing-chk:hover{borde
 .landing-preview-tools{display:flex;gap:4px;padding:6px 14px;background:var(--bg-2);border-top:1px solid var(--border);font-size:.7em;color:var(--text-muted);align-items:center}
 .landing-preview-tools button{background:var(--bg-3);color:var(--text);border:1px solid var(--border);padding:3px 8px;border-radius:3px;cursor:pointer;font-size:.85em}
 #sel-box{position:absolute;border:1px solid var(--blue);background:rgba(33,150,243,.08);z-index:50;pointer-events:none;display:none}
+.ce.multi-sel{outline:2px solid #60a5fa;outline-offset:2px;box-shadow:0 0 0 3px rgba(96,165,250,.25)}
 .snap-guide{position:absolute;background:var(--red);z-index:40;pointer-events:none;opacity:.5}
 .snap-guide-h{height:1px;left:0;right:0}.snap-guide-v{width:1px;top:0;bottom:0}
 /* @ 메모 picker (인라인 인서트) */
@@ -2797,7 +2798,7 @@ const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},'age
 function isAgentType(t){return t==='agent'||t==='agent-gemini'}
 function providerOfType(t){return t==='agent-gemini'?'gemini':'claude'}
 
-let nodes=[],conns=[],canvasEls=[],selectedNode=null,selectedCe=null,multiSel=[],workflowId=null,paneList=[];
+let nodes=[],conns=[],canvasEls=[],selectedNode=null,selectedCe=null,multiSel=[],multiCeSel=[],workflowId=null,paneList=[];
 let isCeCreate=null,ceCreateSX=0,ceCreateSY=0,ceCreateEl=null;
 let isCeDrag=false,ceDragNd=null,ceDragOX=0,ceDragOY=0;
 let isCeResize=false,ceResNd=null,ceResSX=0,ceResSY=0,ceResSW=0,ceResSH=0;
@@ -2891,7 +2892,8 @@ cw.addEventListener('mousedown',e=>{
 function _deselectAll(){
   nodes.forEach(n=>{n.el.classList.remove('sel','multi-sel')});
   canvasEls.forEach(c=>c.el.classList.remove('sel'));
-  selectedNode=null;selectedCe=null;multiSel=[];selectedConn=null;
+  selectedNode=null;selectedCe=null;multiSel=[];multiCeSel=[];selectedConn=null;
+  canvasEls.forEach(c=>c.el&&c.el.classList.remove('multi-sel'));
   closeSb();
   drawConns();
 }
@@ -2903,6 +2905,10 @@ window.addEventListener('mousemove',e=>{
     if(e.altKey){const snap=calcSnap(dragNd,nx,ny);nx=snap.x;ny=snap.y;showGuides(snap)}else{hideGuides()}
     const dx=nx-dragNd.x,dy=ny-dragNd.y;dragNd.x=nx;dragNd.y=ny;dragNd.el.style.left=nx+'px';dragNd.el.style.top=ny+'px';
     multiSel.forEach(n=>{if(n!==dragNd){n.x+=dx;n.y+=dy;n.el.style.left=n.x+'px';n.el.style.top=n.y+'px'}});
+    // 노드 드래그 시 같이 선택된 CE 도 같은 델타로 이동
+    if(multiCeSel.length){
+      multiCeSel.forEach(c=>{ c.x+=dx; c.y+=dy; if(c.el){ c.el.style.left=c.x+'px'; c.el.style.top=c.y+'px'; } });
+    }
     dragOX=p.x-dragNd.x;dragOY=p.y-dragNd.y;drawConns()}
   if(isConn){
     connMX=e.clientX;connMY=e.clientY;drawTmpConn();
@@ -2921,7 +2927,18 @@ window.addEventListener('mousemove',e=>{
   if(isSelBox){const sb=document.getElementById('sel-box');const wr=cw.getBoundingClientRect();const mx=e.clientX-wr.left,my=e.clientY-wr.top;const x=Math.min(selBSX,mx),y=Math.min(selBSY,my);sb.style.left=x+'px';sb.style.top=y+'px';sb.style.width=Math.abs(mx-selBSX)+'px';sb.style.height=Math.abs(my-selBSY)+'px'}
   if(isWpDrag&&wpDrag){const cp=s2c(e.clientX,e.clientY);wpDrag.conn.waypoints[wpDrag.idx].x=cp.x;wpDrag.conn.waypoints[wpDrag.idx].y=cp.y;drawConns()}
   if(ceCreateEl){const cp=s2c(e.clientX,e.clientY);const w=cp.x-ceCreateSX,h=cp.y-ceCreateSY;ceCreateEl.style.left=Math.min(ceCreateSX,cp.x)+'px';ceCreateEl.style.top=Math.min(ceCreateSY,cp.y)+'px';ceCreateEl.style.width=Math.abs(w)+'px';ceCreateEl.style.height=Math.abs(h)+'px'}
-  if(isCeDrag&&ceDragNd){const cp=s2c(e.clientX,e.clientY);const _oldX=ceDragNd.x,_oldY=ceDragNd.y;ceDragNd.x=cp.x-ceDragOX;ceDragNd.y=cp.y-ceDragOY;ceDragNd.el.style.left=ceDragNd.x+'px';ceDragNd.el.style.top=ceDragNd.y+'px';if(ceDragNd.type==='region'&&ceDragNd.scrollable){_regionShiftMembers(ceDragNd, ceDragNd.x-_oldX, ceDragNd.y-_oldY);}drawConns()}
+  if(isCeDrag&&ceDragNd){const cp=s2c(e.clientX,e.clientY);const _oldX=ceDragNd.x,_oldY=ceDragNd.y;ceDragNd.x=cp.x-ceDragOX;ceDragNd.y=cp.y-ceDragOY;ceDragNd.el.style.left=ceDragNd.x+'px';ceDragNd.el.style.top=ceDragNd.y+'px';
+    const _dx=ceDragNd.x-_oldX, _dy=ceDragNd.y-_oldY;
+    // 다중 선택된 다른 CE 도 같은 델타로 이동
+    if(multiCeSel.length && multiCeSel.includes(ceDragNd)){
+      multiCeSel.forEach(c=>{ if(c===ceDragNd)return; c.x+=_dx; c.y+=_dy; if(c.el){c.el.style.left=c.x+'px'; c.el.style.top=c.y+'px';} });
+    }
+    // 같이 선택된 노드 도 같은 델타로 이동
+    if(multiSel.length){
+      multiSel.forEach(n=>{ n.x+=_dx; n.y+=_dy; if(n.el){n.el.style.left=n.x+'px'; n.el.style.top=n.y+'px';} });
+    }
+    if(ceDragNd.type==='region'&&ceDragNd.scrollable){_regionShiftMembers(ceDragNd, _dx, _dy);}
+    drawConns()}
   if(isCeResize&&ceResNd){const w=Math.max(20,ceResSW+(e.clientX-ceResSX)/zoom),h=Math.max(20,ceResSH+(e.clientY-ceResSY)/zoom);ceResNd.w=w;ceResNd.h=h;ceResNd.el.style.width=w+'px';ceResNd.el.style.height=h+'px';if(ceResNd.type==='region'&&ceResNd.scrollable){_regionApplyScroll(ceResNd);}drawConns()}
   // 가까운 포트 강조 (드래그 중이 아닐 때만)
   if(!isDrag&&!isResize&&!isCeDrag&&!isCeResize){
@@ -2963,7 +2980,23 @@ window.addEventListener('mouseup',e=>{
   if(isSelBox){isSelBox=false;const sb=document.getElementById('sel-box');sb.style.display='none';
     const wr=cw.getBoundingClientRect();
     const r={left:parseInt(sb.style.left)+wr.left,top:parseInt(sb.style.top)+wr.top,width:parseInt(sb.style.width),height:parseInt(sb.style.height)};
-    multiSel=[];nodes.forEach(n=>{const nr=n.el.getBoundingClientRect();if(nr.left>=r.left&&nr.top>=r.top&&nr.right<=r.left+r.width&&nr.bottom<=r.top+r.height){n.el.classList.add('multi-sel');multiSel.push(n)}else{n.el.classList.remove('multi-sel')}})}
+    // 박스와 교차하는 노드 수집 (완전 포함 아닌 '겹침' 기준으로 더 관대하게)
+    const intersects=(nr)=> !(nr.right < r.left || nr.left > r.left+r.width || nr.bottom < r.top || nr.top > r.top+r.height);
+    multiSel=[];nodes.forEach(n=>{
+      const nr=n.el.getBoundingClientRect();
+      if(intersects(nr)){ n.el.classList.add('multi-sel'); multiSel.push(n); }
+      else n.el.classList.remove('multi-sel');
+    });
+    // CE (이미지/비디오/영역/도형/텍스트/체크리스트/미니표) 도 함께 수집
+    multiCeSel=[];canvasEls.forEach(c=>{
+      if(!c.el)return;
+      const cr=c.el.getBoundingClientRect();
+      if(intersects(cr)){ c.el.classList.add('multi-sel'); multiCeSel.push(c); }
+      else c.el.classList.remove('multi-sel');
+    });
+    const total = multiSel.length + multiCeSel.length;
+    if(total>0) showCopyToast(`⬚ 선택됨 — 노드 ${multiSel.length}개 · CE ${multiCeSel.length}개`);
+  }
 });
 
 // ═══ SNAP GUIDES (Alt+드래그) ═══
