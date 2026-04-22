@@ -1411,7 +1411,7 @@ body.focus-mode #canvas-controls{display:none}
       <div class="cc-label">정렬 간격</div>
       <div class="cc-row"><span class="cc-k">X</span><input type="range" min="20" max="400" step="5" id="cc-gx" oninput="ccUpdateArr()"><span class="cc-v" id="cc-gx-v">180</span></div>
       <div class="cc-row"><span class="cc-k">Y</span><input type="range" min="20" max="200" step="5" id="cc-gy" oninput="ccUpdateArr()"><span class="cc-v" id="cc-gy-v">40</span></div>
-      <button class="cc-action" onclick="arrangeAll()" title="지금 정렬 적용">⚙ 지금 정렬</button>
+      <button class="cc-action" onclick="arrangeAllWithHint()" title="선택한 영역 내부에 정렬 적용">⚙ 영역 정렬</button>
     </div>
     <div class="cc-section">
       <div class="cc-label">그리드</div>
@@ -3654,7 +3654,7 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item" onclick="addCeChecklist(${ctxPos.x},${ctxPos.y})" style="color:#facc15">☑ 체크리스트 (할 일)</div>
       <div class="ctx-item" onclick="addCeMinitable(${ctxPos.x},${ctxPos.y})" style="color:#a78bfa">📋 표 메모 (장식 테이블)</div>
       <div class="ctx-sep"></div>
-      <div class="ctx-item" onclick="arrangeAll()">🔲 정렬 즉시 적용</div>
+      <div class="ctx-item" onclick="arrangeAllWithHint()">🔲 영역 내부 정렬 (에이전트만)</div>
       <div style="padding:8px 14px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
         <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase">정렬 간격 (즉시 반영)</div>
         <div style="display:flex;gap:4px;margin-bottom:8px">
@@ -3701,11 +3701,54 @@ function setArrDir(dir){
   arrangeAll();
 }
 
+// 정렬 가능한 "에이전트류" 노드 판정 — 실행 되는 노드들만 (문서·시트·이미지·비디오 제외)
+function _isArrangeableNode(n){
+  return n && ['agent','agent-gemini','memo','input','trigger','downloader'].includes(n.type);
+}
+
+// 자동 호출용 (slider, collapseAll 등 암묵적 트리거) — 영역 없으면 조용히 스킵
 function arrangeAll(){
-  // 이미지 노드도 포함하여 통합 정렬 (type==='image' 캔버스 요소 + 일반 노드)
-  const items=[...nodes,...canvasEls.filter(c=>c.type==='image')];
-  if(items.length===0)return;
-  const gx=arrGapX,gy=arrGapY,pad=40;
+  if(selectedCe && selectedCe.type==='region'){
+    return arrangeRegion(selectedCe);
+  }
+  const regions = canvasEls.filter(c=>c.type==='region');
+  if(regions.length === 1){
+    return arrangeRegion(regions[0]); // 영역 하나면 그걸로
+  }
+  // 영역이 없거나 여러 개 → 자동 호출에서는 조용히 무시
+}
+
+// 사용자가 버튼/메뉴로 명시적으로 호출한 경우 — 안내 메시지 포함
+function arrangeAllWithHint(){
+  if(selectedCe && selectedCe.type==='region'){
+    return arrangeRegion(selectedCe);
+  }
+  const regions = canvasEls.filter(c=>c.type==='region');
+  if(regions.length === 0){
+    alert('⚠ 정렬은 "영역" 안에서만 적용됩니다.\n\n1. 🗺 영역(region) 을 그려 정렬할 에이전트들을 묶고\n2. 그 영역을 선택한 뒤 이 버튼을 다시 누르세요.\n\n(영역 우클릭 → "🔲 영역 내부 에이전트 정렬" 에서도 실행 가능)');
+    return;
+  }
+  if(regions.length === 1){
+    return arrangeRegion(regions[0]);
+  }
+  alert('⚠ 정렬할 영역을 선택해주세요.\n\n여러 영역 중 어느 영역의 에이전트를 정렬할지 모호합니다. 영역을 클릭해서 선택한 뒤 다시 시도하세요.');
+}
+
+// 영역 내부 에이전트류만 정렬 (문서/시트/이미지/비디오는 건드리지 않음)
+function arrangeRegion(ce){
+  if(!ce || ce.type!=='region') return;
+  const rx = ce.x, ry = ce.y, rR = ce.x + ce.w, rB = ce.y + ce.h;
+  // 센터가 영역 안에 있는 에이전트류 노드만 대상
+  const items = nodes.filter(n=>{
+    if(!_isArrangeableNode(n)) return false;
+    const cx = n.x + (n.w||280)/2, cy = n.y + (n.h||240)/2;
+    return cx>=rx && cx<=rR && cy>=ry && cy<=rB;
+  });
+  if(items.length===0){
+    alert(`⚠ 이 영역 안에 정렬할 에이전트/메모/Input/Trigger 가 없습니다.\n\n(문서·시트·이미지·비디오는 정렬 대상에서 제외)`);
+    return;
+  }
+  const gx=arrGapX, gy=arrGapY, pad=20;
   // BFS 레벨 계산 (연결 방향 따라)
   const levels=new Map();const roots=items.filter(n=>!conns.find(c=>c.tid===n.id));
   if(roots.length===0)roots.push(items[0]);
@@ -3733,9 +3776,10 @@ function arrangeAll(){
   const sortedLevels=[...byLevel.keys()].sort((a,b)=>a-b);
   const center=arrVCenter;
 
+  // 영역 기준 오프셋 — 노드 좌표가 (rx+pad, ry+pad) 부터 시작
   if(arrDir==='v'){
     // 세로 흐름: 각 레벨이 한 "행" — 위에서 아래로 쌓임, 한 레벨 내 노드는 좌→우 나열
-    const rowInfo=[];let curY=pad;let maxTotalW=0;
+    const rowInfo=[];let curY=ry+pad;let maxTotalW=0;
     sortedLevels.forEach(lv=>{
       const group=byLevel.get(lv);let maxH=0,totalW=0;
       group.forEach(n=>{const w=itemW(n);const h=itemH(n);totalW+=w;if(h>maxH)maxH=h});
@@ -3744,9 +3788,8 @@ function arrangeAll(){
       rowInfo.push({lv,group,maxH,totalW,y:curY});
       curY+=maxH+gy;
     });
-    const centerX=maxTotalW/2;
     rowInfo.forEach(ri=>{
-      const startX=center?(centerX-ri.totalW/2+pad):pad;
+      const startX = center ? (rx + (ce.w - ri.totalW)/2) : (rx + pad);
       let curX=startX;
       ri.group.forEach(n=>{const w=itemW(n);
         n.x=curX;n.y=ri.y;
@@ -3756,7 +3799,7 @@ function arrangeAll(){
     });
   } else {
     // 가로 흐름 (기본): 각 레벨이 한 "열" — 좌→우, 한 레벨 내 노드는 위→아래 쌓임
-    const colInfo=[];let curX=pad;let maxTotalH=0;
+    const colInfo=[];let curX=rx+pad;let maxTotalH=0;
     sortedLevels.forEach(lv=>{
       const group=byLevel.get(lv);let maxW=0,totalH=0;
       group.forEach(n=>{const w=itemW(n);const h=itemH(n);totalH+=h;if(w>maxW)maxW=w});
@@ -3765,9 +3808,8 @@ function arrangeAll(){
       colInfo.push({lv,group,maxW,totalH,x:curX});
       curX+=maxW+gx;
     });
-    const centerY=maxTotalH/2;
     colInfo.forEach(ci=>{
-      const startY=center?(centerY-ci.totalH/2+pad):pad;
+      const startY = center ? (ry + (ce.h - ci.totalH)/2) : (ry + pad);
       let curY=startY;
       ci.group.forEach(n=>{const h=itemH(n);
         n.x=ci.x;n.y=curY;
@@ -3777,6 +3819,7 @@ function arrangeAll(){
     });
   }
   drawConns();autoSave();
+  showCopyToast(`🔲 영역 "${ce.label||'(이름없음)'}" 내부 에이전트 ${items.length}개 정렬`);
 }
 
 function arrSyncDirUI(){
@@ -9776,6 +9819,7 @@ function showCeCtxMenu(x, y, ce, dx, dy){
       ce.memberIds=inside.map(n=>n.id);
       _regionApplyScroll(ce);autoSave();showCopyToast(`🔭 멤버 ${inside.length}개 재설정 (세로 컬럼)`);
     }} : null,
+    ce.type==='region' ? {label:'🔲 영역 내부 에이전트 정렬', fn:()=>arrangeRegion(ce)} : null,
     ce.type==='region' ? {label:'▶ 이 영역만 실행', fn:()=>executeRegion(ce)} : null,
     ce.type==='region' ? {label:(typeof ce.execOrder==='number'?`🔢 실행 순서 변경 (현재 #${ce.execOrder})`:'🔢 실행 순서 부여'), fn:()=>{
       const cur = (typeof ce.execOrder==='number')?String(ce.execOrder):'';
@@ -13135,7 +13179,7 @@ document.addEventListener('keydown',function(e){
     'KeyQ':()=>startCeCreate&&startCeCreate('region'),           // 🟦 영역(Box)
     'KeyW':()=>{const c=centerCoord();addCeText&&addCeText(c.x,c.y)}, // 📝 텍스트 메모
     'KeyE':()=>{const inp=document.getElementById('ce-img-input');if(inp){try{ctxPos=centerCoord()}catch{};inp.click()}}, // 🖼 이미지
-    'KeyR':()=>arrangeAll&&arrangeAll(),                         // 📐 정렬
+    'KeyR':()=>arrangeAllWithHint&&arrangeAllWithHint(),          // 📐 영역 정렬
     // 패널/메모 (ASDF)
     'KeyA':()=>toggleFolderPanel&&toggleFolderPanel(),           // 📂 메모폴더
     'KeyS':()=>{newMemo&&newMemo();focusMemoContent()},          // 📝 새 메모 탭
