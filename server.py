@@ -1925,6 +1925,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/trash/list": self._json(self._trash_list())
         elif p == "/api/temp/folder-list": self._json(self._temp_folder_list())
         elif p == "/api/temp/folder-snapshot": self._json(self._temp_folder_snapshot(params))
+        elif p == "/api/doc/list": self._json(self._doc_list(params))
+        elif p == "/api/doc/versions": self._json(self._doc_versions(params))
+        elif p == "/api/project/files": self._json(self._project_files(params))
+        elif p == "/api/project/file":
+            self._project_file_serve(params)
+            return
         elif p == "/api/settings/get": self._json(self._settings_get())
         elif p == "/api/auth/health": self._json(self._auth_health(params))
         elif p == "/api/claude/accounts/list": self._json(self._claude_accounts_list())
@@ -1982,6 +1988,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/save": self._project_save,
             "/api/project/adopt": self._project_adopt,
             "/api/media/download": self._media_download,
+            "/api/media/extract-frame": self._media_extract_frame,
             "/api/project/delete": self._project_delete,
             "/api/state/save": self._state_save,
             "/api/temp/save": self._temp_save,
@@ -2051,6 +2058,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/temp/cleanup-now": self._temp_cleanup_now,
             "/api/sheet/import": self._sheet_import,
             "/api/sheet/export-xlsx": self._sheet_export_xlsx,
+            "/api/doc/read": self._doc_read,
+            "/api/doc/write": self._doc_write,
+            "/api/doc/delete": self._doc_delete,
+            "/api/doc/restore": self._doc_restore,
+            "/api/doc/milestone": self._doc_milestone,
+            "/api/doc/delete-version": self._doc_delete_version,
+            "/api/doc/hwp-to-docx": self._doc_hwp_to_docx,
         }
         handler = handlers.get(p)
         if handler:
@@ -2600,6 +2614,56 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True, "folders": candidates[:100], "root": root}
 
     # ══════════════ 미디어 다운로드 (YouTube/Instagram/TikTok 등) ══════════════
+    def _media_extract_frame(self, body):
+        """yt-dlp 로 스트림 URL 얻은 뒤 ffmpeg 로 특정 시각의 프레임 추출.
+        body: {url, timestamp (초 단위, 실수)}
+        return: {ok, url (/uploads/images/xxx.png), path, size}"""
+        url = (body.get("url") or "").strip()
+        ts = float(body.get("timestamp") or 0)
+        if not url:
+            return {"ok": False, "error": "url 필요"}
+        if ts < 0: ts = 0
+        # 1) yt-dlp -g 로 직접 스트림 URL 취득 (720p 이하로 빠르게)
+        try:
+            r = subprocess.run(
+                ["yt-dlp", "-g", "-f", "best[height<=720]/best", "--no-warnings", url],
+                capture_output=True, text=True, timeout=40,
+                encoding="utf-8", errors="replace",
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "yt-dlp 타임아웃 (40초)"}
+        except FileNotFoundError:
+            return {"ok": False, "error": "yt-dlp 미설치"}
+        stream_urls = [s.strip() for s in (r.stdout or "").splitlines() if s.strip()]
+        if not stream_urls:
+            err = (r.stderr or "").strip()[-400:]
+            return {"ok": False, "error": f"스트림 URL 가져오기 실패: {err or 'unknown'}"}
+        stream_url = stream_urls[0]
+
+        # 2) ffmpeg -ss TS -i URL -vframes 1  (input seek → 빠름)
+        img_dir = os.path.join(UPLOADS_DIR, "images")
+        os.makedirs(img_dir, exist_ok=True)
+        ts_str = f"{ts:.2f}"
+        out_name = f"ytframe_{int(time.time()*1000)}_{int(ts)}s.png"
+        out_path = os.path.join(img_dir, out_name)
+        try:
+            r2 = subprocess.run(
+                ["ffmpeg", "-ss", ts_str, "-i", stream_url,
+                 "-vframes", "1", "-q:v", "2", "-y", out_path],
+                capture_output=True, timeout=60,
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "ffmpeg 타임아웃 (60초)"}
+        except FileNotFoundError:
+            return {"ok": False, "error": "ffmpeg 미설치"}
+        if not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
+            err = (r2.stderr or b"").decode("utf-8", errors="replace")[-400:]
+            return {"ok": False, "error": f"프레임 추출 실패: {err or 'unknown'}"}
+        log(f"[EXTRACT_FRAME] {url} @ {ts_str}s → {out_path}")
+        return {"ok": True, "url": f"/uploads/images/{out_name}",
+                "path": out_path, "size": os.path.getsize(out_path),
+                "timestamp": ts}
+
     def _media_download(self, body):
         """URL → 프로젝트 work_dir 하위 videos/ 또는 images/ 로 자동 분류 저장.
         body:
@@ -2923,6 +2987,554 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     "data": _b64.b64encode(buf.getvalue()).decode("ascii")}
         except Exception as e:
             return {"ok": False, "error": f"xlsx 생성 실패: {e}"}
+
+    # ═══════════════════════════════════════
+    # 📄 Document 노드 — DOCX/HWP 파일 I/O + Time Machine 버전관리
+    # ═══════════════════════════════════════
+    # 파일 레이아웃:
+    #   {work_dir}/documents/{basename}.{ext}               ← 현재
+    #   {work_dir}/documents/.versions/
+    #     {basename}.v{N}.{YYYYMMDD_HHMMSS}.{ext}           ← 자동 스냅샷
+    #     {basename}.M.{tag}.{YYYYMMDD_HHMMSS}.{ext}        ← 마일스톤
+    # Document 노드가 받아들일 수 있는 모든 파일 확장자
+    # - 편집 가능 (inline 에디터): docx, doc, hwp, hwpx, odt, rtf, txt, md
+    # - 파일 카드만 (read-only reference): pptx, xlsx, pdf, zip, psd, ai 등 거의 모든 일반 파일
+    _DOC_SUPPORTED_EXTS = (
+        # 편집 가능
+        ".docx", ".doc", ".hwp", ".hwpx", ".odt", ".rtf", ".txt", ".md",
+        # 오피스·문서 (읽기 전용 참조)
+        ".pptx", ".ppt", ".xlsx", ".xls", ".csv", ".tsv", ".odp", ".ods", ".key", ".pdf", ".epub",
+        # 그래픽·디자인
+        ".psd", ".ai", ".sketch", ".fig", ".xd", ".eps", ".indd",
+        # 코드·데이터
+        ".json", ".xml", ".yaml", ".yml", ".ini", ".toml", ".log", ".sql", ".py", ".js", ".ts", ".html", ".css", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".sh",
+        # 아카이브
+        ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz",
+        # 미디어 (File 카드 용도 — 캔버스 CE 와는 별개, 참조로만)
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".tiff", ".heic",
+        ".mp4", ".webm", ".mov", ".m4v", ".mkv", ".avi",
+        ".mp3", ".m4a", ".wav", ".ogg", ".opus", ".flac", ".aac",
+        # 기타
+        ".ics", ".vcf", ".torrent",
+    )
+
+    def _doc_project_dir(self, project_id):
+        """project_id → documents 디렉토리 절대경로"""
+        if not project_id:
+            return None, "projectId 필요"
+        try:
+            row = db_exec("SELECT work_dir FROM projects WHERE id=?", (project_id,), fetchone=True)
+        except Exception as e:
+            return None, f"DB 오류: {e}"
+        if not row or not row.get("work_dir"):
+            return None, "프로젝트를 먼저 저장해주세요 (문서는 프로젝트 폴더에 저장됩니다)"
+        work_dir = row["work_dir"]
+        doc_dir = os.path.join(work_dir, "documents")
+        os.makedirs(doc_dir, exist_ok=True)
+        return doc_dir, None
+
+    def _doc_validate_filename(self, name):
+        """파일명 검증 (경로조작 방지)"""
+        if not name or "/" in name or "\\" in name or ".." in name:
+            return False
+        if name.startswith("."):
+            return False
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in self._DOC_SUPPORTED_EXTS:
+            return False
+        return True
+
+    def _doc_list(self, params):
+        """프로젝트의 documents/ 내 모든 문서 리스트"""
+        pid = params.get("projectId", [""])[0]
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        items = []
+        try:
+            for name in sorted(os.listdir(doc_dir)):
+                if name.startswith("."): continue
+                full = os.path.join(doc_dir, name)
+                if not os.path.isfile(full): continue
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in self._DOC_SUPPORTED_EXTS: continue
+                try:
+                    st = os.stat(full)
+                    items.append({
+                        "name": name,
+                        "path": os.path.join("documents", name).replace("\\", "/"),
+                        "size": st.st_size,
+                        "mtime": st.st_mtime,
+                        "ext": ext.lstrip("."),
+                    })
+                except Exception: continue
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "docDir": doc_dir, "items": items}
+
+    def _doc_read(self, body):
+        """파일 바이너리 읽어서 base64 로 반환.
+        body: {projectId, filename}
+        returns: {ok, data(base64), size, mtime, path}"""
+        import base64 as _b64
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        full = os.path.join(doc_dir, filename)
+        if not os.path.isfile(full):
+            return {"ok": False, "error": "파일 없음", "errorKind": "not_found"}
+        try:
+            with open(full, "rb") as f: raw = f.read()
+            st = os.stat(full)
+            return {"ok": True, "data": _b64.b64encode(raw).decode("ascii"),
+                    "size": st.st_size, "mtime": st.st_mtime,
+                    "filename": filename,
+                    "path": os.path.join("documents", filename).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _doc_snapshot(self, doc_dir, filename, reason="auto", milestone_tag=None):
+        """현재 파일을 .versions/ 에 스냅샷. 실패해도 silent."""
+        full = os.path.join(doc_dir, filename)
+        if not os.path.isfile(full): return None
+        vdir = os.path.join(doc_dir, ".versions")
+        try: os.makedirs(vdir, exist_ok=True)
+        except Exception: return None
+        base, ext = os.path.splitext(filename)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if milestone_tag:
+            safe_tag = re.sub(r'[^\w\-_가-힣]', '_', milestone_tag)[:40] or 'milestone'
+            snap_name = f"{base}.M.{safe_tag}.{ts}{ext}"
+        else:
+            # 자동 버전 번호 계산
+            existing = [f for f in os.listdir(vdir) if f.startswith(base+".v") and f.endswith(ext)]
+            n = len(existing) + 1
+            snap_name = f"{base}.v{n:03d}.{ts}{ext}"
+        snap_path = os.path.join(vdir, snap_name)
+        try:
+            shutil.copy2(full, snap_path)
+            log(f"[DOC_SNAPSHOT] {reason}: {filename} → .versions/{snap_name}")
+            return snap_name
+        except Exception as e:
+            log(f"[DOC_SNAPSHOT] 실패 {filename}: {e}")
+            return None
+
+    def _doc_thin_versions(self, doc_dir, filename):
+        """Time Machine 스타일 씨이어링 — 마일스톤은 건드리지 않음.
+        - <24h : 전부 유지
+        - <7d  : 시간당 1개
+        - <30d : 하루 1개
+        - <180d: 주당 1개
+        - >=180d: 월당 1개
+        """
+        vdir = os.path.join(doc_dir, ".versions")
+        if not os.path.isdir(vdir): return
+        base, ext = os.path.splitext(filename)
+        now = time.time()
+        candidates = []
+        try:
+            for name in os.listdir(vdir):
+                if not name.startswith(base+"."): continue
+                if ".M." in name: continue   # 마일스톤 제외
+                if not name.endswith(ext): continue
+                full = os.path.join(vdir, name)
+                if not os.path.isfile(full): continue
+                try:
+                    mt = os.path.getmtime(full)
+                    candidates.append((mt, full))
+                except Exception: continue
+        except Exception: return
+        # 오래된 것부터 그룹핑 버킷 기준으로 1개만 남김
+        candidates.sort(key=lambda x: x[0])
+        kept_buckets = set()
+        to_delete = []
+        for mt, path in candidates:
+            age = now - mt
+            if age < 86400:  # 24h
+                bucket = None  # 전부 유지
+            elif age < 7*86400:
+                bucket = ("h", int(mt // 3600))
+            elif age < 30*86400:
+                bucket = ("d", int(mt // 86400))
+            elif age < 180*86400:
+                bucket = ("w", int(mt // (7*86400)))
+            else:
+                bucket = ("m", int(mt // (30*86400)))
+            if bucket is None: continue
+            if bucket in kept_buckets:
+                to_delete.append(path)
+            else:
+                kept_buckets.add(bucket)
+        pruned = 0
+        for p in to_delete:
+            try: os.remove(p); pruned += 1
+            except Exception: pass
+        if pruned: log(f"[DOC_THIN] {filename}: {pruned}개 자동 정리")
+
+    def _doc_write(self, body):
+        """파일 저장 + 저장 전 자동 스냅샷 + 씨이어링.
+        body: {projectId, filename, data(base64), clientMtime?, force?}
+        - clientMtime 이 있고 디스크 mtime 이 더 크면 외부 수정 감지 → 자동 스냅샷 후 진행 (force=true)
+          또는 {errorKind:'external_modified'} 리턴 (force=false)
+        """
+        import base64 as _b64
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        b64 = body.get("data") or ""
+        client_mtime = body.get("clientMtime")
+        force = bool(body.get("force"))
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        full = os.path.join(doc_dir, filename)
+        # 외부 수정 감지
+        if os.path.isfile(full) and client_mtime is not None:
+            try:
+                actual_mt = os.path.getmtime(full)
+                if actual_mt > float(client_mtime) + 1:  # 1s tolerance
+                    if not force:
+                        return {"ok": False, "errorKind": "external_modified",
+                                "error": "외부에서 수정된 흔적이 있습니다. 덮어쓰시겠어요?",
+                                "diskMtime": actual_mt, "clientMtime": client_mtime}
+                    # force=true → 저장 직전 외부 버전 스냅샷 보관
+                    self._doc_snapshot(doc_dir, filename, reason="pre-overwrite-external")
+            except Exception: pass
+        # 저장 전 현재 상태 스냅샷 (파일이 이미 있으면)
+        if os.path.isfile(full):
+            self._doc_snapshot(doc_dir, filename, reason="pre-save")
+        # 실제 쓰기
+        try:
+            if "," in b64 and b64.startswith("data:"):
+                b64 = b64.split(",", 1)[1]
+            raw = _b64.b64decode(b64)
+            with open(full, "wb") as f: f.write(raw)
+            st = os.stat(full)
+            # 씨이어링
+            try: self._doc_thin_versions(doc_dir, filename)
+            except Exception as e: log(f"[DOC_THIN] {e}")
+            log(f"[DOC_WRITE] {filename} ({st.st_size} bytes)")
+            return {"ok": True, "size": st.st_size, "mtime": st.st_mtime,
+                    "path": os.path.join("documents", filename).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _doc_versions(self, params):
+        """파일의 버전 목록 (최신순). 자동 + 마일스톤 구분."""
+        pid = params.get("projectId", [""])[0]
+        filename = params.get("filename", [""])[0]
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        vdir = os.path.join(doc_dir, ".versions")
+        base, ext = os.path.splitext(filename)
+        items = []
+        if os.path.isdir(vdir):
+            try:
+                for name in os.listdir(vdir):
+                    if not name.startswith(base+"."): continue
+                    if not name.endswith(ext): continue
+                    full = os.path.join(vdir, name)
+                    if not os.path.isfile(full): continue
+                    is_milestone = ".M." in name
+                    tag = ""
+                    if is_milestone:
+                        # {base}.M.{tag}.{ts}{ext}
+                        inner = name[len(base)+3:-len(ext)]  # "{tag}.{ts}"
+                        parts = inner.rsplit(".", 1)
+                        if len(parts) == 2: tag = parts[0]
+                    try:
+                        st = os.stat(full)
+                        items.append({
+                            "name": name,
+                            "kind": "milestone" if is_milestone else "auto",
+                            "tag": tag,
+                            "size": st.st_size,
+                            "mtime": st.st_mtime,
+                        })
+                    except Exception: continue
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+        items.sort(key=lambda x: x["mtime"], reverse=True)
+        # 현재 파일 정보도 추가
+        current = None
+        full = os.path.join(doc_dir, filename)
+        if os.path.isfile(full):
+            try:
+                st = os.stat(full)
+                current = {"size": st.st_size, "mtime": st.st_mtime}
+            except Exception: pass
+        return {"ok": True, "current": current, "versions": items}
+
+    def _doc_restore(self, body):
+        """선택 버전을 현재 파일로 복원. 복원 전 현재 상태 자동 스냅샷.
+        body: {projectId, filename, versionName}"""
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        ver = (body.get("versionName") or "").strip()
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        if "/" in ver or "\\" in ver or ".." in ver:
+            return {"ok": False, "error": "유효하지 않은 버전명"}
+        vdir = os.path.join(doc_dir, ".versions")
+        ver_path = os.path.join(vdir, ver)
+        if not os.path.isfile(ver_path):
+            return {"ok": False, "error": "버전 파일 없음"}
+        full = os.path.join(doc_dir, filename)
+        # 복원 직전 현재 상태 자동 보관
+        if os.path.isfile(full):
+            self._doc_snapshot(doc_dir, filename, reason="pre-restore")
+        try:
+            shutil.copy2(ver_path, full)
+            st = os.stat(full)
+            log(f"[DOC_RESTORE] {filename} ← {ver}")
+            return {"ok": True, "size": st.st_size, "mtime": st.st_mtime}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _doc_milestone(self, body):
+        """현재 파일을 마일스톤 스냅샷으로 보관.
+        body: {projectId, filename, tag, note?}"""
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        tag = (body.get("tag") or "").strip() or "milestone"
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        snap = self._doc_snapshot(doc_dir, filename, reason="milestone", milestone_tag=tag)
+        if not snap:
+            return {"ok": False, "error": "스냅샷 실패 — 파일이 없거나 권한 문제"}
+        return {"ok": True, "versionName": snap}
+
+    def _doc_delete_version(self, body):
+        """특정 버전 파일 삭제 (마일스톤도 허용)."""
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        ver = (body.get("versionName") or "").strip()
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        if "/" in ver or "\\" in ver or ".." in ver:
+            return {"ok": False, "error": "유효하지 않은 버전명"}
+        p = os.path.join(doc_dir, ".versions", ver)
+        if not os.path.isfile(p):
+            return {"ok": False, "error": "파일 없음"}
+        try:
+            os.remove(p)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _doc_delete(self, body):
+        """현재 문서 삭제 (휴지통으로 이동 — .trash-doc/).
+        body: {projectId, filename}"""
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        full = os.path.join(doc_dir, filename)
+        if not os.path.isfile(full):
+            return {"ok": False, "error": "파일 없음"}
+        # 삭제 전 마지막 스냅샷 (안전)
+        self._doc_snapshot(doc_dir, filename, reason="pre-delete", milestone_tag="deleted")
+        try:
+            trash_dir = os.path.join(doc_dir, ".trash-doc")
+            os.makedirs(trash_dir, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            target = os.path.join(trash_dir, f"{ts}_{filename}")
+            shutil.move(full, target)
+            log(f"[DOC_DELETE] {filename} → .trash-doc/")
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _doc_hwp_to_docx(self, body):
+        """LibreOffice 로 HWP → DOCX 변환. libreoffice 가 설치되어 있을 때만 동작.
+        body: {projectId, filename} — filename 이 .hwp 면 같은 베이스의 .docx 생성"""
+        pid = (body.get("projectId") or "").strip()
+        filename = (body.get("filename") or "").strip()
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not filename.lower().endswith((".hwp", ".hwpx")):
+            return {"ok": False, "error": "HWP/HWPX 만 변환 가능"}
+        src = os.path.join(doc_dir, filename)
+        if not os.path.isfile(src):
+            return {"ok": False, "error": "원본 없음"}
+        # libreoffice 확인
+        from shutil import which as _which
+        soffice = _which("libreoffice") or _which("soffice")
+        if not soffice:
+            return {"ok": False, "error": "libreoffice 미설치 — Dockerfile 재빌드 후 재시도"}
+        try:
+            result = subprocess.run(
+                [soffice, "--headless", "--convert-to", "docx", "--outdir", doc_dir, src],
+                capture_output=True, text=True, timeout=120,
+            )
+            base = os.path.splitext(filename)[0]
+            out = os.path.join(doc_dir, base + ".docx")
+            if not os.path.isfile(out):
+                return {"ok": False, "error": f"변환 실패: {result.stderr[:400] or result.stdout[:400]}"}
+            log(f"[DOC_HWP2DOCX] {filename} → {base}.docx")
+            return {"ok": True, "filename": base + ".docx"}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "변환 타임아웃 (2분)"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ═══════════════════════════════════════
+    # 📂 프로젝트 폴더 실시간 파일 리스트 + 파일 서빙
+    # ═══════════════════════════════════════
+    _PROJ_FILE_GROUPS = {
+        'documents': {
+            'label':'📄 문서',
+            'exts':{'docx','doc','hwp','hwpx','odt','rtf','txt','md','pdf','pptx','ppt','xlsx','xls','csv','odp','ods','key','tsv'},
+        },
+        'images': {
+            'label':'🖼 이미지',
+            'exts':{'jpg','jpeg','png','gif','webp','bmp','svg','ico','tiff','heic','heif'},
+        },
+        'videos': {
+            'label':'🎬 동영상',
+            'exts':{'mp4','webm','ogv','mov','m4v','avi','mkv','flv'},
+        },
+        'audio': {
+            'label':'🎵 오디오',
+            'exts':{'mp3','m4a','wav','ogg','opus','aac','flac'},
+        },
+        'other': {'label':'📎 기타', 'exts': set()},
+    }
+    _PROJ_HIDDEN_DIRS = {'.versions','.trash-doc','_dl_tmp','.locks','.trash','_temp','_dl_tmp'}
+    _PROJ_HIDDEN_FILES = {'project.json', '.DS_Store', 'Thumbs.db', 'desktop.ini'}
+
+    def _classify_ext(self, ext):
+        e=(ext or '').lower()
+        for key, g in self._PROJ_FILE_GROUPS.items():
+            if key=='other': continue
+            if e in g['exts']: return key
+        return 'other'
+
+    def _project_files(self, params):
+        """프로젝트 폴더 파일 리스트 그룹화 반환."""
+        pid = params.get("projectId", [""])[0]
+        show_system = params.get("showSystem", ["0"])[0] == "1"
+        max_depth = int(params.get("maxDepth", ["3"])[0] or "3")
+        try:
+            row = db_exec("SELECT work_dir, name FROM projects WHERE id=?", (pid,), fetchone=True)
+        except Exception as e:
+            return {"ok": False, "error": f"DB 오류: {e}"}
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트를 먼저 저장해주세요"}
+        root = row["work_dir"]
+        if not os.path.isdir(root):
+            return {"ok": False, "error": f"폴더 없음: {root}"}
+
+        groups = {k: {'label': v['label'], 'files': []} for k,v in self._PROJ_FILE_GROUPS.items()}
+        all_entries = []
+        try:
+            for dirpath, dirnames, filenames in os.walk(root):
+                # 시스템 폴더 스킵
+                if not show_system:
+                    dirnames[:] = [d for d in dirnames if d not in self._PROJ_HIDDEN_DIRS and not d.startswith('.')]
+                rel_root = os.path.relpath(dirpath, root).replace('\\','/')
+                depth = 0 if rel_root == '.' else rel_root.count('/') + 1
+                if depth > max_depth:
+                    dirnames[:] = []
+                    continue
+                for fn in filenames:
+                    if not show_system:
+                        if fn in self._PROJ_HIDDEN_FILES: continue
+                        if fn.startswith('.'): continue
+                    full = os.path.join(dirpath, fn)
+                    try:
+                        st = os.stat(full)
+                    except Exception: continue
+                    ext = os.path.splitext(fn)[1].lower().lstrip('.')
+                    rel = os.path.relpath(full, root).replace('\\','/')
+                    kind = self._classify_ext(ext)
+                    entry = {
+                        'name': fn, 'path': rel,
+                        'size': st.st_size, 'mtime': st.st_mtime, 'ext': ext,
+                        'kind': kind,
+                    }
+                    groups[kind]['files'].append(entry)
+                    all_entries.append(entry)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        # 각 그룹 최신순 정렬
+        for g in groups.values():
+            g['files'].sort(key=lambda f: f['mtime'], reverse=True)
+
+        # 변경 감지 해시 (이름+mtime+size)
+        sig = "\n".join(f"{e['path']}|{e['mtime']}|{e['size']}" for e in sorted(all_entries, key=lambda x:x['path']))
+        phash = hashlib.md5(sig.encode('utf-8')).hexdigest()[:16]
+
+        return {
+            "ok": True, "root": root, "groups": groups, "hash": phash,
+            "totalFiles": len(all_entries),
+            "projectName": row.get("name",""),
+        }
+
+    def _project_file_serve(self, params):
+        """프로젝트 폴더 내 파일을 Content-Type 맞춰 서빙 (이미지·비디오 <img src> 용).
+        쿼리: projectId, path (프로젝트 루트 기준 상대)"""
+        pid = params.get("projectId", [""])[0]
+        rel = params.get("path", [""])[0]
+        if not pid or not rel:
+            self.send_error(400, "projectId and path required")
+            return
+        # 경로 조작 방지
+        if '..' in rel.split('/') or rel.startswith('/'):
+            self.send_error(400, "invalid path")
+            return
+        try:
+            row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        except Exception:
+            row = None
+        if not row or not row.get("work_dir"):
+            self.send_error(404, "project not found")
+            return
+        root = row["work_dir"]
+        full = os.path.join(root, rel.replace('\\','/'))
+        # canonical 경로 재확인 (심볼릭 링크 · .. 완전 방지)
+        if not os.path.abspath(full).startswith(os.path.abspath(root)):
+            self.send_error(403, "forbidden")
+            return
+        if not os.path.isfile(full):
+            self.send_error(404, "file not found")
+            return
+        try:
+            import mimetypes
+            mime, _ = mimetypes.guess_type(full)
+            if not mime: mime = 'application/octet-stream'
+            size = os.path.getsize(full)
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(size))
+            # 캐시: mtime 기반 ETag (브라우저가 변경 감지 가능)
+            etag = f'"{int(os.path.getmtime(full))}-{size}"'
+            self.send_header("ETag", etag)
+            self.send_header("Cache-Control", "private, max-age=60")
+            # 인라인 표시 (이미지/비디오/PDF 등)
+            self.end_headers()
+            with open(full, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk: break
+                    self.wfile.write(chunk)
+        except Exception as e:
+            log(f"[PROJECT_FILE] 서빙 오류 {full}: {e}")
+            try: self.send_error(500, str(e))
+            except Exception: pass
 
     def _project_list(self):
         rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
