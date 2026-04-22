@@ -359,6 +359,22 @@ body > nav.nav, body > div.tb{display:none!important}
 #undo-redo-bar .ur-btn:active:not(:disabled){transform:scale(.95)}
 #undo-redo-bar .ur-btn:disabled{opacity:.3;cursor:not-allowed}
 #undo-redo-bar #ur-status{font-size:10.5px;color:var(--text-dim);font-family:var(--mono);min-width:42px;text-align:center;user-select:none}
+/* 도형 CE */
+.ce.shape{background:transparent;padding:0;border:none;box-shadow:none;overflow:visible}
+.ce.shape .ce-port{display:block}
+.ce.shape .ce-del{z-index:3}
+.ce.shape .ce-resize{z-index:3}
+.ce.shape .ce-style-btn{z-index:3}
+.ce.shape .shape-text[contenteditable="true"]{outline:2px dashed rgba(126,207,255,.8);border-radius:3px}
+/* 도형 선택기 플라이아웃 */
+#shape-flyout{position:fixed;display:none;background:var(--bg-2);border:1px solid var(--border-light);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);padding:8px;z-index:90;width:260px}
+#shape-flyout.show{display:block}
+#shape-flyout .sf-title{font-size:10.5px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+#shape-flyout .sf-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+#shape-flyout .sf-item{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 2px;border:1px solid transparent;border-radius:5px;cursor:pointer;background:rgba(255,255,255,.03);transition:.12s;gap:2px}
+#shape-flyout .sf-item:hover{background:rgba(76,175,80,.2);border-color:rgba(76,175,80,.5);transform:scale(1.06)}
+#shape-flyout .sf-icon{font-size:20px;line-height:1;color:#a3be8c}
+#shape-flyout .sf-name{font-size:9px;color:var(--text-dim);text-align:center;line-height:1}
 /* YouTube 검색 탭 */
 #yt-tabs .yt-tab{display:flex;align-items:center;gap:4px;padding:4px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px 4px 0 0;cursor:pointer;font-size:11px;color:var(--text-dim);white-space:nowrap;max-width:220px;transition:.12s}
 #yt-tabs .yt-tab:hover{background:rgba(255,255,255,.1);color:var(--text)}
@@ -1576,6 +1592,12 @@ body.focus-mode #canvas-controls{display:none}
 
 <!-- 🎨 CE 스타일 팝오버 (region/text 공통) -->
 <div id="ce-style-pop"></div>
+
+<!-- 🔶 도형 플라이아웃 (호버 시 표시) -->
+<div id="shape-flyout">
+  <div class="sf-title">📐 도형 (클릭하여 즉시 생성)</div>
+  <div class="sf-grid" id="shape-flyout-grid"></div>
+</div>
 
 <!-- 📍 앵커 연결 상태 힌트 배너 -->
 <div id="anchor-connect-hint"></div>
@@ -3747,7 +3769,18 @@ function delNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i
 
 // ═══ CONTEXT MENU ═══
 cw.addEventListener('contextmenu',e=>{e.preventDefault();if(e.target===cw||e.target===cvs||e.target.tagName==='svg')showCtx(e.clientX,e.clientY,'canvas')});
-document.addEventListener('click',e=>{document.getElementById('ctx').classList.remove('show');if(!document.getElementById('arr-pop').contains(e.target))document.getElementById('arr-pop').classList.remove('show')});
+document.addEventListener('click',e=>{
+  // 도형 플라이아웃 클릭은 허용, 외부 클릭 시 숨김
+  const fly = document.getElementById('shape-flyout');
+  const clickedFly = fly && fly.contains(e.target);
+  const clickedShTrig = e.target.closest && e.target.closest('#ctx-shape-trigger');
+  if(!clickedFly && !clickedShTrig) shapeFlyoutHide();
+  // 도형 플라이아웃 또는 트리거 위 클릭은 ctx 메뉴도 유지
+  if(!clickedFly && !clickedShTrig){
+    document.getElementById('ctx').classList.remove('show');
+  }
+  if(!document.getElementById('arr-pop').contains(e.target))document.getElementById('arr-pop').classList.remove('show');
+});
 function showCtx(x,y,mode,nd){
   ctxPos=s2c(x,y);const m=document.getElementById('ctx');
   let html='';
@@ -3767,6 +3800,7 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item" onclick="promptAddVideoCe(${ctxPos.x},${ctxPos.y})" style="color:#22d3ee">🎬 동영상 추가 (URL)</div>
       <div class="ctx-item" onclick="addCeChecklist(${ctxPos.x},${ctxPos.y})" style="color:#facc15">☑ 체크리스트 (할 일)</div>
       <div class="ctx-item" onclick="addCeMinitable(${ctxPos.x},${ctxPos.y})" style="color:#a78bfa">📋 표 메모 (장식 테이블)</div>
+      <div class="ctx-item" id="ctx-shape-trigger" style="color:#a3be8c;position:relative">🔶 도형 추가 <span style="float:right;color:var(--text-muted);font-size:10px">▶ 마우스 올리기</span></div>
       <div class="ctx-sep"></div>
       <div class="ctx-item" onclick="arrangeAllWithHint()">🔲 영역 내부 정렬 (에이전트만)</div>
       <div style="padding:8px 14px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
@@ -3788,6 +3822,21 @@ function showCtx(x,y,mode,nd){
       <div class="ctx-item danger" onclick="delNode('${nd.id}')">삭제</div>`;
   }
   m.innerHTML=html;
+  // 도형 트리거 — hover 시 플라이아웃 표시
+  const shTrig = m.querySelector('#ctx-shape-trigger');
+  if(shTrig){
+    let hideT = null;
+    const keepShown = ()=>{ if(hideT){ clearTimeout(hideT); hideT=null; } };
+    const scheduleHide = ()=>{ if(hideT) clearTimeout(hideT); hideT = setTimeout(shapeFlyoutHide, 200); };
+    shTrig.addEventListener('mouseenter', ()=>{ keepShown(); shapeFlyoutShow(shTrig); });
+    shTrig.addEventListener('mouseleave', scheduleHide);
+    shTrig.addEventListener('click', e=>{ e.stopPropagation(); shapeFlyoutShow(shTrig); });
+    const fly = document.getElementById('shape-flyout');
+    if(fly){
+      fly.addEventListener('mouseenter', keepShown);
+      fly.addEventListener('mouseleave', scheduleHide);
+    }
+  }
   // 먼저 화면 밖에 숨겨놓고 실제 크기 측정 → 뷰포트 경계를 넘으면 반대방향으로 플립
   m.style.left='-9999px';m.style.top='-9999px';m.classList.add('show');
   requestAnimationFrame(()=>{
@@ -4639,9 +4688,30 @@ document.addEventListener('keydown',function(e){
 }
 
 // ═══ CANVAS ELEMENTS (영역/텍스트/이미지) ═══
+// 도형 SVG 정의 — viewBox 100×100 기준, 나중에 CE 크기에 맞춰 스케일
+const SHAPE_DEFS = {
+  rect:       { icon:'▭', name:'사각형',      svg:'<rect x="1" y="1" width="98" height="98" rx="0" />' },
+  roundrect:  { icon:'▢', name:'둥근 사각형',  svg:'<rect x="1" y="1" width="98" height="98" rx="14" ry="14" />' },
+  ellipse:    { icon:'○', name:'타원/원',      svg:'<ellipse cx="50" cy="50" rx="49" ry="49" />' },
+  triangle:   { icon:'△', name:'삼각형',      svg:'<polygon points="50,2 98,98 2,98" />' },
+  tri_down:   { icon:'▽', name:'역삼각형',    svg:'<polygon points="2,2 98,2 50,98" />' },
+  diamond:    { icon:'◇', name:'마름모',      svg:'<polygon points="50,2 98,50 50,98 2,50" />' },
+  pentagon:   { icon:'⬠', name:'오각형',      svg:'<polygon points="50,2 98,38 80,98 20,98 2,38" />' },
+  hexagon:    { icon:'⬡', name:'육각형',      svg:'<polygon points="25,4 75,4 98,50 75,96 25,96 2,50" />' },
+  star:       { icon:'★', name:'별',         svg:'<polygon points="50,3 61,38 98,38 68,60 79,95 50,74 21,95 32,60 2,38 39,38" />' },
+  arrow_r:    { icon:'→', name:'오른쪽 화살표', svg:'<polygon points="2,32 62,32 62,12 98,50 62,88 62,68 2,68" />' },
+  arrow_l:    { icon:'←', name:'왼쪽 화살표',  svg:'<polygon points="98,32 38,32 38,12 2,50 38,88 38,68 98,68" />' },
+  parallelogram:{icon:'▱', name:'평행사변형',   svg:'<polygon points="20,2 98,2 80,98 2,98" />' },
+  trapezoid:  { icon:'⏢', name:'사다리꼴',    svg:'<polygon points="20,2 80,2 98,98 2,98" />' },
+  heart:      { icon:'♥', name:'하트',        svg:'<path d="M50 90 C-5 55 5 15 28 15 C40 15 50 30 50 40 C50 30 60 15 72 15 C95 15 105 55 50 90 Z" />' },
+  cloud:      { icon:'☁', name:'구름',        svg:'<path d="M25 65 C10 65 5 50 18 45 C15 30 35 25 42 38 C45 25 70 25 72 42 C92 38 97 62 82 68 Z" />' },
+  cross:      { icon:'✚', name:'십자',        svg:'<polygon points="38,2 62,2 62,38 98,38 98,62 62,62 62,98 38,98 38,62 2,62 2,38 38,38" />' },
+  speech:     { icon:'💬', name:'말풍선',     svg:'<path d="M4 4 L96 4 L96 68 L60 68 L40 94 L42 68 L4 68 Z" />' },
+};
+
 function mkCe(opts={}){
-  const defW = opts.type==='video' ? 360 : 200;
-  const defH = opts.type==='video' ? 203 : 100;  // 16:9
+  const defW = opts.type==='video' ? 360 : (opts.type==='shape' ? 160 : 200);
+  const defH = opts.type==='video' ? 203 : (opts.type==='shape' ? 140 : 100);  // 16:9
   const ce={
     id:opts.id||'ce'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
     type:opts.type||'text',
@@ -4689,6 +4759,15 @@ function mkCe(opts={}){
     execOrder:(typeof opts.execOrder==='number')?opts.execOrder:null,
     execLabel:opts.execLabel||'',
     execMode:opts.execMode||'parallel',  // 'parallel'|'sequential'
+    // 도형 CE 전용
+    shape:opts.shape||(opts.type==='shape'?'rect':null),
+    fillColor:opts.fillColor||'rgba(76,175,80,0.25)',
+    strokeColor:opts.strokeColor||'#4caf50',
+    strokeWidth:(opts.strokeWidth!=null)?opts.strokeWidth:2,
+    shapeText:opts.shapeText||'',
+    shapeTextColor:opts.shapeTextColor||'#ffffff',
+    shapeFontSize:opts.shapeFontSize||14,
+    shapeTextPadding:(opts.shapeTextPadding!=null)?opts.shapeTextPadding:12,
     el:null
   };
   ce.el=buildCeDom(ce);cvs.appendChild(ce.el);canvasEls.push(ce);
@@ -4782,6 +4861,43 @@ function buildCeDom(ce){
     ce.el=d;
     _renderMinitable(ce);
     ce.el=_oldEl;
+  } else if(ce.type==='shape'){
+    const def = SHAPE_DEFS[ce.shape] || SHAPE_DEFS.rect;
+    const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    d.style.cssText += ';background:transparent;padding:0;border:none;box-shadow:none;overflow:visible';
+    d.innerHTML = `<svg class="shape-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+        <g fill="${ce.fillColor}" stroke="${ce.strokeColor}" stroke-width="${ce.strokeWidth}" stroke-linejoin="round">${def.svg}</g>
+      </svg>
+      <div class="shape-text" contenteditable="false" style="position:absolute;inset:${ce.shapeTextPadding}px;display:flex;align-items:center;justify-content:center;text-align:center;color:${ce.shapeTextColor};font-size:${ce.shapeFontSize}px;font-weight:600;word-break:break-word;line-height:1.3;outline:none;pointer-events:auto;cursor:text">${esc(ce.shapeText||'')}</div>
+      <button class="ce-style-btn" title="도형 스타일 (색·테두리·텍스트)" data-ce-style style="background:rgba(139,92,246,.85);color:#fff">🎨</button>
+      <div class="ce-port ce-port-l port-l" data-side="l"></div>
+      <div class="ce-port ce-port-r port-r" data-side="r"></div>
+      <div class="ce-port ce-port-t port-t" data-side="t"></div>
+      <div class="ce-port ce-port-b port-b" data-side="b"></div>
+      <div class="ce-resize"></div><div class="ce-del">×</div>`;
+    // 텍스트 편집 — 더블클릭으로 editable, blur로 저장
+    const txt = d.querySelector('.shape-text');
+    if(txt){
+      txt.addEventListener('dblclick', e=>{
+        e.stopPropagation(); e.preventDefault();
+        txt.contentEditable = 'true';
+        txt.focus();
+        const range=document.createRange(); range.selectNodeContents(txt);
+        const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      });
+      txt.addEventListener('input', ()=>{
+        if(txt.getAttribute('contenteditable')==='true'){
+          ce.shapeText = txt.innerText||txt.textContent||'';
+          autoSave();
+        }
+      });
+      txt.addEventListener('blur', ()=>{
+        txt.setAttribute('contenteditable','false');
+      });
+      txt.addEventListener('mousedown', e=>{
+        if(txt.getAttribute('contenteditable')==='true') e.stopPropagation();
+      });
+    }
   } else if(ce.type==='image'){
     d.innerHTML=`<img src="${ce.src}" draggable="false">
       <div class="ce-mode-badge">${ce.nodeType?ce.nodeType.toUpperCase():''}</div>
@@ -5077,7 +5193,8 @@ function buildCeDom(ce){
     styleBtn.addEventListener('mousedown',e=>e.stopPropagation());
     styleBtn.addEventListener('click',e=>{
       e.stopPropagation();e.preventDefault();
-      openCeStylePopover(ce, e.clientX, e.clientY);
+      if(ce.type==='shape') openShapeStylePopover(ce, e.clientX, e.clientY);
+      else openCeStylePopover(ce, e.clientX, e.clientY);
     });
   }
   return d;
@@ -5997,7 +6114,16 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
             // 영역 실행 오케스트레이션 (region 전용)
             execOrder:(typeof c.execOrder==='number')?c.execOrder:undefined,
             execLabel:c.execLabel||undefined,
-            execMode:(c.execMode && c.execMode!=='parallel')?c.execMode:undefined};
+            execMode:(c.execMode && c.execMode!=='parallel')?c.execMode:undefined,
+            // 도형 CE 전용
+            shape:(c.type==='shape')?(c.shape||'rect'):undefined,
+            fillColor:(c.type==='shape')?c.fillColor:undefined,
+            strokeColor:(c.type==='shape')?c.strokeColor:undefined,
+            strokeWidth:(c.type==='shape')?c.strokeWidth:undefined,
+            shapeText:(c.type==='shape')?(c.el?.querySelector('.shape-text')?.innerText||c.shapeText||''):undefined,
+            shapeTextColor:(c.type==='shape')?c.shapeTextColor:undefined,
+            shapeFontSize:(c.type==='shape')?c.shapeFontSize:undefined,
+            shapeTextPadding:(c.type==='shape')?c.shapeTextPadding:undefined};
   })}}
 let _saveTimer=null;
 let undoStack=[],redoStack=[],lastSavedState=null;
@@ -7549,6 +7675,116 @@ function _regionShiftMembers(ce, dx, dy){
     if(n.el){ n.el.style.left = n.x + 'px'; }
   });
   _regionApplyScroll(ce);
+}
+
+// ═══ 도형 CE ═══
+function _renderShapeFlyoutGrid(){
+  const g = document.getElementById('shape-flyout-grid');
+  if(!g || g.dataset.built) return;
+  g.innerHTML = '';
+  Object.entries(SHAPE_DEFS).forEach(([key, def])=>{
+    const d = document.createElement('div');
+    d.className = 'sf-item';
+    d.title = def.name + ' — 클릭해서 생성';
+    d.innerHTML = `<div class="sf-icon">${def.icon}</div><div class="sf-name">${def.name.split(' ')[0]}</div>`;
+    d.addEventListener('click', ()=>{
+      addCeShape(key);
+      shapeFlyoutHide();
+    });
+    g.appendChild(d);
+  });
+  g.dataset.built = '1';
+}
+function shapeFlyoutShow(anchorEl){
+  _renderShapeFlyoutGrid();
+  const f = document.getElementById('shape-flyout');
+  if(!f || !anchorEl) return;
+  const r = anchorEl.getBoundingClientRect();
+  f.style.left = (r.right + 8) + 'px';
+  f.style.top = r.top + 'px';
+  f.classList.add('show');
+}
+function shapeFlyoutHide(){
+  document.getElementById('shape-flyout')?.classList.remove('show');
+}
+function addCeShape(shape, x, y){
+  const pos = (x!==undefined) ? {x,y} : s2c(cw.clientWidth/2, cw.clientHeight/2);
+  const w = 160, h = 140;
+  const ce = mkCe({
+    type:'shape', shape: shape || 'rect',
+    x: pos.x - w/2, y: pos.y - h/2, w, h,
+  });
+  selCe(ce); autoSave();
+  showCopyToast(`${(SHAPE_DEFS[shape]||SHAPE_DEFS.rect).icon} ${(SHAPE_DEFS[shape]||SHAPE_DEFS.rect).name} 생성됨`);
+}
+
+// 도형 스타일 팝오버 (채우기·테두리·텍스트)
+function openShapeStylePopover(ce, x, y){
+  const pop = document.getElementById('ce-style-pop');
+  if(!pop) return;
+  const toHex = v => {
+    if(!v) return '#4caf50';
+    if(/^#/.test(v)) return v;
+    // rgba 대응 — rgb 부분만 hex 로 변환
+    const m = v.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if(m){ return '#'+[+m[1],+m[2],+m[3]].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+    return '#4caf50';
+  };
+  const fillAlpha = (()=>{
+    const m = (ce.fillColor||'').match(/rgba\([^,]+,[^,]+,[^,]+,([\d.]+)/);
+    return m ? Math.round(parseFloat(m[1])*100) : 100;
+  })();
+  pop.innerHTML = `
+    <div style="padding:10px 12px;min-width:240px">
+      <div style="font-weight:700;color:var(--accent);margin-bottom:8px;font-size:12px">🎨 도형 스타일</div>
+      <div class="csp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px"><label style="min-width:60px">채우기</label><input type="color" value="${toHex(ce.fillColor)}" data-sh="fill" style="flex:1"><input type="range" min="0" max="100" value="${fillAlpha}" data-sh="alpha" style="width:60px;accent-color:var(--accent)"><span data-sh-v="alpha" style="font-size:10px;color:var(--accent);min-width:28px;text-align:right">${fillAlpha}%</span></div>
+      <div class="csp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px"><label style="min-width:60px">테두리</label><input type="color" value="${toHex(ce.strokeColor)}" data-sh="stroke" style="flex:1"><input type="range" min="0" max="10" value="${ce.strokeWidth}" data-sh="strokeW" style="width:60px;accent-color:var(--accent)"><span data-sh-v="strokeW" style="font-size:10px;color:var(--accent);min-width:28px;text-align:right">${ce.strokeWidth}px</span></div>
+      <div style="height:1px;background:var(--border);margin:8px 0"></div>
+      <div class="csp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px"><label style="min-width:60px">글자색</label><input type="color" value="${toHex(ce.shapeTextColor)}" data-sh="tcol" style="flex:1"></div>
+      <div class="csp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px"><label style="min-width:60px">크기</label><input type="range" min="8" max="48" value="${ce.shapeFontSize}" data-sh="fs" style="flex:1;accent-color:var(--accent)"><span data-sh-v="fs" style="font-size:10px;color:var(--accent);min-width:32px;text-align:right">${ce.shapeFontSize}px</span></div>
+      <div class="csp-row" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px"><label style="min-width:60px">여백</label><input type="range" min="0" max="60" value="${ce.shapeTextPadding}" data-sh="pad" style="flex:1;accent-color:var(--accent)"><span data-sh-v="pad" style="font-size:10px;color:var(--accent);min-width:32px;text-align:right">${ce.shapeTextPadding}px</span></div>
+      <div style="display:flex;gap:4px"><button data-sh="close" style="flex:1;padding:5px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11px">닫기</button></div>
+    </div>`;
+  pop.style.display='block';
+  pop.style.left=Math.min(x, window.innerWidth-280)+'px';
+  pop.style.top=Math.min(y, window.innerHeight-300)+'px';
+
+  const apply = ()=>{
+    const fillHex = pop.querySelector('[data-sh="fill"]').value;
+    const alpha = parseInt(pop.querySelector('[data-sh="alpha"]').value,10)/100;
+    const r=parseInt(fillHex.substr(1,2),16), g=parseInt(fillHex.substr(3,2),16), b=parseInt(fillHex.substr(5,2),16);
+    ce.fillColor = `rgba(${r},${g},${b},${alpha})`;
+    ce.strokeColor = pop.querySelector('[data-sh="stroke"]').value;
+    ce.strokeWidth = parseInt(pop.querySelector('[data-sh="strokeW"]').value,10);
+    ce.shapeTextColor = pop.querySelector('[data-sh="tcol"]').value;
+    ce.shapeFontSize = parseInt(pop.querySelector('[data-sh="fs"]').value,10);
+    ce.shapeTextPadding = parseInt(pop.querySelector('[data-sh="pad"]').value,10);
+    // 값 라벨 갱신
+    pop.querySelector('[data-sh-v="alpha"]').textContent = Math.round(alpha*100)+'%';
+    pop.querySelector('[data-sh-v="strokeW"]').textContent = ce.strokeWidth+'px';
+    pop.querySelector('[data-sh-v="fs"]').textContent = ce.shapeFontSize+'px';
+    pop.querySelector('[data-sh-v="pad"]').textContent = ce.shapeTextPadding+'px';
+    // DOM 갱신
+    const g = ce.el.querySelector('svg.shape-svg g');
+    if(g){
+      g.setAttribute('fill', ce.fillColor);
+      g.setAttribute('stroke', ce.strokeColor);
+      g.setAttribute('stroke-width', ce.strokeWidth);
+    }
+    const txt = ce.el.querySelector('.shape-text');
+    if(txt){
+      txt.style.color = ce.shapeTextColor;
+      txt.style.fontSize = ce.shapeFontSize+'px';
+      txt.style.inset = ce.shapeTextPadding+'px';
+    }
+    autoSave();
+  };
+  pop.querySelectorAll('input').forEach(el => el.addEventListener('input', apply));
+  pop.querySelector('[data-sh="close"]').addEventListener('click', ()=>{ pop.style.display='none'; });
+  setTimeout(()=>{
+    const close = e=>{ if(!pop.contains(e.target)){ pop.style.display='none'; document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown', close);
+  },100);
 }
 
 // ═══ 영역 실행 오케스트레이션 ═══
