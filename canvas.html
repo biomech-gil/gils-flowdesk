@@ -3424,7 +3424,7 @@ function mkNode(opts={}){
     // Sheet 노드 전용
     sheet:opts.sheet||(type==='sheet'?_sheetDefault():null),
     // Document 노드 전용 — {filename, lastSeenMtime, engine('superdoc'|'rhwp')}
-    doc:opts.doc||(type==='document'?{filename:'',lastSeenMtime:0,engine:null,outputFormat:'markdown'}:null),
+    doc:opts.doc||(type==='document'?{filename:'',lastSeenMtime:0,engine:null,outputFormat:'markdown',pdfPageMode:'all',pdfPageNumber:1}:null),
     el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);return n;
 }
@@ -5701,8 +5701,12 @@ const engine={
           const bin = atob(r.data);
           const arr = new Uint8Array(bin.length);
           for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
-          if(['docx','txt','md'].includes(ext)){
-            text = await _docExtractForAi(arr.buffer, ext, fmt);
+          if(['docx','txt','md','pdf'].includes(ext)){
+            const opts = ext==='pdf' ? {
+              pdfPageMode: (nd.doc && nd.doc.pdfPageMode) || 'all',
+              pdfPageNumber: (nd.doc && nd.doc.pdfPageNumber) || 1,
+            } : {};
+            text = await _docExtractForAi(arr.buffer, ext, fmt, opts);
           } else {
             text = `(${ext.toUpperCase()} 파일 — AI 추출 미지원. 텍스트로 저장하거나 DOCX로 변환해주세요)`;
           }
@@ -5828,6 +5832,8 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       lastSeenMtime:(n.doc?.lastSeenMtime)||0,
       engine:(n.doc?.engine)||null,
       outputFormat:(n.doc?.outputFormat)||'markdown',
+      pdfPageMode:(n.doc?.pdfPageMode)||'all',
+      pdfPageNumber:(n.doc?.pdfPageNumber)||1,
     }:undefined,
   })),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))})),
@@ -7071,6 +7077,7 @@ function _docEngineForExt(ext){
   const e=(ext||'').toLowerCase().replace(/^\./,'');
   if(e==='hwp'||e==='hwpx')return 'rhwp';
   if(e==='docx'||e==='doc'||e==='odt'||e==='rtf')return 'superdoc';
+  if(e==='pdf')return 'pdf';
   if(e==='txt'||e==='md'||e==='json'||e==='xml'||e==='yaml'||e==='yml'||e==='ini'||e==='toml'||e==='log'||e==='sql'||e==='py'||e==='js'||e==='ts'||e==='html'||e==='css'||e==='java'||e==='cpp'||e==='c'||e==='h'||e==='go'||e==='rs'||e==='rb'||e==='php'||e==='sh'||e==='csv'||e==='tsv')return 'plain';
   // 나머지는 파일 카드 (편집 불가, 참조만)
   return 'fileref';
@@ -7824,6 +7831,12 @@ async function docInlineRender(state, holder){
     }
     return;
   }
+  if(kind==='pdf'){
+    holder.style.display='flex';
+    holder.style.flexDirection='column';
+    await _docRenderPdf(state, holder);
+    return;
+  }
   holder.innerHTML='<div class="doc-loading" style="color:#fca5a5">지원하지 않는 형식입니다</div>';
 }
 
@@ -8446,6 +8459,156 @@ async function docEnsureMammoth(){
   if(window.mammoth)return;
   await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js','mammoth');
 }
+async function docEnsurePdfjs(){
+  if(window.pdfjsLib) return;
+  await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.mjs','pdfjsLib');
+  // 없으면 pdfjs-dist 로 폴백
+  if(!window.pdfjsLib){
+    await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js','pdfjsLib');
+  }
+  if(window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions){
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js';
+  }
+}
+
+// PDF 인라인 렌더 — state.buffer 의 PDF 를 pages(canvas 들)로 렌더
+// state.node.doc.pdfPageMode: 'all' (스크롤) | 'single' (단일 페이지)
+// state.node.doc.pdfPageNumber: 단일 모드일 때 보여줄 페이지 (1-based)
+async function _docRenderPdf(state, holder){
+  try{ await docEnsurePdfjs(); }catch(e){
+    holder.innerHTML=`<div class="doc-loading" style="color:#fca5a5">PDF.js 로드 실패: ${e.message}</div>`;
+    return;
+  }
+  const n = state.node;
+  n.doc = n.doc || {};
+  n.doc.pdfPageMode = n.doc.pdfPageMode || 'all';
+  n.doc.pdfPageNumber = n.doc.pdfPageNumber || 1;
+
+  holder.innerHTML = '<div class="doc-loading">📄 PDF 분석 중…</div>';
+  let pdf;
+  try{
+    const u8 = new Uint8Array(state.buffer);
+    pdf = await window.pdfjsLib.getDocument({data: u8}).promise;
+  }catch(e){
+    holder.innerHTML = `<div class="doc-loading" style="color:#fca5a5">PDF 읽기 실패: ${e.message}</div>`;
+    return;
+  }
+  state._pdfDoc = pdf;
+  const total = pdf.numPages;
+  // 단일 페이지 모드는 범위 체크
+  if(n.doc.pdfPageNumber > total) n.doc.pdfPageNumber = total;
+  if(n.doc.pdfPageNumber < 1) n.doc.pdfPageNumber = 1;
+
+  // 컨트롤 바 + 페이지 컨테이너
+  const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const mode = n.doc.pdfPageMode;
+  const curP = n.doc.pdfPageNumber;
+  holder.innerHTML = `<div class="pdf-ctl" style="display:flex;align-items:center;gap:4px;padding:3px 6px;background:rgba(0,0,0,.3);border-bottom:1px solid rgba(255,255,255,.08);font-size:11px;color:var(--text);flex-shrink:0">
+      <button data-pdf-prev title="이전" style="padding:2px 6px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid rgba(255,255,255,.15);border-radius:3px;cursor:pointer;font-size:11px">◀</button>
+      <input type="number" data-pdf-page min="1" max="${total}" value="${curP}" style="width:46px;padding:2px 4px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px;text-align:center;font-size:11px"> / ${total}
+      <button data-pdf-next title="다음" style="padding:2px 6px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid rgba(255,255,255,.15);border-radius:3px;cursor:pointer;font-size:11px">▶</button>
+      <span style="flex:1"></span>
+      <label style="display:flex;align-items:center;gap:3px;cursor:pointer" title="전체 스크롤 ↔ 단일 페이지 고정">
+        <input type="checkbox" data-pdf-single ${mode==='single'?'checked':''} style="margin:0">
+        <span style="color:${mode==='single'?'#fbbf24':'var(--text-dim)'};font-weight:${mode==='single'?'700':'400'}">🔒 단일 페이지 고정</span>
+      </label>
+    </div>
+    <div class="pdf-pages" data-pdf-pages style="flex:1;overflow:auto;background:#404040;padding:8px;display:flex;flex-direction:column;align-items:center;gap:8px"></div>`;
+  const pagesEl = holder.querySelector('[data-pdf-pages]');
+  const pageInp = holder.querySelector('[data-pdf-page]');
+  const singleChk = holder.querySelector('[data-pdf-single]');
+
+  // 렌더 함수
+  const renderPage = async (pageNum) => {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({scale: 1.5});
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    canvas.style.cssText='background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.5);max-width:100%;height:auto;display:block';
+    canvas.dataset.pageNum = pageNum;
+    const ctx = canvas.getContext('2d');
+    await page.render({canvasContext:ctx, viewport}).promise;
+    return canvas;
+  };
+
+  const doRender = async () => {
+    pagesEl.innerHTML = '<div class="doc-loading" style="color:#ccc">페이지 렌더 중…</div>';
+    try{
+      if(n.doc.pdfPageMode === 'single'){
+        pagesEl.innerHTML = '';
+        const c = await renderPage(n.doc.pdfPageNumber);
+        pagesEl.appendChild(c);
+      } else {
+        pagesEl.innerHTML = '';
+        for(let i=1; i<=total; i++){
+          const c = await renderPage(i);
+          // 페이지 번호 라벨
+          const wrap = document.createElement('div');
+          wrap.style.cssText='position:relative;display:inline-block';
+          const lbl = document.createElement('div');
+          lbl.textContent = i+' / '+total;
+          lbl.style.cssText='position:absolute;left:4px;top:4px;background:rgba(0,0,0,.6);color:#fff;padding:1px 6px;border-radius:3px;font-size:10px;pointer-events:none';
+          wrap.appendChild(c); wrap.appendChild(lbl);
+          pagesEl.appendChild(wrap);
+        }
+      }
+    }catch(e){
+      pagesEl.innerHTML = `<div class="doc-loading" style="color:#fca5a5">렌더 실패: ${e.message}</div>`;
+    }
+  };
+
+  // 이벤트
+  pageInp.addEventListener('mousedown',e=>e.stopPropagation());
+  pageInp.addEventListener('change', ()=>{
+    let v = parseInt(pageInp.value,10) || 1;
+    v = Math.max(1, Math.min(total, v));
+    pageInp.value = v;
+    n.doc.pdfPageNumber = v;
+    autoSave();
+    doRender();
+    if(n.doc.pdfPageMode === 'all'){
+      // 전체 모드에선 해당 페이지로 스크롤
+      setTimeout(()=>{
+        const target = pagesEl.querySelector(`[data-page-num="${v}"]`);
+        if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+      }, 200);
+    }
+  });
+  holder.querySelector('[data-pdf-prev]').addEventListener('click', e=>{
+    e.stopPropagation();
+    const v = Math.max(1, (parseInt(pageInp.value,10)||1) - 1);
+    pageInp.value = v; pageInp.dispatchEvent(new Event('change'));
+  });
+  holder.querySelector('[data-pdf-next]').addEventListener('click', e=>{
+    e.stopPropagation();
+    const v = Math.min(total, (parseInt(pageInp.value,10)||1) + 1);
+    pageInp.value = v; pageInp.dispatchEvent(new Event('change'));
+  });
+  singleChk.addEventListener('change', ()=>{
+    n.doc.pdfPageMode = singleChk.checked ? 'single' : 'all';
+    autoSave();
+    doRender();
+    // 라벨 색상 갱신
+    const lbl = singleChk.nextElementSibling;
+    if(lbl){
+      lbl.style.color = singleChk.checked ? '#fbbf24' : 'var(--text-dim)';
+      lbl.style.fontWeight = singleChk.checked ? '700' : '400';
+    }
+    showCopyToast(singleChk.checked
+      ? `🔒 ${n.doc.pdfPageNumber}페이지 고정 모드 (여러 PDF의 특정 페이지만 모을 때 유용)`
+      : '📜 전체 스크롤 모드');
+  });
+  singleChk.addEventListener('mousedown',e=>e.stopPropagation());
+
+  await doRender();
+
+  // Output 텍스트 — AI 가 인식할 수 있도록 현재 모드 + 페이지 번호 명시
+  state._getText = () => {
+    const mode = n.doc.pdfPageMode === 'single' ? `페이지 ${n.doc.pdfPageNumber}만` : '전체';
+    return `[PDF: ${n.doc.filename}, ${total}페이지 중 ${mode} 표시]`;
+  };
+  state._getBuffer = () => state.buffer;
+}
 async function docEnsureTurndown(){
   if(window.TurndownService)return;
   await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/turndown/7.2.0/turndown.min.js','TurndownService');
@@ -8453,13 +8616,36 @@ async function docEnsureTurndown(){
   try{ await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/turndown-plugin-gfm/1.0.2/turndown-plugin-gfm.min.js','turndownPluginGfm'); }catch(e){ console.warn('turndown gfm 플러그인 로드 실패 — 표 변환 제한적'); }
 }
 
-// docx/html → AI 친화적 Markdown (표 구조 보존)
+// docx/pdf/html → AI 친화적 Markdown (표 구조 보존)
 // format: 'markdown' | 'html' | 'plain'
-async function _docExtractForAi(arrayBuffer, ext, format){
+async function _docExtractForAi(arrayBuffer, ext, format, opts){
   format = format || 'markdown';
+  opts = opts || {};
   if(ext === 'txt' || ext === 'md'){
     const arr = new Uint8Array(arrayBuffer);
     return new TextDecoder('utf-8').decode(arr);
+  }
+  if(ext === 'pdf'){
+    await docEnsurePdfjs();
+    const u8 = new Uint8Array(arrayBuffer);
+    const pdf = await window.pdfjsLib.getDocument({data:u8}).promise;
+    const total = pdf.numPages;
+    // 단일 페이지 모드면 그 페이지만, 아니면 전체
+    const targetPages = (opts.pdfPageMode === 'single')
+      ? [Math.max(1, Math.min(total, opts.pdfPageNumber||1))]
+      : Array.from({length:total}, (_,i)=>i+1);
+    const parts = [];
+    for(const pn of targetPages){
+      const page = await pdf.getPage(pn);
+      const tc = await page.getTextContent();
+      const text = (tc.items||[]).map(it=>it.str||'').join(' ').replace(/\s+/g,' ').trim();
+      if(format === 'plain'){
+        parts.push(`[페이지 ${pn}] ${text}`);
+      } else {
+        parts.push(`## 페이지 ${pn}\n\n${text}\n`);
+      }
+    }
+    return parts.join('\n\n');
   }
   if(ext !== 'docx'){
     throw new Error(`AI 추출 미지원 포맷: ${ext}`);
