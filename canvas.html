@@ -5610,8 +5610,14 @@ function loadState(st){
   // 외관 설정 복원 (없으면 기본값)
   if(st.appearance)appearance={...appearance,...st.appearance};
   applyAppearance();
-  // 프로젝트 불러오기 시 모든 노드는 접힌 상태로 (사용자 요청)
-  (st.nodes||[]).forEach(nd=>mkNode({...nd,collapsed:true}));
+  // 프로젝트 불러오기 — 문서 노드는 저장된 펼침/접힘 상태 유지, 나머지는 기본 접힘
+  (st.nodes||[]).forEach(nd=>{
+    if(nd.type==='document'){
+      mkNode(nd); // saved collapsed 그대로
+    } else {
+      mkNode({...nd, collapsed:true});
+    }
+  });
   conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5}))}));
   (st.canvasElements||[]).forEach(ce=>mkCe(ce));
   // 스크롤 박스 region 복원: 모든 노드 로드 완료 후 스크롤 상태 적용
@@ -9189,7 +9195,17 @@ function ytAddOneToCanvas(url){
 }
 function ytOpenOriginal(url){ window.open(url, '_blank'); }
 function ytPreview(url){
-  _DL_PREVIEW.urls=[url];_DL_PREVIEW.idx=0;
+  // 현재 검색 결과 전체를 urls로 등록 → 좌우 화살표로 순회 가능
+  const items = (_YT && _YT.items) ? _YT.items : [];
+  const urls = items.map(it=>it.url).filter(Boolean);
+  const idx = Math.max(0, urls.indexOf(url));
+  if(urls.length){
+    _DL_PREVIEW.urls = urls;
+    _DL_PREVIEW.idx = idx;
+  } else {
+    _DL_PREVIEW.urls = [url];
+    _DL_PREVIEW.idx = 0;
+  }
   document.getElementById('dl-preview-modal').style.display='flex';
   dlPreviewRender();
 }

@@ -2635,46 +2635,75 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         # 임시 세그먼트 다운 디렉토리
         temp_dir = tempfile.mkdtemp(prefix="ytframe_")
         seg_template = os.path.join(temp_dir, "seg.%(ext)s")
-        seg_start = max(0, int(ts) - 1)
-        seg_end = int(ts) + 2
+        # 더 여유 있는 범위 (앞 2초, 뒤 4초 — 총 6초)로 키프레임 확보 확률 증가
+        seg_start = max(0, int(ts) - 2)
+        seg_end = int(ts) + 4
         sections = f"*{seg_start}-{seg_end}"
 
-        try:
-            r = subprocess.run(
-                ["yt-dlp",
-                 "-f", "best[height<=720][ext=mp4]/best[height<=720]/best",
-                 "--download-sections", sections,
-                 "--force-keyframes-at-cuts",
-                 "--no-warnings", "--no-playlist",
-                 "-o", seg_template,
-                 url],
-                capture_output=True, text=True, timeout=90,
-                encoding="utf-8", errors="replace",
-            )
-        except subprocess.TimeoutExpired:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            return {"ok": False, "error": "yt-dlp 타임아웃 (90초) — 네트워크 또는 영상 접근 확인"}
-        except FileNotFoundError:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            return {"ok": False, "error": "yt-dlp 미설치"}
-
-        # 다운로드된 세그먼트 파일 찾기 (확장자 모름 — seg.* 패턴)
+        # 포맷 후보: format 18 (360p progressive mp4, 가장 호환) 우선 → 720p → best
+        # --force-keyframes-at-cuts 는 재인코딩 유발하여 실패 잦음 → 제거
+        attempts = [
+            # 1차: 포맷 18 진행성 mp4, 가장 안정
+            ["-f", "18/best[height<=360][ext=mp4]/best[ext=mp4]",
+             "--download-sections", sections],
+            # 2차: 720p 까지 허용, 세그먼트 여전히 사용
+            ["-f", "best[height<=720][ext=mp4]/best[height<=720]/best",
+             "--download-sections", sections],
+            # 3차: 최후 — 세그먼트 플래그 없이 full 다운로드 (작은 영상만 실용)
+            ["-f", "18/best[height<=360][ext=mp4]/best[ext=mp4]"],
+        ]
+        r = None
         seg_file = None
-        try:
-            for fn in sorted(os.listdir(temp_dir)):
-                full = os.path.join(temp_dir, fn)
-                if os.path.isfile(full) and fn.startswith("seg.") and os.path.getsize(full) > 0:
+        used_full_video = False  # 3차 시도(세그먼트 플래그 없음)면 True
+        errors_collected = []
+        for idx, args in enumerate(attempts):
+            try:
+                r = subprocess.run(
+                    ["yt-dlp"] + args +
+                    ["--no-warnings", "--no-playlist", "-o", seg_template, url],
+                    capture_output=True, text=True, timeout=120,
+                    encoding="utf-8", errors="replace",
+                )
+            except subprocess.TimeoutExpired:
+                errors_collected.append(f"시도 {idx+1}: yt-dlp 타임아웃")
+                continue
+            except FileNotFoundError:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return {"ok": False, "error": "yt-dlp 미설치"}
+            # 결과 파일 찾기 — .part 가 남았을 수도
+            try:
+                for fn in sorted(os.listdir(temp_dir)):
+                    full = os.path.join(temp_dir, fn)
+                    if not os.path.isfile(full): continue
+                    if not fn.startswith("seg."): continue
+                    if fn.endswith(".part"): continue  # 미완성 파일 무시
+                    if os.path.getsize(full) < 1024: continue  # 1KB 미만은 실패
                     seg_file = full
                     break
-        except Exception:
-            pass
+            except Exception: pass
+            if seg_file:
+                used_full_video = (idx == 2)  # 3차 시도는 세그먼트 플래그 없음
+                log(f"[YT_FRAME] 시도 {idx+1} 성공 → {seg_file} ({os.path.getsize(seg_file)} bytes, full={used_full_video})")
+                break
+            # 이 시도 실패 → stderr 수집
+            err_snippet = ((r.stderr if r else '') or (r.stdout if r else '') or '').strip()[-400:]
+            errors_collected.append(f"시도 {idx+1}: {err_snippet}")
+            # temp_dir 비우기 (부분 파일 제거)
+            try:
+                for fn in os.listdir(temp_dir):
+                    try: os.remove(os.path.join(temp_dir, fn))
+                    except Exception: pass
+            except Exception: pass
+
         if not seg_file:
             shutil.rmtree(temp_dir, ignore_errors=True)
-            err = ((r.stderr or "") + (r.stdout or "")).strip()[-300:]
-            return {"ok": False, "error": f"세그먼트 다운로드 실패: {err or 'yt-dlp가 파일을 생성하지 못함'}"}
+            combined = "\n---\n".join(errors_collected)[-800:]
+            return {"ok": False, "error": f"세그먼트 다운로드 실패 — 3차 폴백까지 모두 실패.\n\n{combined or 'yt-dlp가 파일을 생성하지 못함'}"}
+        # full-video 모드(3차 시도)였다면 local_ts = 실제 ts (0부터 시작이 아님)
+        # 그 외는 ts - seg_start
 
-        # 세그먼트 내부에서 원래 ts 위치 = ts - seg_start
-        local_ts = max(0, ts - seg_start)
+        # 세그먼트 모드면 ts - seg_start, 풀-비디오 모드면 ts 그대로
+        local_ts = max(0, ts if used_full_video else (ts - seg_start))
         try:
             r2 = subprocess.run(
                 ["ffmpeg", "-y",
