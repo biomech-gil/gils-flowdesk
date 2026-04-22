@@ -9791,7 +9791,21 @@ async function pbExportPdf(){
 
 async function docEnsureJsPdf(){
   if(window.jspdf && window.jspdf.jsPDF) return;
-  await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js','jspdf');
+  // cdnjs 에 jspdf 2.5.2 파일이 없을 수 있음 → 여러 CDN/버전 폴백
+  const urls = [
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
+    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js',
+  ];
+  let lastErr = null;
+  for(const url of urls){
+    try{
+      await _loadScript(url, 'jspdf');
+      if(window.jspdf && window.jspdf.jsPDF) return;
+    }catch(e){ lastErr = e; console.warn('[jsPDF]', url, e.message); }
+  }
+  throw new Error('jsPDF CDN 로드 실패 (모든 폴백 시도): ' + (lastErr&&lastErr.message||''));
 }
 
 // 이미지 CE 들을 페이지로 모아 PDF 생성 → 프로젝트 documents/ 저장 + Document 노드 생성
