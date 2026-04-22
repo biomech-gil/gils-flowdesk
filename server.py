@@ -2049,6 +2049,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/temp/folder-promote": self._temp_folder_promote,
             "/api/temp/folder-delete": self._temp_folder_delete_now,
             "/api/temp/cleanup-now": self._temp_cleanup_now,
+            "/api/sheet/import": self._sheet_import,
+            "/api/sheet/export-xlsx": self._sheet_export_xlsx,
         }
         handler = handlers.get(p)
         if handler:
@@ -2760,6 +2762,168 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 "imageCount": sum(1 for m in moved if m["kind"] == "image"),
                 "audioCount": sum(1 for m in moved if m["kind"] == "audio")}
 
+    # ═══════════════════════════════════════
+    # 📊 Sheet 노드 — xlsx/csv/tsv 가져오기·내보내기
+    # ═══════════════════════════════════════
+    def _sheet_import(self, body):
+        """파일 base64 받아서 {sheets: [{name, columns, rows, mergesFlattened}]} 반환.
+        body:
+          filename   원본 파일명 (확장자로 포맷 판별)
+          data       base64 인코딩된 파일 내용
+          sheetName  (xlsx 전용) 특정 시트만 원할 때 — 없으면 모든 시트
+        """
+        import base64 as _b64, csv as _csv, io as _io
+        filename = (body.get("filename") or "").strip()
+        b64 = body.get("data") or ""
+        want_sheet = (body.get("sheetName") or "").strip()
+        if not filename or not b64:
+            return {"ok": False, "error": "filename/data 필요"}
+        try:
+            if "," in b64 and b64.startswith("data:"):
+                b64 = b64.split(",", 1)[1]
+            raw = _b64.b64decode(b64)
+        except Exception as e:
+            return {"ok": False, "error": f"base64 디코드 실패: {e}"}
+        ext = os.path.splitext(filename)[1].lower()
+
+        # CSV / TSV — stdlib 만으로
+        if ext in (".csv", ".tsv", ".txt"):
+            delim = "\t" if ext == ".tsv" else ","
+            try:
+                text = raw.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                try: text = raw.decode("cp949")
+                except Exception: text = raw.decode("utf-8", errors="replace")
+            reader = _csv.reader(_io.StringIO(text), delimiter=delim)
+            all_rows = list(reader)
+            if not all_rows:
+                return {"ok": False, "error": "파일이 비어있습니다"}
+            header = all_rows[0]
+            # 빈 끝 열 제거
+            while header and not (header[-1] or "").strip():
+                header.pop()
+            columns = [{"id": f"c{i+1}", "name": (h or f"열{i+1}"), "type": "text", "width": 140}
+                       for i, h in enumerate(header)]
+            col_ids = [c["id"] for c in columns]
+            rows = []
+            for rrow in all_rows[1:]:
+                r = {}
+                for i, cid in enumerate(col_ids):
+                    r[cid] = rrow[i] if i < len(rrow) else ""
+                rows.append(r)
+            return {"ok": True, "sheets": [{
+                "name": os.path.splitext(os.path.basename(filename))[0],
+                "columns": columns, "rows": rows, "mergesFlattened": 0,
+            }], "fileType": ext.lstrip(".")}
+
+        # XLSX — openpyxl
+        if ext in (".xlsx", ".xlsm"):
+            try:
+                import openpyxl
+            except ImportError:
+                return {"ok": False, "error": "openpyxl 미설치 — Dockerfile 재빌드 필요"}
+            try:
+                wb = openpyxl.load_workbook(_io.BytesIO(raw), data_only=True, read_only=False)
+            except Exception as e:
+                return {"ok": False, "error": f"xlsx 파싱 실패: {e}"}
+            result_sheets = []
+            target_names = [want_sheet] if want_sheet else wb.sheetnames
+            for name in target_names:
+                if name not in wb.sheetnames:
+                    continue
+                ws = wb[name]
+                merges_flattened = 0
+                # 병합 영역 값을 좌상단에서 가져와 모든 셀에 복사 (평탄화)
+                try:
+                    ranges = list(ws.merged_cells.ranges)
+                    for rng in ranges:
+                        top_left = ws.cell(row=rng.min_row, column=rng.min_col).value
+                        ws.unmerge_cells(str(rng))
+                        for r in range(rng.min_row, rng.max_row + 1):
+                            for c in range(rng.min_col, rng.max_col + 1):
+                                ws.cell(row=r, column=c).value = top_left
+                        merges_flattened += 1
+                except Exception as e:
+                    log(f"[SHEET_IMPORT] 병합 평탄화 오류 (무시): {e}")
+                # 실제 데이터 영역
+                rows_data = list(ws.iter_rows(values_only=True))
+                if not rows_data:
+                    continue
+                # 마지막 전체 None 행/열 트림
+                while rows_data and all(v is None or v == "" for v in rows_data[-1]):
+                    rows_data.pop()
+                if not rows_data:
+                    continue
+                header = list(rows_data[0])
+                # 끝 쪽 None 열 트림
+                max_cols = len(header)
+                while max_cols > 0 and (header[max_cols-1] is None or header[max_cols-1] == ""):
+                    max_cols -= 1
+                header = header[:max_cols]
+                columns = [{"id": f"c{i+1}",
+                            "name": (str(h) if h is not None and str(h).strip() else f"열{i+1}"),
+                            "type": "text", "width": 140}
+                           for i, h in enumerate(header)]
+                col_ids = [c["id"] for c in columns]
+                rows = []
+                for rrow in rows_data[1:]:
+                    r = {}
+                    for i, cid in enumerate(col_ids):
+                        v = rrow[i] if i < len(rrow) else None
+                        if v is None:
+                            r[cid] = ""
+                        elif isinstance(v, (int, float)):
+                            r[cid] = v
+                        elif hasattr(v, "isoformat"):
+                            r[cid] = v.isoformat()
+                        else:
+                            r[cid] = str(v)
+                    rows.append(r)
+                result_sheets.append({
+                    "name": name, "columns": columns, "rows": rows,
+                    "mergesFlattened": merges_flattened,
+                })
+            if not result_sheets:
+                return {"ok": False, "error": "파싱된 시트가 없습니다"}
+            return {"ok": True, "sheets": result_sheets, "fileType": "xlsx",
+                    "allSheetNames": wb.sheetnames}
+        return {"ok": False, "error": f"지원하지 않는 확장자: {ext}"}
+
+    def _sheet_export_xlsx(self, body):
+        """sheet {columns, rows} 받아서 xlsx 바이트를 base64 로 반환."""
+        import base64 as _b64, io as _io
+        sheet = body.get("sheet") or {}
+        name = (body.get("name") or "Sheet1")[:31]
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment
+        except ImportError:
+            return {"ok": False, "error": "openpyxl 미설치 — Dockerfile 재빌드 필요"}
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = name
+            cols = sheet.get("columns") or []
+            rows = sheet.get("rows") or []
+            # 헤더
+            for ci, c in enumerate(cols, start=1):
+                cell = ws.cell(row=1, column=ci, value=c.get("name") or f"열{ci}")
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill("solid", fgColor="EEEEEE")
+                cell.alignment = Alignment(horizontal="center")
+                ws.column_dimensions[cell.column_letter].width = (c.get("width") or 120) / 7
+            # 데이터
+            for ri, row in enumerate(rows, start=2):
+                for ci, c in enumerate(cols, start=1):
+                    v = row.get(c["id"], "")
+                    ws.cell(row=ri, column=ci, value=v)
+            buf = _io.BytesIO()
+            wb.save(buf)
+            return {"ok": True, "filename": f"{name}.xlsx",
+                    "data": _b64.b64encode(buf.getvalue()).decode("ascii")}
+        except Exception as e:
+            return {"ok": False, "error": f"xlsx 생성 실패: {e}"}
+
     def _project_list(self):
         rows = db_exec("SELECT id, name, modified, favorite, folder_id FROM projects ORDER BY favorite DESC, modified DESC LIMIT 200", fetch=True) or []
         # __current__ 류는 Python에서 필터링 (LIKE ESCAPE 호환성 이슈 회피)
@@ -3361,7 +3525,10 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             with open(filepath, "wb") as f:
                 f.write(data)
             log(f"UPLOAD [{purpose}] {filename} → {filepath} ({len(data)} bytes)")
-            return {"ok": True, "path": filepath, "filename": final_name}
+            # url 필드 = 브라우저가 <img src=> 로 쓸 수 있는 상대 URL
+            # path 필드 = 파일시스템 절대경로 (Claude/Gemini CLI 에 첨부용)
+            url = f"/uploads/{purpose}s/{final_name}"
+            return {"ok": True, "path": filepath, "url": url, "filename": final_name}
         except Exception as e:
             log(f"UPLOAD ERROR: {e}")
             return {"ok": False, "error": str(e)}

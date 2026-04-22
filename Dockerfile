@@ -16,8 +16,8 @@ RUN curl -fsSL https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-st
     && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe \
     && rm -rf /tmp/ffmpeg /tmp/ffmpeg.tar.xz
 
-# Python deps + yt-dlp (YouTube/Instagram/TikTok 등 다운로더)
-RUN pip install --no-cache-dir psycopg2-binary yt-dlp
+# Python deps + yt-dlp (YouTube/Instagram/TikTok 등 다운로더) + openpyxl (Sheet 노드 xlsx I/O)
+RUN pip install --no-cache-dir psycopg2-binary yt-dlp openpyxl
 
 # Claude Code CLI + Gemini CLI
 RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli
