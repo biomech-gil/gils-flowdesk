@@ -7871,11 +7871,11 @@ function openShapeStylePopover(ce, x, y){
     pop.querySelector('[data-sh-v="fs"]').textContent = ce.shapeFontSize+'px';
     pop.querySelector('[data-sh-v="pad"]').textContent = ce.shapeTextPadding+'px';
     // DOM 갱신
-    const g = ce.el.querySelector('svg.shape-svg g');
-    if(g){
-      g.setAttribute('fill', ce.fillColor);
-      g.setAttribute('stroke', ce.strokeColor);
-      g.setAttribute('stroke-width', ce.strokeWidth);
+    const svgGrp = ce.el.querySelector('svg.shape-svg g');
+    if(svgGrp){
+      svgGrp.setAttribute('fill', ce.fillColor);
+      svgGrp.setAttribute('stroke', ce.strokeColor);
+      svgGrp.setAttribute('stroke-width', ce.strokeWidth);
     }
     const txt = ce.el.querySelector('.shape-text');
     if(txt){
