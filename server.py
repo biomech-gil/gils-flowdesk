@@ -2067,6 +2067,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/copy-files": self._project_copy_files,
             "/api/project/move-files": self._project_move_files,
             "/api/project/create-empty": self._project_create_empty,
+            "/api/fs/mkdir": self._fs_mkdir,
             "/api/doc/delete": self._doc_delete,
             "/api/doc/restore": self._doc_restore,
             "/api/doc/milestone": self._doc_milestone,
@@ -3570,6 +3571,25 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             try: os.remove(p); pruned += 1
             except Exception: pass
         if pruned: log(f"[DOC_THIN] {filename}: {pruned}개 자동 정리")
+
+    def _fs_mkdir(self, body):
+        """임의 절대 경로에 폴더 생성 — /synology (= /volume1/...) 내부만 허용.
+        body: {path (절대경로)}"""
+        path = (body.get("path") or "").strip()
+        if not path or not path.startswith("/"):
+            return {"ok": False, "error": "절대 경로 필요"}
+        # 보안 — 허용 루트만 (시놀로지 + 임시 + 업로드 영역)
+        allowed = ["/synology", "/volume1", "/workspace", "/app/uploads"]
+        if not any(path.startswith(a) for a in allowed):
+            return {"ok": False, "error": f"허용 외 경로: {path}"}
+        if ".." in path.split("/"):
+            return {"ok": False, "error": "상위 이동(..) 경로 금지"}
+        try:
+            os.makedirs(path, exist_ok=True)
+            log(f"[FS_MKDIR] {path}")
+            return {"ok": True, "path": path}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def _project_create_empty(self, body):
         """빈 프로젝트 생성 (이름 + 날짜) — 파일 복사용 대상 프로젝트 빠른 생성.
