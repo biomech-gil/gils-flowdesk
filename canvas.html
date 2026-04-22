@@ -4290,6 +4290,117 @@ window.addEventListener('keydown',e=>{
   }
 });
 
+// 이미지 CE 자르기 — Cropper.js 기반 모달
+async function _ensureCropper(){
+  if(window.Cropper) return;
+  // CSS 먼저
+  if(!document.querySelector('link[data-cropper-css]')){
+    const link = document.createElement('link');
+    link.rel='stylesheet';
+    link.href='https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css';
+    link.dataset.cropperCss='1';
+    document.head.appendChild(link);
+  }
+  await _loadScript('https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js','Cropper');
+}
+
+async function cropImageCe(ce){
+  if(!ce || ce.type!=='image' || !ce.src){ alert('이미지 소스 없음'); return; }
+  try{ await _ensureCropper(); }catch(e){ alert('Cropper 라이브러리 로드 실패: '+e.message); return; }
+
+  // 모달 컨테이너
+  let modal = document.getElementById('image-crop-modal');
+  if(modal) modal.remove();
+  modal = document.createElement('div');
+  modal.id = 'image-crop-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;display:flex;flex-direction:column';
+  modal.innerHTML = `
+    <div style="padding:10px 16px;background:var(--bg-1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <span style="font-weight:700;color:var(--accent);font-size:14px">✂ 이미지 자르기</span>
+      <span style="flex:1"></span>
+      <button data-crop-aspect="free" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">자유</button>
+      <button data-crop-aspect="1" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">1:1</button>
+      <button data-crop-aspect="1.777" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">16:9</button>
+      <button data-crop-aspect="0.75" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">3:4</button>
+      <span style="width:1px;height:22px;background:var(--border);margin:0 4px"></span>
+      <button data-crop-rotate="-90" title="좌회전" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:13px">↶</button>
+      <button data-crop-rotate="90" title="우회전" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:13px">↷</button>
+      <button data-crop-flip="h" title="좌우 반전" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">↔</button>
+      <button data-crop-flip="v" title="상하 반전" style="padding:5px 10px;background:rgba(255,255,255,.08);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px">↕</button>
+      <span style="width:1px;height:22px;background:var(--border);margin:0 4px"></span>
+      <button data-crop-cancel style="padding:6px 14px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+      <button data-crop-apply style="padding:6px 16px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:700">✂ 적용</button>
+    </div>
+    <div style="flex:1;overflow:hidden;position:relative;background:#1a1a20">
+      <img id="crop-target" src="${ce.src}" style="max-width:100%;display:block">
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Cropper 초기화
+  const img = modal.querySelector('#crop-target');
+  const cropper = new window.Cropper(img, {
+    viewMode: 1, autoCropArea: 0.9, background: true,
+    zoomable: true, movable: true, rotatable: true, scalable: true,
+    toggleDragModeOnDblclick: false,
+  });
+
+  // 툴바 이벤트
+  modal.querySelectorAll('[data-crop-aspect]').forEach(b=>b.addEventListener('click',()=>{
+    const v = b.dataset.cropAspect;
+    cropper.setAspectRatio(v==='free' ? NaN : parseFloat(v));
+  }));
+  modal.querySelectorAll('[data-crop-rotate]').forEach(b=>b.addEventListener('click',()=>{
+    cropper.rotate(parseInt(b.dataset.cropRotate,10));
+  }));
+  modal.querySelectorAll('[data-crop-flip]').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.cropFlip==='h'){ const v=cropper.getData().scaleX||1; cropper.scaleX(-v); }
+    else { const v=cropper.getData().scaleY||1; cropper.scaleY(-v); }
+  }));
+  const close = ()=>{ try{cropper.destroy()}catch(e){} modal.remove(); };
+  modal.querySelector('[data-crop-cancel]').addEventListener('click', close);
+
+  modal.querySelector('[data-crop-apply]').addEventListener('click', async ()=>{
+    const canvas = cropper.getCroppedCanvas({maxWidth:4096, maxHeight:4096, imageSmoothingQuality:'high'});
+    if(!canvas){ alert('자르기 실패'); return; }
+    canvas.toBlob(async blob=>{
+      if(!blob){ alert('이미지 인코딩 실패'); return; }
+      // Blob → base64 data URL → 서버 업로드
+      const dataUrl = await new Promise(r=>{
+        const fr=new FileReader(); fr.onload=()=>r(fr.result); fr.readAsDataURL(blob);
+      });
+      const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+      const name = (ce.nodeName||'cropped')+'_'+stamp+'.png';
+      // /api/project/file/upload 로 저장 (프로젝트 폴더의 images/)
+      const r = await api('POST','/api/project/file/upload',{
+        projectId: workflowId||'', tempKey: window._tempKey||'',
+        filename:name, data:dataUrl, category:'images',
+      });
+      if(!r || !r.ok){
+        // 폴백: /api/upload (global uploads)
+        const r2 = await api('POST','/api/upload',{filename:name, data:dataUrl, purpose:'image'});
+        if(!r2 || !r2.ok){ alert('업로드 실패: '+((r2&&r2.error)||(r&&r.error)||'')); return; }
+        ce.src = r2.url; if(r2.path) ce.srcPath = r2.path;
+      } else {
+        ce.src = r.url; if(r.path) ce.srcPath = r.path;
+      }
+      // 크기도 자른 비율에 맞게 조정 (선택적 — 기존 크기 유지하되 이미지가 letterbox 안 생기도록)
+      ce.w = Math.round(canvas.width);
+      ce.h = Math.round(canvas.height);
+      // CE DOM 갱신 (img src + 크기)
+      const imgEl = ce.el.querySelector('img');
+      if(imgEl) imgEl.src = ce.src;
+      ce.el.style.width = ce.w+'px';
+      ce.el.style.height = ce.h+'px';
+      drawConns(); autoSave();
+      try{ fpRefresh(true); }catch(e){}
+      showCopyToast('✂ 이미지 자르기 완료');
+      close();
+    }, 'image/png');
+  });
+  // ESC 로 취소
+  modal.addEventListener('keydown', e=>{ if(e.key==='Escape') close(); });
+}
+
 // 이미지/비디오 CE → OS 클립보드에 PNG 이미지로 복사
 // secure-context 검사 선제적 차단 안 함 — 일단 시도하고 실제 실패시 폴백
 async function copyCeAsImage(ce){
@@ -4971,39 +5082,35 @@ function buildCeDom(ce){
     const def = SHAPE_DEFS[ce.shape] || SHAPE_DEFS.rect;
     const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     d.style.cssText += ';background:transparent;padding:0;border:none;box-shadow:none;overflow:visible';
-    d.innerHTML = `<svg class="shape-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible">
+    d.innerHTML = `<svg class="shape-svg" viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none">
         <g fill="${ce.fillColor}" stroke="${ce.strokeColor}" stroke-width="${ce.strokeWidth}" stroke-linejoin="round">${def.svg}</g>
       </svg>
-      <div class="shape-text" contenteditable="false" style="position:absolute;inset:${ce.shapeTextPadding}px;display:flex;align-items:center;justify-content:center;text-align:center;color:${ce.shapeTextColor};font-size:${ce.shapeFontSize}px;font-weight:600;word-break:break-word;line-height:1.3;outline:none;pointer-events:auto;cursor:text">${esc(ce.shapeText||'')}</div>
+      <div class="shape-text" contenteditable="true" spellcheck="false" style="position:absolute;inset:${ce.shapeTextPadding}px;display:flex;align-items:center;justify-content:center;text-align:center;color:${ce.shapeTextColor};font-size:${ce.shapeFontSize}px;font-weight:600;word-break:break-word;line-height:1.3;outline:none;pointer-events:auto;cursor:text;white-space:pre-wrap">${esc(ce.shapeText||'')}</div>
       <button class="ce-style-btn" title="도형 스타일 (색·테두리·텍스트)" data-ce-style style="background:rgba(139,92,246,.85);color:#fff">🎨</button>
       <div class="ce-port ce-port-l port-l" data-side="l"></div>
       <div class="ce-port ce-port-r port-r" data-side="r"></div>
       <div class="ce-port ce-port-t port-t" data-side="t"></div>
       <div class="ce-port ce-port-b port-b" data-side="b"></div>
       <div class="ce-resize"></div><div class="ce-del">×</div>`;
-    // 텍스트 편집 — 더블클릭으로 editable, blur로 저장
+    // 텍스트 편집 — 기본 contenteditable=true (즉시 입력 가능)
+    // CE mousedown 핸들러는 contenteditable 이 true 인 target 을 skip 하므로 드래그 간섭 없음
     const txt = d.querySelector('.shape-text');
     if(txt){
-      txt.addEventListener('dblclick', e=>{
-        e.stopPropagation(); e.preventDefault();
-        txt.contentEditable = 'true';
-        txt.focus();
-        const range=document.createRange(); range.selectNodeContents(txt);
-        const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-      });
       txt.addEventListener('input', ()=>{
-        if(txt.getAttribute('contenteditable')==='true'){
-          ce.shapeText = txt.innerText||txt.textContent||'';
-          autoSave();
-        }
+        ce.shapeText = txt.innerText||txt.textContent||'';
+        autoSave();
       });
-      txt.addEventListener('blur', ()=>{
-        txt.setAttribute('contenteditable','false');
-      });
-      txt.addEventListener('mousedown', e=>{
-        if(txt.getAttribute('contenteditable')==='true') e.stopPropagation();
-      });
+      txt.addEventListener('mousedown', e=>e.stopPropagation());
     }
+    // 포트 이벤트 — 드래그해서 연결선 시작 (image/video CE 와 동일 패턴)
+    d.querySelectorAll('.ce-port').forEach(port=>port.addEventListener('mousedown', ev=>{
+      ev.stopPropagation(); ev.preventDefault();
+      isConn = true;
+      connSrc = {node:ce, side:_shortSide(port.dataset.side), isCe:true};
+      connMX = ev.clientX; connMY = ev.clientY;
+      cw.classList.add('connecting');
+      drawTmpConn();
+    }));
   } else if(ce.type==='image'){
     d.innerHTML=`<img src="${ce.src}" draggable="false">
       <div class="ce-mode-badge">${ce.nodeType?ce.nodeType.toUpperCase():''}</div>
@@ -10584,6 +10691,7 @@ function showCeCtxMenu(x, y, ce, dx, dy){
       autoSave();
     }} : null,
     (ce.type==='image' || ce.type==='video') ? {label:'📋 이미지로 클립보드 복사 (Ctrl+C)', fn:()=>copyCeAsImage(ce)} : null,
+    (ce.type==='image') ? {label:'✂ 자르기 (Crop)', fn:()=>cropImageCe(ce)} : null,
     {label:'🗑 이 요소 삭제', fn:()=>delCe(ce.id), danger:true},
   ].filter(Boolean);
   items.forEach(it=>{
