@@ -7081,7 +7081,7 @@ async function refreshWfList(){const r=await api('GET','/api/project/list');cons
 // ═══════════════════════════════════════════════
 // 📂 프로젝트 파일 컴팩트 패널 (좌측 상단, 30s 폴링)
 // ═══════════════════════════════════════════════
-const _FP={lastHash:'', timer:null, showSystem:false, collapsedGroups:new Set(), selected:new Set()};
+const _FP={lastHash:'', timer:null, showSystem:false, collapsedGroups:new Set(), selected:new Set(), filterPath:'', lastData:null};
 
 function fpShow(){
   if(!workflowId){fpHide();return;}
@@ -7143,6 +7143,7 @@ async function fpRefresh(force){
   }
 }
 function fpRender(data){
+  _FP.lastData=data;
   const body=document.getElementById('fp-body');
   const total=document.getElementById('fp-total');
   const foot=document.getElementById('fp-foot');
@@ -7191,12 +7192,65 @@ function fpRender(data){
     if(['zip','7z','rar','tar','gz'].includes(e))return '🗜';
     return '📎';
   };
+  // ── 경로 필터 + 브레드크럼 ─────────────────────────
+  const cur=(_FP.filterPath||'').replace(/^\/+|\/+$/g,'');
+  const inCur=p=>{
+    if(!cur) return true;
+    // 필터 경로로 시작하되, 필터 경로 바로 아래 파일만 (또는 그 하위 전체)
+    return p===cur || p.startsWith(cur+'/');
+  };
   let html='';
+  // 브레드크럼
+  const parts=cur?cur.split('/'):[];
+  html+=`<div class="fp-crumbs" style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px 8px;font-size:10.5px;color:var(--text-dim);background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.06)">
+    <span class="fp-crumb" data-crumb-path="" style="cursor:pointer;padding:2px 6px;border-radius:3px;color:${cur?'#7ecfff':'var(--text)'};${!cur?'background:rgba(126,207,255,.1)':''}">🏠 루트</span>`;
+  parts.forEach((seg,i)=>{
+    const p=parts.slice(0,i+1).join('/');
+    html+=`<span style="opacity:.5">/</span><span class="fp-crumb" data-crumb-path="${esc(p)}" style="cursor:pointer;padding:2px 6px;border-radius:3px;color:${i===parts.length-1?'var(--text)':'#7ecfff'};${i===parts.length-1?'background:rgba(126,207,255,.1)':''}">${esc(seg)}</span>`;
+  });
+  html+='</div>';
+  // 📁 폴더 그룹 — 현재 경로 바로 아래의 서브폴더만
+  const allFolders=data.folders||[];
+  const curDepth=cur?cur.split('/').length:0;
+  const subFolders=allFolders.filter(f=>{
+    if(cur){
+      if(!f.path.startsWith(cur+'/')) return false;
+      return f.path.split('/').length === curDepth+1;
+    }
+    return f.depth===1;
+  });
+  if(subFolders.length){
+    const collapsedCls=_FP.collapsedGroups.has('_folders')?'collapsed':'';
+    html+=`<div class="fp-group ${collapsedCls}" data-group="_folders">
+      <div class="fp-group-hd" data-grp-tog="_folders">
+        <span class="arr">▼</span>
+        <span>📁 폴더</span>
+        <span class="c">${subFolders.length}</span>
+      </div>
+      <div class="fp-items">`;
+    subFolders.forEach(f=>{
+      const totalInside=f.fileCount + f.subCount;
+      html+=`<div class="fp-item fp-folder" data-folder-path="${esc(f.path)}"
+                 title="${esc(f.path)} · 파일 ${f.fileCount}개 · 하위폴더 ${f.subCount}개">
+        <span class="fp-badge">📁</span>
+        <span class="fp-ico">🗂</span>
+        <span class="fp-name">${esc(f.name)}</span>
+        <span class="fp-meta">${totalInside?totalInside+'개':'<span style=\"opacity:.5\">비어있음</span>'}</span>
+      </div>`;
+    });
+    html+='</div></div>';
+  } else if(cur){
+    // 필터 안에 하위폴더 없을 때도 헤더로 알려줌
+    html+=`<div style="padding:4px 10px;font-size:10px;color:var(--text-muted);font-style:italic">(이 폴더엔 하위 폴더 없음)</div>`;
+  }
+  // 파일 그룹 — 현재 경로에 포함되는 것만
   const groupOrder=['documents','images','videos','audio','other'];
+  let shownFileCount=0;
   groupOrder.forEach(key=>{
     const g=data.groups[key];if(!g)return;
-    const files=g.files||[];
+    const files=(g.files||[]).filter(f=>inCur(f.path));
     if(files.length===0)return;
+    shownFileCount+=files.length;
     const collapsedCls=_FP.collapsedGroups.has(key)?'collapsed':'';
     html+=`<div class="fp-group ${collapsedCls}" data-group="${key}">
       <div class="fp-group-hd" data-grp-tog="${key}">
@@ -7220,8 +7274,27 @@ function fpRender(data){
     });
     html+='</div></div>';
   });
-  if(!html)html='<div class="fp-empty">파일 없음<br><span style="font-size:9.5px">파일을 드래그하거나<br>노드에서 저장하면 여기 표시</span></div>';
+  if(!subFolders.length && shownFileCount===0 && !cur){
+    html+='<div class="fp-empty">파일 없음<br><span style="font-size:9.5px">파일을 드래그하거나<br>노드에서 저장하면 여기 표시</span></div>';
+  } else if(shownFileCount===0 && cur){
+    html+=`<div style="padding:10px;font-size:10.5px;color:var(--text-muted);text-align:center">이 폴더에는 파일이 없습니다</div>`;
+  }
   body.innerHTML=html;
+  // ── 브레드크럼 · 폴더 클릭 ──────────────────────────
+  body.querySelectorAll('.fp-crumb').forEach(el=>{
+    el.onclick=()=>{
+      _FP.filterPath=el.dataset.crumbPath||'';
+      fpRender(_FP.lastData);
+    };
+  });
+  body.querySelectorAll('.fp-folder').forEach(el=>{
+    el.onclick=ev=>{
+      ev.stopPropagation();
+      _FP.filterPath=el.dataset.folderPath||'';
+      fpRender(_FP.lastData);
+    };
+    el.oncontextmenu=ev=>{ev.preventDefault();_fpFolderCtx(ev,el.dataset.folderPath);};
+  });
   if(foot)foot.textContent=`${new Date().toLocaleTimeString()} 갱신 · ${data.totalFiles}개`;
   // 이벤트 바인딩
   body.querySelectorAll('[data-grp-tog]').forEach(el=>{
@@ -7274,12 +7347,58 @@ function _fpUpdateSelBar(){
 // + 폴더 만들기
 async function fpMkdir(){
   if(!workflowId){ alert('프로젝트를 먼저 저장해주세요'); return; }
-  const name = prompt('새 폴더 이름 (하위는 / 로 구분, 예: refs 또는 archive/2024):', 'refs');
+  const cur=_FP.filterPath||'';
+  const hint = cur?`현재 폴더 안에 새 폴더 생성 (${cur}/)`:'새 폴더 이름 (하위는 / 로 구분, 예: refs 또는 archive/2024)';
+  const name = prompt(hint+':', 'refs');
   if(!name || !name.trim()) return;
-  const r = await api('POST','/api/project/mkdir',{projectId:workflowId, folderName:name.trim()});
+  const fullName = cur ? `${cur}/${name.trim()}` : name.trim();
+  const r = await api('POST','/api/project/mkdir',{projectId:workflowId, folderName:fullName});
   if(!r || !r.ok){ alert('폴더 생성 실패: '+((r&&r.error)||'')); return; }
   showCopyToast(`📁 폴더 생성: ${r.relPath}`);
   fpRefresh(true);
+}
+function _fpFolderCtx(ev, folderPath){
+  // 폴더 컨텍스트 메뉴 — 열기(드릴인), DSM 열기, 이름 변경, 삭제
+  const mnu = document.createElement('div');
+  mnu.style.cssText='position:fixed;z-index:99999;background:var(--bg-1);border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,.6);padding:4px;min-width:180px;font-size:12px';
+  mnu.style.left=ev.clientX+'px';mnu.style.top=ev.clientY+'px';
+  const mk=(label,fn)=>{
+    const it=document.createElement('div');
+    it.textContent=label;
+    it.style.cssText='padding:6px 12px;cursor:pointer;border-radius:4px;color:var(--text)';
+    it.onmouseover=()=>it.style.background='rgba(255,255,255,.06)';
+    it.onmouseout=()=>it.style.background='';
+    it.onclick=()=>{document.body.removeChild(mnu);fn();};
+    mnu.appendChild(it);
+  };
+  mk('📂 폴더 열기', ()=>{_FP.filterPath=folderPath;fpRender(_FP.lastData);});
+  mk('🌐 DSM 에서 열기', async ()=>{
+    const data=_FP.lastData;
+    if(!data||!data.root) return;
+    const absPath = data.root + '/' + folderPath;
+    openInDsm(absPath);
+  });
+  mk('✏️ 폴더명 변경', async ()=>{
+    const curName=folderPath.split('/').pop();
+    const nn=prompt(`폴더명 변경 (${folderPath}):`, curName);
+    if(!nn || !nn.trim() || nn.trim()===curName) return;
+    const parent=folderPath.split('/').slice(0,-1).join('/');
+    const newPath=parent?`${parent}/${nn.trim()}`:nn.trim();
+    const r=await api('POST','/api/project/rename-subdir',{projectId:workflowId, oldPath:folderPath, newPath});
+    if(!r||!r.ok){ alert('실패: '+((r&&r.error)||'')); return; }
+    if(_FP.filterPath===folderPath) _FP.filterPath=newPath;
+    fpRefresh(true);
+  });
+  mk('🗑 폴더 삭제', async ()=>{
+    if(!confirm(`'${folderPath}' 폴더를 삭제할까요?\n(안에 있는 모든 파일·하위폴더도 영구 삭제됩니다)`)) return;
+    const r=await api('POST','/api/project/rmdir',{projectId:workflowId, folderPath});
+    if(!r||!r.ok){ alert('삭제 실패: '+((r&&r.error)||'')); return; }
+    if((_FP.filterPath||'').startsWith(folderPath)) _FP.filterPath='';
+    fpRefresh(true);
+  });
+  document.body.appendChild(mnu);
+  const off=e=>{if(!mnu.contains(e.target)){document.body.removeChild(mnu);document.removeEventListener('click',off);}};
+  setTimeout(()=>document.addEventListener('click',off),0);
 }
 
 function fpSelClear(){

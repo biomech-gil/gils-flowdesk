@@ -2065,6 +2065,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/doc/write": self._doc_write,
             "/api/project/file/upload": self._project_file_upload,
             "/api/project/mkdir": self._project_mkdir,
+            "/api/project/rename-subdir": self._project_rename_subdir,
+            "/api/project/rmdir": self._project_rmdir,
             "/api/project/copy-files": self._project_copy_files,
             "/api/project/move-files": self._project_move_files,
             "/api/project/create-empty": self._project_create_empty,
@@ -3664,6 +3666,63 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def _project_rename_subdir(self, body):
+        """프로젝트 work_dir 내부의 하위 폴더 이름 변경 (내용물 유지).
+        body: {projectId, oldPath, newPath} — 모두 work_dir 기준 상대경로"""
+        pid = (body.get("projectId") or "").strip()
+        old_rel = (body.get("oldPath") or "").replace("\\","/").strip("/")
+        new_rel = (body.get("newPath") or "").replace("\\","/").strip("/")
+        if not pid or not old_rel or not new_rel:
+            return {"ok": False, "error": "projectId, oldPath, newPath 필요"}
+        if ".." in old_rel.split("/") or ".." in new_rel.split("/"):
+            return {"ok": False, "error": "유효하지 않은 경로"}
+        row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트 미저장"}
+        root = row["work_dir"]
+        old_abs = os.path.abspath(os.path.join(root, old_rel))
+        new_abs = os.path.abspath(os.path.join(root, new_rel))
+        root_abs = os.path.abspath(root)
+        if not old_abs.startswith(root_abs + os.sep) or not new_abs.startswith(root_abs + os.sep):
+            return {"ok": False, "error": "경로 침범"}
+        if not os.path.isdir(old_abs):
+            return {"ok": False, "error": f"폴더 없음: {old_rel}"}
+        if os.path.exists(new_abs):
+            return {"ok": False, "error": f"이미 존재: {new_rel}"}
+        try:
+            os.makedirs(os.path.dirname(new_abs), exist_ok=True)
+            os.rename(old_abs, new_abs)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "oldPath": old_rel, "newPath": new_rel}
+
+    def _project_rmdir(self, body):
+        """프로젝트 work_dir 내부의 하위 폴더 삭제 (재귀).
+        body: {projectId, folderPath}"""
+        pid = (body.get("projectId") or "").strip()
+        rel = (body.get("folderPath") or "").replace("\\","/").strip("/")
+        if not pid or not rel:
+            return {"ok": False, "error": "projectId, folderPath 필요"}
+        if ".." in rel.split("/"):
+            return {"ok": False, "error": "유효하지 않은 경로"}
+        row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트 미저장"}
+        root = row["work_dir"]
+        root_abs = os.path.abspath(root)
+        target = os.path.abspath(os.path.join(root, rel))
+        if not target.startswith(root_abs + os.sep):
+            return {"ok": False, "error": "경로 침범"}
+        if target == root_abs:
+            return {"ok": False, "error": "루트 폴더는 삭제 불가"}
+        if not os.path.isdir(target):
+            return {"ok": False, "error": f"폴더 없음: {rel}"}
+        try:
+            shutil.rmtree(target)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {"ok": True, "path": rel}
+
     def _project_copy_files(self, body):
         """프로젝트 폴더 내 파일들을 다른 목적지로 복사.
         body: {projectId (source), files (relpaths), targetProjectId?, targetAbsPath?, subfolder?}
@@ -4080,6 +4139,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         groups = {k: {'label': v['label'], 'files': []} for k,v in self._PROJ_FILE_GROUPS.items()}
         all_entries = []
+        # 폴더 엔트리 — path(rel), name, depth, fileCount (직속), mtime
+        folders_by_path = {}
         try:
             for dirpath, dirnames, filenames in os.walk(root):
                 # 시스템 폴더 스킵
@@ -4090,6 +4151,26 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 if depth > max_depth:
                     dirnames[:] = []
                     continue
+                # 현재 dir 을 폴더 엔트리로 등록 (루트 제외)
+                if rel_root != '.':
+                    try:
+                        st_d = os.stat(dirpath)
+                        mt = st_d.st_mtime
+                    except Exception:
+                        mt = 0
+                    folders_by_path[rel_root] = {
+                        'path': rel_root,
+                        'name': os.path.basename(rel_root),
+                        'depth': depth,
+                        'mtime': mt,
+                        'fileCount': 0,
+                        'subCount': 0,
+                    }
+                # 부모 폴더의 subCount 증가
+                if rel_root != '.':
+                    parent = '/'.join(rel_root.split('/')[:-1])
+                    if parent and parent in folders_by_path:
+                        folders_by_path[parent]['subCount'] += 1
                 for fn in filenames:
                     if not show_system:
                         if fn in self._PROJ_HIDDEN_FILES: continue
@@ -4108,6 +4189,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     }
                     groups[kind]['files'].append(entry)
                     all_entries.append(entry)
+                    # 파일을 포함한 폴더의 fileCount 증가
+                    if rel_root != '.' and rel_root in folders_by_path:
+                        folders_by_path[rel_root]['fileCount'] += 1
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -4115,13 +4199,18 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         for g in groups.values():
             g['files'].sort(key=lambda f: f['mtime'], reverse=True)
 
-        # 변경 감지 해시 (이름+mtime+size)
-        sig = "\n".join(f"{e['path']}|{e['mtime']}|{e['size']}" for e in sorted(all_entries, key=lambda x:x['path']))
+        folders = sorted(folders_by_path.values(), key=lambda d: d['path'])
+
+        # 변경 감지 해시 (이름+mtime+size + 폴더 경로)
+        sig_parts = [f"{e['path']}|{e['mtime']}|{e['size']}" for e in sorted(all_entries, key=lambda x:x['path'])]
+        sig_parts += [f"D:{d['path']}" for d in folders]
+        sig = "\n".join(sig_parts)
         phash = hashlib.md5(sig.encode('utf-8')).hexdigest()[:16]
 
         return {
-            "ok": True, "root": root, "groups": groups, "hash": phash,
+            "ok": True, "root": root, "groups": groups, "folders": folders, "hash": phash,
             "totalFiles": len(all_entries),
+            "totalFolders": len(folders),
             "projectName": row.get("name",""),
         }
 
