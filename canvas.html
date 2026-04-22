@@ -8661,6 +8661,14 @@ async function docRenderEngine(active){
     await docLoadRhwpEngine(active, holder);
     return;
   }
+  if(kind==='pdf'){
+    // 모달에서는 더 큰 뷰포트로 PDF 렌더 — 인라인과 동일 로직 재사용
+    holder.style.display='flex';
+    holder.style.flexDirection='column';
+    holder.style.background='#2a2a30';
+    await _docRenderPdf(active, holder);
+    return;
+  }
   // 미지원 포맷
   holder.innerHTML=`<div style="padding:30px;color:#fca5a5">지원하지 않는 파일 형식입니다</div>`;
 }
@@ -9375,15 +9383,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 // 노드 더블클릭 → 모달 오픈
-// (buildDom 의 nd-hd 더블클릭은 togCollapse 이므로 body 영역 더블클릭만 가로챔)
+// (buildDom 의 nd-hd 더블클릭은 togCollapse 이므로 body/coll-body 영역 더블클릭만 가로챔)
+// 펼침/접힘 상태 모두 지원 — coll-body, nd-body, doc-mini 어디든 OK
 document.addEventListener('dblclick',(e)=>{
-  const body=e.target.closest('.doc-mini, .nd[data-type="document"] .nd-body');
+  // 편집 가능 요소 안의 dblclick 은 제외 (텍스트 선택용)
+  const tagName = e.target.tagName;
+  if(tagName==='INPUT' || tagName==='TEXTAREA' || e.target.contentEditable==='true') return;
+  const body=e.target.closest('.doc-mini, .nd[data-type="document"] .nd-body, .nd[data-type="document"] .coll-body');
   if(!body)return;
   const nd=body.closest('.nd');
   if(!nd)return;
   const n=nodes.find(nn=>nn.id===nd.dataset.nid);
   if(n&&n.type==='document'){
-    e.stopPropagation();
+    e.stopPropagation(); e.preventDefault();
     selNode(n);
     docOpenModal(n);
   }
