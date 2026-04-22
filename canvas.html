@@ -1033,7 +1033,7 @@ body.focus-mode #fp-panel:not(.fp-user-pinned){display:none!important}
 .fp-hd .fp-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;padding:2px 4px;border-radius:3px;transition:.12s}
 .fp-hd .fp-btn:hover{color:var(--text);background:rgba(255,255,255,.08)}
 .fp-body{flex:1;overflow-y:auto;padding:2px 0;min-height:0}
-.fp-item .fp-chk{opacity:0;width:12px;height:12px;margin-right:4px;cursor:pointer;accent-color:#3b82f6;transition:opacity .1s}
+.fp-item .fp-chk{opacity:0;width:12px;height:12px;margin:0;cursor:pointer;accent-color:#3b82f6;transition:opacity .1s;flex-shrink:0}
 .fp-item:hover .fp-chk,.fp-item.sel .fp-chk{opacity:1}
 .fp-item.sel{background:rgba(59,130,246,.15);outline:1px solid rgba(59,130,246,.4)}
 .fp-sel-btn{padding:3px 8px;background:rgba(59,130,246,.18);color:#7ecfff;border:1px solid rgba(59,130,246,.4);border-radius:3px;cursor:pointer;font-size:10px;white-space:nowrap}
@@ -1048,14 +1048,14 @@ body.focus-mode #fp-panel:not(.fp-user-pinned){display:none!important}
 .fp-group.collapsed .fp-items{display:none}
 .fp-group-hd .c{font-size:9px;color:var(--text-muted);font-family:var(--mono);margin-left:auto}
 .fp-items{padding:1px 0}
-.fp-item{display:grid;grid-template-columns:16px 14px 1fr auto;gap:4px;padding:3px 8px 3px 14px;cursor:pointer;align-items:center;transition:background .08s}
+.fp-item{display:grid;grid-template-columns:14px 14px 14px minmax(0,1fr) auto;gap:4px;padding:3px 8px 3px 10px;cursor:pointer;align-items:center;transition:background .08s}
 .fp-item:hover{background:rgba(255,255,255,.06)}
 .fp-item.has-node .fp-badge{color:#a3e635}
 .fp-item.no-node .fp-badge{color:var(--text-muted);opacity:.5}
 .fp-item .fp-badge{font-size:9px;text-align:center;line-height:1}
 .fp-item .fp-ico{font-size:11px;text-align:center}
 .fp-item .fp-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;color:var(--text)}
-.fp-item .fp-meta{font-size:8.5px;color:var(--text-muted);font-family:var(--mono);flex-shrink:0}
+.fp-item .fp-meta{font-size:8.5px;color:var(--text-muted);font-family:var(--mono);white-space:nowrap;overflow:hidden}
 .fp-empty{padding:20px 10px;text-align:center;font-size:10.5px;color:var(--text-muted);line-height:1.6}
 .fp-foot{padding:4px 8px;border-top:1px solid rgba(255,255,255,.05);font-size:9px;color:var(--text-muted);display:flex;align-items:center;gap:6px;flex-shrink:0}
 .fp-drag-ghost{position:fixed;z-index:500;padding:4px 10px;background:#1a1a2e;color:#a7f3d0;border:1px solid rgba(34,197,94,.4);border-radius:5px;font-size:11px;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
