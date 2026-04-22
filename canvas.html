@@ -4007,53 +4007,38 @@ window.addEventListener('keydown',e=>{
 });
 
 // 이미지/비디오 CE → OS 클립보드에 PNG 이미지로 복사
-// HTTPS가 아닌 환경에서도 가능한 한 동작하도록 3단 폴백
+// HTTPS (secure context) 에서만 클립보드 직접 복사 가능. HTTP 에서는 다운로드 폴백.
 async function copyCeAsImage(ce){
   try{
     showCopyToast('📋 이미지 복사 준비 중…');
     let blob = await _ceToImageBlob(ce);
     if(!blob){ showCopyToast('⚠ 복사할 이미지가 없어요'); return; }
-    // 1차: Clipboard API (secure context 필요)
-    if(navigator.clipboard && window.ClipboardItem){
+    const isSecure = window.isSecureContext || location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1';
+    // Secure context + Clipboard API — PPT/Word/Paint 어디든 붙여넣기 가능
+    if(isSecure && navigator.clipboard && window.ClipboardItem){
       try{
         await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
         showCopyToast('✅ 이미지 클립보드에 복사됨 — 아무데나 붙여넣기 (Ctrl+V)');
         return;
       }catch(err){
-        console.warn('[copyCe] clipboard.write 실패 (insecure context?):', err.message);
+        console.warn('[copyCe] clipboard.write 실패:', err.message);
+        // 권한 거부/미지원 → 다운로드 폴백으로
       }
     }
-    // 2차: execCommand 폴백 — 임시 contenteditable에 이미지 삽입 후 selection copy
-    try{
-      const url = URL.createObjectURL(blob);
-      const img = document.createElement('img');
-      await new Promise((res,rej)=>{ img.onload=res; img.onerror=rej; img.src=url; });
-      const holder = document.createElement('div');
-      holder.contentEditable = 'true';
-      holder.style.cssText='position:fixed;left:-9999px;top:-9999px;opacity:0.01;pointer-events:none';
-      holder.appendChild(img);
-      document.body.appendChild(holder);
-      const range = document.createRange();
-      range.selectNode(img);
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(range);
-      const ok = document.execCommand('copy');
-      sel.removeAllRanges();
-      holder.remove();
-      URL.revokeObjectURL(url);
-      if(ok){
-        showCopyToast('✅ 이미지 복사됨 (레거시 API) — Ctrl+V 로 붙여넣기');
-        return;
-      }
-    }catch(err){ console.warn('[copyCe] execCommand 폴백 실패:', err.message); }
-    // 3차: 다운로드로 저장
+    // HTTP 환경 — 클립보드 이미지 복사가 브라우저 보안 정책으로 불가
+    //  (execCommand+<img> 방식은 PPT가 못 읽는 HTML 조각만 복사되어 빈 파일로 붙여짐)
+    //  깔끔하게 PNG 파일로 다운로드해 사용자가 직접 삽입하도록 유도
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
     a.href = url; a.download = (ce.nodeName||'capture')+'_'+stamp+'.png';
     a.click();
     setTimeout(()=>URL.revokeObjectURL(url), 3000);
-    showCopyToast('⬇ 클립보드 접근 차단됨 — PNG로 다운로드됨 (HTTPS 환경이면 클립보드 작동)');
+    if(!isSecure){
+      showCopyToast('⬇ HTTP 환경 — 이미지 클립보드 복사는 HTTPS 에서만 지원. PNG 파일로 다운로드됨 (PPT에 드래그해 넣기)');
+    } else {
+      showCopyToast('⬇ 클립보드 권한 거부됨 — PNG 파일로 다운로드됨');
+    }
   }catch(e){
     console.error('[copyCe]', e);
     alert('이미지 복사 실패: '+e.message);
@@ -4749,9 +4734,14 @@ function buildCeDom(ce){
           const aspect=vid.videoWidth/vid.videoHeight;
           // 사용자가 수동 리사이즈 안 했다면 자동 조정 (초기 생성 시)
           if(!ce._userResized){
-            ce.h=Math.round(ce.w/aspect);
-            d.style.height=ce.h+'px';
-            drawConns();autoSave();
+            const newH = Math.round(ce.w/aspect);
+            // 실제로 높이가 달라질 때만 적용+저장 — loadState 후 매번 autoSave 방지
+            if(Math.abs(newH - ce.h) > 1){
+              ce.h = newH;
+              d.style.height=ce.h+'px';
+              drawConns();
+              if(!_isLoadingState) autoSave();
+            }
           }
           // 북마크 렌더 (duration 을 이제 얻었으니)
           _renderVideoBookmarks(ce, vid.duration);
@@ -5855,22 +5845,83 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
 let _saveTimer=null;
 let undoStack=[],redoStack=[],lastSavedState=null;
 const MAX_UNDO=50;
+// undo/redo 시 재생 중인 direct 비디오의 currentTime/paused 보존
+// → 뒤로가기 눌러도 영상이 처음부터 다시 재생되지 않음
+function _captureVideoPlaybackState(){
+  const snap = new Map();
+  canvasEls.forEach(ce=>{
+    if(ce.type!=='video') return;
+    if(!ce.el) return;
+    const v = ce.el.querySelector('video.ce-video');
+    if(v && isFinite(v.currentTime)){
+      snap.set(ce.id, {currentTime: v.currentTime, paused: v.paused, muted: v.muted});
+    }
+    // YouTube embed — IFrame API 상태
+    if(ce.videoProvider==='youtube' && ce._ytPlayer && ce._ytReady){
+      try{
+        snap.set(ce.id, {
+          ytCurrentTime: ce._ytPlayer.getCurrentTime?.() || 0,
+          ytPlayerState: ce._ytPlayer.getPlayerState?.(),
+        });
+      }catch(e){}
+    }
+  });
+  return snap;
+}
+function _restoreVideoPlaybackState(snap){
+  if(!snap || snap.size===0) return;
+  // loadState 직후 DOM/engine 정비가 끝나려면 살짝 지연
+  setTimeout(()=>{
+    canvasEls.forEach(ce=>{
+      if(ce.type!=='video') return;
+      const s = snap.get(ce.id);
+      if(!s) return;
+      const v = ce.el && ce.el.querySelector('video.ce-video');
+      if(v && typeof s.currentTime==='number'){
+        try{ v.currentTime = s.currentTime; }catch(e){}
+        if(s.paused === false){ v.play().catch(()=>{}); }
+        if(typeof s.muted==='boolean') v.muted = s.muted;
+      }
+      // YouTube 재생 상태 복원 — 플레이어 준비되면 시도 (여러 번 재시도)
+      if(ce.videoProvider==='youtube' && typeof s.ytCurrentTime==='number'){
+        const tryRestore = (tries)=>{
+          if(ce._ytReady && ce._ytPlayer){
+            try{
+              ce._ytPlayer.seekTo(s.ytCurrentTime, true);
+              // PlayerState: PLAYING=1, PAUSED=2
+              if(s.ytPlayerState===1) ce._ytPlayer.playVideo();
+              else if(s.ytPlayerState===2) ce._ytPlayer.pauseVideo();
+            }catch(e){}
+          } else if(tries > 0){
+            setTimeout(()=>tryRestore(tries-1), 300);
+          }
+        };
+        tryRestore(10); // 최대 3초 대기
+      }
+    });
+  }, 50);
+}
+
 function undo(){
   if(undoStack.length===0)return;
+  const videoSnap = _captureVideoPlaybackState();
   redoStack.push(JSON.stringify(getState()));
   const prev=undoStack.pop();
   loadState(JSON.parse(prev));
   lastSavedState=prev;
+  _restoreVideoPlaybackState(videoSnap);
   console.log('[UNDO] '+undoStack.length+' 남음');
   _updateUndoRedoBar();
   showCopyToast('⟲ 뒤로가기');
 }
 function redo(){
   if(redoStack.length===0)return;
+  const videoSnap = _captureVideoPlaybackState();
   undoStack.push(JSON.stringify(getState()));
   const next=redoStack.pop();
   loadState(JSON.parse(next));
   lastSavedState=next;
+  _restoreVideoPlaybackState(videoSnap);
   console.log('[REDO]');
   _updateUndoRedoBar();
   showCopyToast('⟳ 앞으로가기');
@@ -5885,6 +5936,9 @@ function _updateUndoRedoBar(){
 }
 let _lastTempSave=0;
 function autoSave(){
+  // 로드/복원 진행 중에는 autoSave 스킵 — loadedmetadata 등이 발생시키는
+  // 가짜 상태 변화를 undoStack 에 푸시해서 redoStack 을 비우는 버그 방지
+  if(_isLoadingState) return;
   if(lastSavedState){
     undoStack.push(lastSavedState);
     if(undoStack.length>MAX_UNDO)undoStack.shift();
@@ -5918,7 +5972,9 @@ window.addEventListener('beforeunload',()=>{
     }
   }catch(e){}
 });
+let _isLoadingState = false;
 function loadState(st){
+  _isLoadingState = true;
   nodes.forEach(n=>n.el.remove());nodes=[];conns=[];ncnt=0;selectedNode=null;closeSb();
   canvasEls.forEach(c=>c.el.remove());canvasEls=[];selectedCe=null;
   // work_dir이 있으면 그것을, 없으면 기존 cwd를 캔버스 CWD로 (Project = Folder 우선)
@@ -5966,6 +6022,9 @@ function loadState(st){
   if(workflowId)location.hash='wf='+workflowId;
   else location.hash='';
   lastSavedState=JSON.stringify(getState());
+  // 로드 중 발생한 autoSave 호출은 다 무시됐으므로 이제 해제
+  // (setTimeout 으로 지연된 콜백들도 loadedmetadata 등이 끝난 뒤 정리되도록 여유 시간)
+  setTimeout(()=>{ _isLoadingState = false; }, 500);
 }
 
 // ═══ WORKFLOW SAVE/LOAD ═══
