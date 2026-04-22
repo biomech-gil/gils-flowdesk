@@ -3020,6 +3020,26 @@ function anchorScreenPos(ce, anchorId){
 }
 let _lblDrag = null; // {connId, labelId, pathEl}
 
+// 동적 화살표 marker 생성 (색상별로 캐싱) — 커스텀 색상 연결선용
+function _ensureArrowMarker(color){
+  if(!color) return 'ah';
+  const id = 'ah-' + color.replace(/[^A-Za-z0-9]/g,'_');
+  if(svg.querySelector('#'+id)) return id;
+  const defs = svg.querySelector('defs');
+  if(!defs) return 'ah';
+  const m = document.createElementNS('http://www.w3.org/2000/svg','marker');
+  m.setAttribute('id', id);
+  m.setAttribute('markerWidth','4'); m.setAttribute('markerHeight','3');
+  m.setAttribute('refX','4'); m.setAttribute('refY','1.5');
+  m.setAttribute('orient','auto');
+  const p = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  p.setAttribute('points','0 0,4 1.5,0 3');
+  p.setAttribute('fill', color);
+  m.appendChild(p);
+  defs.appendChild(m);
+  return id;
+}
+
 // 연결선 우클릭 메뉴 (라벨 추가 · 연결선 삭제)
 function showConnCtxMenu(x, y, c, ev){
   document.getElementById('conn-ctx')?.remove();
@@ -3049,6 +3069,7 @@ function showConnCtxMenu(x, y, c, ev){
       c.labels.push({id:'lb'+Date.now()+Math.random().toString(36).slice(2,5), text:text.trim(), t});
       drawConns(); autoSave();
     }},
+    {label:'🎨 연결선 스타일 (색·두께·선)', fn:()=>_showConnStylePop(c, ev?ev.clientX:undefined, ev?ev.clientY:undefined)},
     {label:'↔ 화살표 방향 뒤집기', fn:()=>{
       // src ↔ tgt, side 도 같이 스왑, 앵커도 스왑
       const oSid=c.sid, oTid=c.tid, oFrom=c.fromSide, oTo=c.toSide;
@@ -3089,6 +3110,61 @@ function showConnCtxMenu(x, y, c, ev){
     const close=e=>{ if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('mousedown',close); } };
     document.addEventListener('mousedown',close);
   }, 100);
+}
+
+// 연결선 자체 스타일 팝업 — 두께·선 스타일·색상
+function _showConnStylePop(c, x, y){
+  document.getElementById('conn-style-pop')?.remove();
+  const pop = document.createElement('div');
+  pop.id = 'conn-style-pop';
+  pop.style.cssText='position:fixed;z-index:510;background:var(--bg-2);border:1px solid var(--border-light);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.6);padding:10px 12px;min-width:240px;font-size:11px;color:var(--text)';
+  const col = c.color || '#7ecfff';
+  const width = (typeof c.strokeWidth==='number') ? c.strokeWidth : 2;
+  const style = c.strokeStyle || 'flow';
+  pop.innerHTML=`<div style="font-weight:700;color:var(--accent);margin-bottom:8px">🎨 연결선 스타일</div>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">색상 <input type="color" value="${col}" data-cst-col style="flex:1"></label>
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">두께 <input type="range" min="1" max="10" value="${width}" data-cst-w style="flex:1;accent-color:var(--accent)"><span data-cst-w-v style="color:var(--accent);min-width:28px;text-align:right">${width}px</span></label>
+    <div style="margin-bottom:8px">
+      <div style="color:var(--text-dim);margin-bottom:4px">선 스타일</div>
+      <div style="display:flex;gap:3px">
+        <button data-cst-style="flow"   style="flex:1;padding:4px;background:${style==='flow'?'rgba(126,207,255,.25)':'rgba(255,255,255,.05)'};color:${style==='flow'?'#7ecfff':'var(--text-dim)'};border:1px solid ${style==='flow'?'rgba(126,207,255,.5)':'var(--border)'};border-radius:3px;cursor:pointer;font-size:10px">흐르는 점선 (기본)</button>
+        <button data-cst-style="dashed" style="flex:1;padding:4px;background:${style==='dashed'?'rgba(126,207,255,.25)':'rgba(255,255,255,.05)'};color:${style==='dashed'?'#7ecfff':'var(--text-dim)'};border:1px solid ${style==='dashed'?'rgba(126,207,255,.5)':'var(--border)'};border-radius:3px;cursor:pointer;font-size:10px">대시</button>
+        <button data-cst-style="dotted" style="flex:1;padding:4px;background:${style==='dotted'?'rgba(126,207,255,.25)':'rgba(255,255,255,.05)'};color:${style==='dotted'?'#7ecfff':'var(--text-dim)'};border:1px solid ${style==='dotted'?'rgba(126,207,255,.5)':'var(--border)'};border-radius:3px;cursor:pointer;font-size:10px">점선</button>
+        <button data-cst-style="solid"  style="flex:1;padding:4px;background:${style==='solid'?'rgba(126,207,255,.25)':'rgba(255,255,255,.05)'};color:${style==='solid'?'#7ecfff':'var(--text-dim)'};border:1px solid ${style==='solid'?'rgba(126,207,255,.5)':'var(--border)'};border-radius:3px;cursor:pointer;font-size:10px">실선</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:4px">
+      <button data-cst-reset style="flex:1;padding:5px;background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3);border-radius:3px;cursor:pointer;font-size:11px">↺ 기본값</button>
+      <button data-cst-close style="flex:1;padding:5px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-size:11px">닫기</button>
+    </div>`;
+  pop.style.left = Math.min(x||200, window.innerWidth-260)+'px';
+  pop.style.top = Math.min(y||200, window.innerHeight-280)+'px';
+  document.body.appendChild(pop);
+  const apply = ()=>{
+    c.color = pop.querySelector('[data-cst-col]').value;
+    c.strokeWidth = parseInt(pop.querySelector('[data-cst-w]').value,10);
+    pop.querySelector('[data-cst-w-v]').textContent = c.strokeWidth+'px';
+    drawConns(); autoSave();
+  };
+  pop.querySelector('[data-cst-col]').addEventListener('input', apply);
+  pop.querySelector('[data-cst-w]').addEventListener('input', apply);
+  pop.querySelectorAll('[data-cst-style]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      c.strokeStyle = btn.dataset.cstStyle;
+      drawConns(); autoSave();
+      // 팝업 UI 재생성 (활성 상태 갱신)
+      pop.remove(); _showConnStylePop(c, x, y);
+    });
+  });
+  pop.querySelector('[data-cst-reset]').addEventListener('click', ()=>{
+    delete c.color; delete c.strokeWidth; delete c.strokeStyle;
+    drawConns(); autoSave(); pop.remove();
+  });
+  pop.querySelector('[data-cst-close]').addEventListener('click', ()=>pop.remove());
+  setTimeout(()=>{
+    const close = e=>{ if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('mousedown',close); } };
+    document.addEventListener('mousedown', close);
+  },100);
 }
 
 // 연결선 라벨 스타일 팝업 — 크기/글자색/배경색/테두리색
@@ -3238,7 +3314,21 @@ function drawConns(){
     p.setAttribute('d',d);
     const anchorCls=c.sourceAnchorId?' conn-anchor':'';
     p.setAttribute('class','conn'+(act?' active':'')+(selectedConn===c.id?' sel':'')+anchorCls);
-    p.setAttribute('marker-end','url(#ah)');
+    // 커스텀 스타일 적용 (선택되지 않았을 때만 — 선택 시 CSS .conn.sel 색 유지)
+    const isSel = selectedConn===c.id;
+    if(!isSel){
+      if(c.color) p.style.stroke = c.color;
+      if(typeof c.strokeWidth==='number') p.style.strokeWidth = c.strokeWidth;
+      if(c.strokeStyle){
+        if(c.strokeStyle==='solid'){ p.style.strokeDasharray='none'; p.style.animation='none'; }
+        else if(c.strokeStyle==='dashed'){ p.style.strokeDasharray='8 4'; p.style.animation='none'; }
+        else if(c.strokeStyle==='dotted'){ p.style.strokeDasharray='2 4'; p.style.animation='none'; }
+        // 'flow' 는 기본 CSS 그대로 (흐르는 대시)
+      }
+    }
+    // marker-end — 커스텀 색이면 해당 색 marker 생성
+    const markerId = (!isSel && c.color) ? _ensureArrowMarker(c.color) : 'ah';
+    p.setAttribute('marker-end','url(#'+markerId+')');
     p.dataset.connId = c.id;
     p.style.pointerEvents='none';
     svg.appendChild(p);
@@ -3434,10 +3524,22 @@ function finishConn(e){
   if(!isConn||!connSrc){isConn=false;connSrc=null;return}
 
   const tgt=document.elementFromPoint(e.clientX,e.clientY);
-  let tnd=null, tside=null;
+  let tnd=null, tside=null, targetExistingAnchorId=null;
+
+  // 0) 앵커 점(ce-anchor) 위에 드롭 → 그 앵커를 타겟으로 사용 (앵커 ↔ 앵커 연결 가능)
+  const anchorEl = tgt ? tgt.closest('.ce-anchor') : null;
+  if(anchorEl){
+    const ceEl = anchorEl.closest('.ce, .nd');
+    if(ceEl){
+      const cid = ceEl.dataset.ceId || ceEl.dataset.nid;
+      tnd = canvasEls.find(c=>c.id===cid) || nodes.find(n=>n.id===cid);
+      targetExistingAnchorId = anchorEl.dataset.aid;
+      tside = 'l'; // 앵커 사용 시 side 는 표시만, 실제 좌표는 anchorScreenPos 로
+    }
+  }
 
   // 1) 포트/ce-port 에 정확히 드롭
-  if(tgt&&(tgt.classList.contains('port')||tgt.classList.contains('ce-port'))){
+  if(!tnd && tgt&&(tgt.classList.contains('port')||tgt.classList.contains('ce-port'))){
     tside=_shortSide(tgt.dataset.side);
     if(tgt.classList.contains('ce-port')){
       const ceEl=tgt.closest('.ce');
@@ -3462,25 +3564,29 @@ function finishConn(e){
   }
 
   // 연결 생성 — 소스가 CE 앵커면 sourceAnchorId 포함
-  // 소스가 앵커면 타겟 드롭 지점에도 앵커를 생성해서 targetAnchorId 부여
-  // → 화살표가 사용자가 떨어뜨린 그 위치에 정확히 꽂힘 (핀포인트-to-핀포인트)
-  if(tnd && tnd!==connSrc.node){
+  // 타겟 처리 우선순위:
+  //  1) 기존 앵커 위에 드롭 → 그 앵커 재사용 (핀포인트 간 연결)
+  //  2) 소스가 앵커이고 타겟이 CE 면 → 드롭 지점에 새 타겟 앵커 생성
+  //  3) 그 외 → 기존 port 스냅 방식
+  // 같은 CE 위라도 "다른 앵커" 끼리면 연결 허용 (설명선 용도)
+  const sameNodeDiffAnchor = (tnd===connSrc.node) && connSrc.anchorId && targetExistingAnchorId && (connSrc.anchorId!==targetExistingAnchorId);
+  if(tnd && (tnd!==connSrc.node || sameNodeDiffAnchor)){
     const fromSide=connSrc.side||'r';
     const extra={};
-    if(connSrc.anchorId){
-      extra.sourceAnchorId=connSrc.anchorId;
-      // 타겟이 CE 면 (anchors 배열 있음) 드롭 지점을 앵커로 추가
-      if(tnd.anchors !== undefined){
-        // 드롭 지점을 타겟 CE 로컬 좌표로 변환
-        const r = tnd.el.getBoundingClientRect();
-        const dx = Math.max(0, Math.min(tnd.w||r.width, (e.clientX - r.left)/zoom));
-        const dy = Math.max(0, Math.min(tnd.h||r.height, (e.clientY - r.top)/zoom));
-        if(!Array.isArray(tnd.anchors)) tnd.anchors = [];
-        const tid = 'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
-        tnd.anchors.push({id:tid, dx:Math.round(dx), dy:Math.round(dy), label:''});
-        try{ renderCeAnchors(tnd); }catch(err){}
-        extra.targetAnchorId = tid;
-      }
+    if(connSrc.anchorId) extra.sourceAnchorId = connSrc.anchorId;
+    if(targetExistingAnchorId){
+      // 기존 앵커를 타겟으로 재사용
+      extra.targetAnchorId = targetExistingAnchorId;
+    } else if(connSrc.anchorId && tnd.anchors !== undefined){
+      // 소스 앵커 → 타겟 지점에 새 앵커 생성
+      const r = tnd.el.getBoundingClientRect();
+      const dx = Math.max(0, Math.min(tnd.w||r.width, (e.clientX - r.left)/zoom));
+      const dy = Math.max(0, Math.min(tnd.h||r.height, (e.clientY - r.top)/zoom));
+      if(!Array.isArray(tnd.anchors)) tnd.anchors = [];
+      const tid = 'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
+      tnd.anchors.push({id:tid, dx:Math.round(dx), dy:Math.round(dy), label:''});
+      try{ renderCeAnchors(tnd); }catch(err){}
+      extra.targetAnchorId = tid;
     }
     const sources=multiSel.length>0&&multiSel.includes(connSrc.node)&&!connSrc.anchorId ? multiSel : [connSrc.node];
     sources.forEach(sn=>addConn(sn.id, tnd.id, fromSide, tside, extra));
@@ -6062,7 +6168,7 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       pdfPageNumber:(n.doc?.pdfPageNumber)||1,
     }:undefined,
   })),
-  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined}))})),
+  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined})),
   // YouTube 검색 탭 (여러 검색을 묶음으로 저장) — 프로젝트에 포함
   youtubeSearchTabs: (_YT.tabs||[]).map(t=>({
     id:t.id, name:t.name||'', query:t.query||'',
@@ -6274,7 +6380,7 @@ function loadState(st){
       mkNode({...nd, collapsed:true});
     }
   });
-  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined}))}));
+  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined}));
   // YouTube 검색 탭 복원
   _YT.tabs = (st.youtubeSearchTabs||[]).map(t=>({
     id:t.id||('yttab_'+Date.now()+'_'+Math.random().toString(36).slice(2,5)),
