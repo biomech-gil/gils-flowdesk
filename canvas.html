@@ -1443,7 +1443,7 @@ body.focus-mode #canvas-controls{display:none}
         <a href="/" class="ts-tab active">🎨 캔버스</a>
         <a href="/chat.html" class="ts-tab">💬 채팅</a>
       </div>
-      <div class="ts-project-chip">
+      <div class="ts-project-chip" onclick="renameCurrentProject()" style="cursor:pointer" title="클릭해서 프로젝트 이름 변경">
         <span class="ic">📄</span>
         <span class="name" id="ah-project-name">무제 프로젝트</span>
         <span class="sep"></span>
@@ -6975,6 +6975,27 @@ function svConfirm(){
   if(_svResolver){_svResolver(res);_svResolver=null;}
 }
 
+async function renameCurrentProject(){
+  // 현재 열린 프로젝트의 이름만 변경 (제자리 rename · workflowId 유지 · 폴더 미변경)
+  if(!workflowId || !wfName){
+    alert('저장된 프로젝트가 없습니다.\n먼저 저장을 한 번 수행하세요 (Shift+Alt+S).');
+    return;
+  }
+  const nn = prompt('새 프로젝트 이름:\n(폴더명은 그대로 유지됩니다 — 폴더까지 바꾸려면 랜딩 화면의 ✏️ 버튼 사용)', wfName);
+  if(nn===null) return;
+  const trimmed = nn.trim();
+  if(!trimmed || trimmed===wfName) return;
+  const v=validateProjectName(trimmed);
+  if(!v.ok){ alert('⚠ 저장할 수 없는 이름\n\n'+v.error); return; }
+  const d=getState();d.id=workflowId;d.name=trimmed;
+  const r=await api('POST','/api/project/save',d);
+  if(!r||!r.ok){ alert('이름 변경 실패: '+((r&&r.error)||'')); return; }
+  wfName=trimmed;
+  if(typeof syncProjectNameUi==='function') syncProjectNameUi();
+  if(typeof refreshWfList==='function') refreshWfList();
+  if(typeof loadLandingLists==='function') loadLandingLists().catch(()=>{});
+  showCopyToast(`✏️ 프로젝트 이름 변경: ${trimmed}`);
+}
 async function saveWorkflow(){
   let useFolderId=null;  // 자동 날짜 폴더에 배치할지
   if(workflowId&&wfName){
