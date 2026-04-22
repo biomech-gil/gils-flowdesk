@@ -1394,7 +1394,7 @@ body.focus-mode #canvas-controls{display:none}
     <div class="rail-group">
       <button class="rail-btn" onclick="showLanding()" data-tip="프로젝트 열기">📂</button>
       <button class="rail-btn" onclick="newProject()" data-tip="새 프로젝트">📄</button>
-      <button class="rail-btn rail-btn-accent" onclick="saveWorkflow()" data-tip="저장 (Alt+S)">💾</button>
+      <button class="rail-btn rail-btn-accent" onclick="saveWorkflow()" data-tip="저장 (Shift+Alt+S)">💾</button>
       <button class="rail-btn" onclick="exportProject()" data-tip="내보내기 (.json)">⬇</button>
       <button class="rail-btn" onclick="openInNewTab()" data-tip="새 탭에서 열기">↗</button>
     </div>
@@ -1403,7 +1403,7 @@ body.focus-mode #canvas-controls{display:none}
 
     <!-- Exec -->
     <div class="rail-group">
-      <button class="rail-btn rail-btn-run" onclick="engine.startAll()" data-tip="전체 실행 (Alt+A)">▶</button>
+      <button class="rail-btn rail-btn-run" onclick="engine.startAll()" data-tip="전체 실행 (Shift+Alt+A)">▶</button>
       <button class="rail-btn rail-btn-stop" onclick="engine.stop()" data-tip="정지">■</button>
       <button class="rail-btn" data-rail-exec-order onclick="toggleExecOrderMode()" data-tip="영역 순서 지정 모드 · 영역 클릭 순서대로 번호 부여">🔢</button>
       <button class="rail-btn" onclick="executeOrderedRegions()" data-tip="순서대로 영역 실행 🎬">🎬</button>
@@ -6288,7 +6288,7 @@ const engine={
     if(nd.type==='downloader'){
       // 프로젝트 미저장 차단 (파일 미아 방지)
       if(!workflowId){
-        nd.outputCapture='❌ 프로젝트를 먼저 저장해주세요 (Alt+S)\n다운로드 파일은 프로젝트 폴더에 저장됩니다.';
+        nd.outputCapture='❌ 프로젝트를 먼저 저장해주세요 (Shift+Alt+S)\n다운로드 파일은 프로젝트 폴더에 저장됩니다.';
         this.setSt(nd,'error');
         const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
         autoSave();
@@ -8269,7 +8269,7 @@ async function docInlineMount(n){
     return;
   }
   if(!workflowId){
-    holder.innerHTML='<div class="doc-loading">⚠ 프로젝트를 먼저 저장해주세요 (Alt+S)</div>';
+    holder.innerHTML='<div class="doc-loading">⚠ 프로젝트를 먼저 저장해주세요 (Shift+Alt+S)</div>';
     return;
   }
   // 파일 로드
@@ -9505,7 +9505,7 @@ async function docConvertHwpToDocx(){
 
 async function docMbSave(){
   if(!_docActive||!_docActive.node)return;
-  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Alt+S)');return;}
+  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Shift+Alt+S)');return;}
   if(!_docActive.node.doc.filename){alert('저장할 파일명이 없습니다. "다른 이름으로 저장" 사용.');return;}
   docUpdateStatus('saving');
   try{
@@ -10743,7 +10743,7 @@ function _ceVideoAction(ce, act, btn){
 }
 
 async function _generateVideoSubtitle(ce, btn){
-  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Alt+S)');return;}
+  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Shift+Alt+S)');return;}
   const url=ce.src || ce.embedUrl;
   if(!url){alert('영상 URL 없음');return;}
   const orig=btn?btn.textContent:'';
@@ -10887,7 +10887,7 @@ function _toggleVideoLock(ce, btn){
 
 // 📥 임베드 → 로컬 .mp4 다운로드 후 direct video 로 전환
 async function _downloadVideoCeToLocal(ce, btn){
-  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Alt+S)');return;}
+  if(!workflowId){alert('프로젝트를 먼저 저장해주세요 (Shift+Alt+S)');return;}
   if(ce.videoKind!=='embed'){return;}
   const sourceUrl=ce.src;
   const origHtml=btn?btn.textContent:'';
@@ -12655,40 +12655,37 @@ function sheetTryParseText(text){
 // ⌨ 단축키 허브 (가이드 + 연습게임 Shortcut Rain)
 // ═══════════════════════════════════════════════
 const SH_KEY_LABELS = {
-  KeyQ:'Q', KeyW:'W', KeyE:'E', KeyR:'R', KeyT:'T', KeyY:'Y',
-  KeyA:'A', KeyS:'S', KeyD:'D', KeyF:'F', KeyG:'G', KeyH:'H',
+  KeyQ:'Q', KeyW:'W', KeyE:'E', KeyR:'R', KeyT:'T',
+  KeyA:'A', KeyS:'S', KeyD:'D', KeyF:'F',
   KeyZ:'Z', KeyX:'X', KeyC:'C', KeyV:'V',
+  Digit1:'1', Digit2:'2', Digit3:'3', Digit4:'4',
   Backquote:'`',
 };
+// Shift+Alt + [왼손 키] 단일 2-수식자 조합 — 브라우저 충돌 최소화
 const SHORTCUTS = [
-  // 노드 생성 — 핵심 (easy)
-  {g:'생성', code:'KeyQ', mod:'ctrlalt',      label:'🤖 Claude 노드', tier:1},
-  {g:'생성', code:'KeyT', mod:'ctrlalt',      label:'✨ Gemini 노드', tier:2},
-  {g:'생성', code:'KeyW', mod:'ctrlalt',      label:'📝 메모 노드',    tier:1},
-  {g:'생성', code:'KeyE', mod:'ctrlalt',      label:'📎 Input 노드',   tier:1},
-  {g:'생성', code:'KeyR', mod:'ctrlalt',      label:'⚡ Trigger 노드', tier:2},
-  {g:'생성', code:'KeyY', mod:'ctrlalt',      label:'⬇️ 다운로더 노드', tier:2},
-  {g:'생성', code:'KeyG', mod:'ctrlalt',      label:'📊 Sheet 노드',    tier:2},
-  {g:'생성', code:'KeyH', mod:'ctrlalt',      label:'📄 Document 노드', tier:2},
-  // 실행/파일
-  {g:'실행', code:'KeyA', mod:'ctrlalt',      label:'▶ 전체 실행',      tier:1},
-  {g:'실행', code:'KeyX', mod:'ctrlalt',      label:'▶ 선택 실행',      tier:2},
-  {g:'파일', code:'KeyS', mod:'ctrlalt',      label:'💾 저장',           tier:1},
-  {g:'편집', code:'KeyD', mod:'ctrlalt',      label:'🗑 선택 삭제',      tier:2},
-  {g:'파일', code:'KeyF', mod:'ctrlalt',      label:'📁 파일 탐색',      tier:2},
-  {g:'편집', code:'KeyZ', mod:'ctrlalt',      label:'↶ 되돌리기',        tier:2},
-  // 뷰
-  {g:'뷰',  code:'KeyC', mod:'ctrlalt',      label:'🔽 전체 접기',      tier:2},
-  {g:'뷰',  code:'KeyV', mod:'ctrlalt',      label:'🔼 전체 펼치기',    tier:2},
-  {g:'뷰',  code:'Backquote', mod:'ctrlalt', label:'🔲 집중 모드',      tier:2},
-  // Alt+Shift 보조
-  {g:'요소', code:'KeyQ', mod:'ctrlaltshift', label:'🟦 영역 그리기',   tier:3},
-  {g:'요소', code:'KeyW', mod:'ctrlaltshift', label:'📝 캔버스 텍스트', tier:3},
-  {g:'요소', code:'KeyE', mod:'ctrlaltshift', label:'🖼 이미지 추가',    tier:3},
-  {g:'요소', code:'KeyR', mod:'ctrlaltshift', label:'📐 즉시 정렬',      tier:3},
-  {g:'패널', code:'KeyA', mod:'ctrlaltshift', label:'📂 메모 폴더',      tier:3},
-  {g:'패널', code:'KeyS', mod:'ctrlaltshift', label:'📝 새 메모 탭',     tier:3},
-  {g:'패널', code:'KeyD', mod:'ctrlaltshift', label:'🗑 휴지통',         tier:3},
+  // 노드 생성 — QWERT
+  {g:'생성', code:'KeyQ', mod:'shiftalt', label:'🤖 Claude 노드',   tier:1},
+  {g:'생성', code:'KeyW', mod:'shiftalt', label:'📝 메모 노드',      tier:1},
+  {g:'생성', code:'KeyE', mod:'shiftalt', label:'📎 Input 노드',     tier:1},
+  {g:'생성', code:'KeyR', mod:'shiftalt', label:'⚡ Trigger 노드',   tier:2},
+  {g:'생성', code:'KeyT', mod:'shiftalt', label:'✨ Gemini 노드',    tier:2},
+  // 실행/파일 — ASDF
+  {g:'실행', code:'KeyA', mod:'shiftalt', label:'▶ 전체 실행',       tier:1},
+  {g:'파일', code:'KeyS', mod:'shiftalt', label:'💾 저장',            tier:1},
+  {g:'편집', code:'KeyD', mod:'shiftalt', label:'🗑 선택 삭제',       tier:2},
+  {g:'파일', code:'KeyF', mod:'shiftalt', label:'📁 파일 탐색',       tier:2},
+  // 편집/뷰 — ZXCV
+  {g:'편집', code:'KeyZ', mod:'shiftalt', label:'↶ 되돌리기',         tier:2},
+  {g:'실행', code:'KeyX', mod:'shiftalt', label:'▶ 선택 실행',        tier:2},
+  {g:'뷰',  code:'KeyC', mod:'shiftalt', label:'🔽 전체 접기',        tier:2},
+  {g:'뷰',  code:'KeyV', mod:'shiftalt', label:'🔼 전체 펼치기',      tier:2},
+  // 캔버스 요소 — 1234
+  {g:'요소', code:'Digit1', mod:'shiftalt', label:'🟦 영역 그리기',  tier:3},
+  {g:'요소', code:'Digit2', mod:'shiftalt', label:'📝 캔버스 텍스트', tier:3},
+  {g:'요소', code:'Digit3', mod:'shiftalt', label:'🖼 이미지 추가',   tier:3},
+  {g:'요소', code:'Digit4', mod:'shiftalt', label:'📐 영역 정렬',     tier:3},
+  // 모드 — `
+  {g:'뷰',  code:'Backquote', mod:'shiftalt', label:'🔲 집중 모드',   tier:2},
 ];
 
 function openShortcutsHub(){
@@ -12713,25 +12710,28 @@ function shSwitchTab(tab){
 }
 function _shKbdHtml(mod,code){
   const key=SH_KEY_LABELS[code]||code;
-  const parts=[`<span class="sh-kbd mod">Ctrl</span>`,`<span class="sh-kbd mod">Alt</span>`];
-  if(mod==='ctrlaltshift')parts.push(`<span class="sh-kbd shift">Shift</span>`);
+  const parts=[`<span class="sh-kbd shift">Shift</span>`,`<span class="sh-kbd mod">Alt</span>`];
   parts.push(`<span class="sh-kbd">${key}</span>`);
   return `<span class="sh-keys">${parts.join('+')}</span>`;
 }
 function shRenderGuide(){
   const pane=document.getElementById('sh-pane-guide');
-  // 그룹별 섹션
-  const groups=[
-    {title:'🎯 Ctrl + Alt + 한 글자 — 주요 액션', mod:'ctrlalt'},
-    {title:'🎨 Ctrl + Alt + Shift + 한 글자 — 보조 (캔버스/패널)', mod:'ctrlaltshift'},
+  // 그룹별 섹션 — 그룹 필드(g) 로 나눔
+  const groupDefs = [
+    {title:'🎯 노드 생성 — QWERT', filter:s=>s.g==='생성'},
+    {title:'▶ 실행 · 저장 — ASDF', filter:s=>['실행','파일','편집'].includes(s.g) && ['KeyA','KeyS','KeyD','KeyF'].includes(s.code)},
+    {title:'✂ 편집/뷰 — ZXCV', filter:s=>['KeyZ','KeyX','KeyC','KeyV'].includes(s.code)},
+    {title:'🎨 캔버스 요소 — 1234', filter:s=>s.code.startsWith('Digit')},
+    {title:'🔲 모드 — `', filter:s=>s.code==='Backquote'},
   ];
   let html='';
   html+=`<div style="padding:10px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;font-size:12px;color:var(--text);margin-bottom:16px;line-height:1.7">
-    💡 <b style="color:#a7f3d0">Ctrl+Alt</b> 2-수식자 조합으로 브라우저 충돌을 최소화했습니다 (기존 Alt+ 단일은 크롬·웨일이 가끔 가로챘음).<br>
-    왼손 영역(QWER / ASDF / ZXCV) 으로 한 손 배치. 입력창에 포커스가 있으면 무시됩니다.
+    💡 <b style="color:#a7f3d0">Shift + Alt</b> 2-수식자 조합으로 브라우저 충돌 최소화.<br>
+    왼손 영역(QWERT · ASDF · ZXCV · 1234 · <code>\`</code>) 한 손으로 모두 조작 가능. 입력창 포커스 시 무시.
   </div>`;
-  groups.forEach(grp=>{
-    const rows=SHORTCUTS.filter(s=>s.mod===grp.mod);
+  groupDefs.forEach(grp=>{
+    const rows=SHORTCUTS.filter(grp.filter);
+    if(rows.length===0) return;
     html+=`<div class="sh-group"><div class="sh-group-hd">${grp.title}</div>`;
     rows.forEach(r=>{
       html+=`<div class="sh-row">
@@ -12768,7 +12768,7 @@ const SH_STATE={
   },
   pool(){
     if(this.difficulty==='easy')return SHORTCUTS.filter(s=>s.tier===1);
-    if(this.difficulty==='medium')return SHORTCUTS.filter(s=>s.mod==='ctrlalt');
+    if(this.difficulty==='medium')return SHORTCUTS.filter(s=>s.mod==='shiftalt');
     return SHORTCUTS.slice();
   },
 };
@@ -12876,9 +12876,9 @@ function shSpawn(){
   const s=pool[Math.floor(Math.random()*pool.length)];
   const f=document.getElementById('sh-game-field');
   const c=document.createElement('div');
-  c.className='sh-card'+(s.mod==='ctrlaltshift'?' shiftcard':'');
+  c.className='sh-card';
   const keys=_shKbdHtml(s.mod,s.code);
-  c.innerHTML=`<div>${s.label}</div><div class="sh-card-hint">Ctrl + Alt${s.mod==='ctrlaltshift'?' + Shift':''} + ${SH_KEY_LABELS[s.code]||s.code}</div>`;
+  c.innerHTML=`<div>${s.label}</div><div class="sh-card-hint">Shift + Alt + ${SH_KEY_LABELS[s.code]||s.code}</div>`;
   // 좌우 random 위치
   const fw=f.clientWidth;
   const lx=60+Math.random()*(fw-200);
@@ -13030,7 +13030,7 @@ function prPool(){
   const sel=document.getElementById('pr-range');
   const v=sel?sel.value:'alt';
   if(v==='easy')return SHORTCUTS.filter(s=>s.tier===1);
-  if(v==='alt')return SHORTCUTS.filter(s=>s.mod==='ctrlalt');
+  if(v==='alt')return SHORTCUTS.filter(s=>s.mod==='shiftalt');
   return SHORTCUTS.slice();
 }
 function prRestart(){
@@ -13073,18 +13073,17 @@ function prRender(){
   const cur=PR_STATE.queue[PR_STATE.idx];
   const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const keyLabel=SH_KEY_LABELS[cur.code]||cur.code;
-  const modLabel=cur.mod==='ctrlaltshift'?'Ctrl + Alt + Shift':'Ctrl + Alt';
-  const color=cur.mod==='ctrlaltshift'?'#c4b5fd':'#7ecfff';
+  const modLabel='Shift + Alt';
+  const color='#7ecfff';
   cardEl.innerHTML=`
     <div style="padding:36px 48px;background:linear-gradient(180deg,rgba(14,24,44,.95),rgba(7,13,26,.95));border:2px solid ${color};border-radius:16px;box-shadow:0 10px 40px ${color}33,0 0 0 1px rgba(255,255,255,.04) inset;text-align:center;min-width:360px;max-width:720px">
       <div style="font-size:12px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">이 동작을</div>
       <div style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:24px;letter-spacing:-.5px">${esc(cur.label)}</div>
       <div style="font-size:12px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">이 단축키로</div>
       <div style="display:flex;gap:6px;justify-content:center;align-items:center;font-size:18px;font-weight:700;flex-wrap:wrap">
-        <span class="sh-kbd mod" style="padding:8px 16px;font-size:15px">Ctrl</span>
+        <span class="sh-kbd shift" style="padding:8px 16px;font-size:15px">Shift</span>
         <span style="color:var(--text-muted);font-size:20px">+</span>
         <span class="sh-kbd mod" style="padding:8px 16px;font-size:15px">Alt</span>
-        ${cur.mod==='ctrlaltshift'?`<span style="color:var(--text-muted);font-size:20px">+</span><span class="sh-kbd shift" style="padding:8px 16px;font-size:15px">Shift</span>`:''}
         <span style="color:var(--text-muted);font-size:20px">+</span>
         <span class="sh-kbd" style="padding:8px 18px;font-size:18px;min-width:36px">${keyLabel}</span>
       </div>
@@ -13094,12 +13093,12 @@ function prRender(){
   bar.style.width=`${(PR_STATE.idx/total)*100}%`;
 }
 function prHandleKey(e){
-  // Ctrl+Alt 조합만 인식 (2개 이상 수식자)
-  if(!(e.ctrlKey && e.altKey))return false;
+  // Shift+Alt 조합만 인식 (2 수식자)
+  if(!(e.shiftKey && e.altKey))return false;
   const cur=PR_STATE.queue[PR_STATE.idx];
   if(!cur)return false;
   if(!SH_KEY_LABELS[e.code])return false;
-  const mod=e.shiftKey?'ctrlaltshift':'ctrlalt';
+  const mod='shiftalt';
   if(mod===cur.mod && e.code===cur.code){
     // 정답
     if(PR_STATE.currentMistakeCount>0){
@@ -13117,7 +13116,7 @@ function prHandleKey(e){
     const fb=document.getElementById('pr-feedback');
     if(fb){
       const gotKey=SH_KEY_LABELS[e.code]||e.code;
-      const gotMod=mod==='ctrlaltshift'?'Ctrl + Alt + Shift':'Ctrl + Alt';
+      const gotMod='Shift + Alt';
       fb.innerHTML=`❌ <b style="color:#fca5a5">${gotMod} + ${gotKey}</b> 는 "${prActionForKey(mod,e.code)||'등록 안 된 단축키'}"<br>다시 시도해보세요`;
     }
     try{shBeep(200,0.08);}catch{}
@@ -13157,8 +13156,8 @@ document.addEventListener('keydown',(e)=>{
     return;
   }
   if(inPractice){
-    // 연습 모드 — Ctrl+Alt 조합만 (2 수식자)
-    if(!(e.ctrlKey && e.altKey))return;
+    // 연습 모드 — Shift+Alt 조합만 (2 수식자)
+    if(!(e.shiftKey && e.altKey))return;
     if(!SH_KEY_LABELS[e.code])return;
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -13167,8 +13166,8 @@ document.addEventListener('keydown',(e)=>{
   }
   if(inGame){
     if(!SH_STATE.running||SH_STATE.paused)return;
-    if(!(e.ctrlKey && e.altKey))return;
-    const mod=e.shiftKey?'ctrlaltshift':'ctrlalt';
+    if(!(e.shiftKey && e.altKey))return;
+    const mod='shiftalt';
     const code=e.code;
     if(!SH_KEY_LABELS[code])return;
     e.preventDefault();
@@ -15312,65 +15311,40 @@ document.addEventListener('keydown',function(e){
     return;
   }
 
-  // Ctrl+Alt 조합 단축키 (2개 이상 수식자로 브라우저 충돌 회피)
-  //  기본:    Ctrl+Alt+[letter]
-  //  보조:    Ctrl+Alt+Shift+[letter]
-  //  (기존 Alt+[letter] 도 레거시 호환으로 유지)
-  const isCtrlAlt = e.ctrlKey && e.altKey && !e.metaKey;
-  const isPlainAlt = !e.ctrlKey && e.altKey && !e.metaKey;  // 레거시
-  if(!isCtrlAlt && !isPlainAlt) return;
+  // Shift+Alt 2-수식자 단일 테이블 — 왼손 키만, 브라우저 충돌 최소화
+  const isShiftAlt = e.shiftKey && e.altKey && !e.ctrlKey && !e.metaKey;
+  if(!isShiftAlt) return;
   const ae=document.activeElement;
   if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))return;
 
-  // e.code: 물리 키 (KeyQ, KeyW, ...). IME/OS 영향 없음
-  const code=e.code;
-  const shift=e.shiftKey;
-  const focusMemoContent=()=>setTimeout(()=>{const ta=document.getElementById('me-content');if(ta)ta.focus()},150);
+  const code=e.code;  // 물리 키 (IME/OS 무관)
   const centerCoord=()=>{try{const p=s2c(cw.clientWidth/2,cw.clientHeight/2);return {x:p.x,y:p.y}}catch{return {x:200,y:200}}};
 
-  // Alt+단일 (주요 액션 — 왼손만)
-  const primary={
-    // 노드 생성 (QWER)
-    'KeyQ':()=>addNode&&addNode('agent'),                    // 🤖 Agent (Claude)
-    'KeyT':()=>addNode&&addNode('agent-gemini'),             // ✨ Agent (Gemini)
-    'KeyW':()=>addNode&&addNode('memo'),                     // 📝 Memo 노드
-    'KeyE':()=>addNode&&addNode('input'),                    // 📎 Input
-    'KeyR':()=>addNode&&addNode('trigger'),                  // ⚡ Trigger
-    'KeyY':()=>addNode&&addNode('downloader'),               // ⬇️ Downloader (YouTube/Instagram)
-    'KeyG':()=>addNode&&addNode('sheet'),                    // 📊 Sheet (엑셀형 표)
-    'KeyH':()=>addNode&&addNode('document'),                 // 📄 Document (DOCX/HWP)
-    // 액션/파일 (ASDF)
-    'KeyA':()=>engine&&engine.startAll&&engine.startAll(),   // ▶ 전체실행
-    'KeyS':()=>saveWorkflow&&saveWorkflow(),                 // 💾 저장
-    'KeyD':()=>deleteSelectedNode&&deleteSelectedNode(),     // 🗑 선택삭제
-    'KeyF':()=>openFileManager&&openFileManager(),           // 📁 파일탐색
-    // 편집/뷰 (ZXCV)
+  const table={
+    // 노드 생성 — QWERT
+    'KeyQ':()=>addNode&&addNode('agent'),                                   // 🤖 Claude
+    'KeyW':()=>addNode&&addNode('memo'),                                    // 📝 메모 노드
+    'KeyE':()=>addNode&&addNode('input'),                                   // 📎 Input
+    'KeyR':()=>addNode&&addNode('trigger'),                                 // ⚡ Trigger
+    'KeyT':()=>addNode&&addNode('agent-gemini'),                            // ✨ Gemini
+    // 실행 · 저장 — ASDF
+    'KeyA':()=>engine&&engine.startAll&&engine.startAll(),                  // ▶ 전체 실행
+    'KeyS':()=>saveWorkflow&&saveWorkflow(),                                // 💾 저장
+    'KeyD':()=>deleteSelectedNode&&deleteSelectedNode(),                    // 🗑 선택 삭제
+    'KeyF':()=>openFileManager&&openFileManager(),                          // 📁 파일 탐색
+    // 편집 · 뷰 — ZXCV
     'KeyZ':()=>typeof undo==='function'?undo():console.log('undo 미구현'), // ↶ 되돌리기
-    'KeyX':()=>engine&&engine.execSelected&&engine.execSelected(),          // ▶ 선택실행
-    'KeyC':()=>collapseAll&&collapseAll(true),                              // 🔽 접기
-    'KeyV':()=>collapseAll&&collapseAll(false),                             // 🔼 펼치기
-    // 모드 전환
-    'Backquote':()=>toggleFocusMode&&toggleFocusMode()                      // 🔲 집중모드
+    'KeyX':()=>engine&&engine.execSelected&&engine.execSelected(),          // ▶ 선택 실행
+    'KeyC':()=>collapseAll&&collapseAll(true),                              // 🔽 전체 접기
+    'KeyV':()=>collapseAll&&collapseAll(false),                             // 🔼 전체 펼치기
+    // 캔버스 요소 — 1234
+    'Digit1':()=>startCeCreate&&startCeCreate('region'),                    // 🟦 영역
+    'Digit2':()=>{const c=centerCoord();addCeText&&addCeText(c.x,c.y)},     // 📝 캔버스 텍스트
+    'Digit3':()=>{const inp=document.getElementById('ce-img-input');if(inp){try{ctxPos=centerCoord()}catch{};inp.click()}}, // 🖼 이미지
+    'Digit4':()=>arrangeAllWithHint&&arrangeAllWithHint(),                  // 📐 영역 정렬
+    // 모드 — `
+    'Backquote':()=>toggleFocusMode&&toggleFocusMode()                      // 🔲 집중 모드
   };
-
-  // Alt+Shift+ (보조 — 캔버스 요소/패널)
-  const secondary={
-    // 캔버스 요소 (QWER)
-    'KeyQ':()=>startCeCreate&&startCeCreate('region'),           // 🟦 영역(Box)
-    'KeyW':()=>{const c=centerCoord();addCeText&&addCeText(c.x,c.y)}, // 📝 텍스트 메모
-    'KeyE':()=>{const inp=document.getElementById('ce-img-input');if(inp){try{ctxPos=centerCoord()}catch{};inp.click()}}, // 🖼 이미지
-    'KeyR':()=>arrangeAllWithHint&&arrangeAllWithHint(),          // 📐 영역 정렬
-    // 패널/메모 (ASDF)
-    'KeyA':()=>toggleFolderPanel&&toggleFolderPanel(),           // 📂 메모폴더
-    'KeyS':()=>{newMemo&&newMemo();focusMemoContent()},          // 📝 새 메모 탭
-    'KeyD':()=>{openFileManager&&openFileManager();setTimeout(()=>{fmOpenTrash&&fmOpenTrash()},200)}, // 🗑 휴지통
-    'KeyF':()=>toggleFocusMode&&toggleFocusMode(),               // 🔲 집중모드 (중복 편의)
-    // 접기/펼치기 대체 (Alt+C/V 차단되는 브라우저 대비)
-    'KeyC':()=>collapseAll&&collapseAll(true),                   // 🔽 전체 접기
-    'KeyV':()=>collapseAll&&collapseAll(false)                   // 🔼 전체 펼치기
-  };
-
-  const table=shift?secondary:primary;
   if(table[code]){
     e.preventDefault();
     try{table[code]()}catch(err){console.error('shortcut error:',err)}
