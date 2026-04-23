@@ -2162,6 +2162,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/doc/hwp-to-docx": self._doc_hwp_to_docx,
             "/api/ce/file/read": self._ce_file_read,
             "/api/ce/file/write": self._ce_file_write,
+            "/api/doc/adopt": self._doc_adopt,
         }
         handler = handlers.get(p)
         if handler:
@@ -4282,6 +4283,58 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 except Exception:
                     continue
             return {"ok": False, "error": "텍스트로 디코딩 실패 (바이너리 파일)"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _doc_adopt(self, body):
+        """프로젝트 내 다른 폴더의 파일을 documents/ 로 복사해 document 노드가 쓸 수 있게 함.
+        폴더뷰에서 documents/ 가 아닌 곳의 파일을 캔버스로 드래그했을 때 사용.
+        body: {projectId, srcPath (project-relative or /synology 절대), filename?}"""
+        pid = (body.get("projectId") or "").strip()
+        src_rel = (body.get("srcPath") or "").strip()
+        target_filename = (body.get("filename") or "").strip() or os.path.basename(src_rel)
+        doc_dir, err = self._doc_project_dir(pid)
+        if err: return {"ok": False, "error": err}
+        if not self._doc_validate_filename(target_filename):
+            return {"ok": False, "error": "유효하지 않은 파일명"}
+        try:
+            row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+            work_dir = row.get("work_dir") if row else None
+        except Exception:
+            work_dir = None
+        if not work_dir:
+            return {"ok": False, "error": "프로젝트 폴더 없음"}
+        # 원본 경로 — 절대 경로면 그대로(단 work_dir 아래여야), 상대면 work_dir 기준
+        if os.path.isabs(src_rel):
+            src_full = os.path.realpath(src_rel)
+        else:
+            src_full = os.path.realpath(os.path.join(work_dir, src_rel))
+        wd_real = os.path.realpath(work_dir)
+        if not (src_full == wd_real or src_full.startswith(wd_real + os.sep)):
+            return {"ok": False, "error": "프로젝트 밖 경로 불가"}
+        if not os.path.isfile(src_full):
+            return {"ok": False, "error": "원본 파일 없음"}
+        dst_full = os.path.join(doc_dir, target_filename)
+        # 이미 같은 파일이면 복사 불필요 (realpath 동일)
+        try:
+            if os.path.isfile(dst_full) and os.path.realpath(dst_full) == src_full:
+                return {"ok": True, "filename": target_filename, "copied": False}
+        except Exception: pass
+        # 이름 충돌 — suffix 자동 부여
+        if os.path.isfile(dst_full):
+            base, ext = os.path.splitext(target_filename)
+            for i in range(2, 100):
+                cand = f"{base}_{i}{ext}"
+                cand_full = os.path.join(doc_dir, cand)
+                if not os.path.exists(cand_full):
+                    target_filename = cand
+                    dst_full = cand_full
+                    break
+        try:
+            shutil.copy2(src_full, dst_full)
+            log(f"[DOC_ADOPT] {src_full} → documents/{target_filename}")
+            return {"ok": True, "filename": target_filename, "copied": True,
+                    "path": os.path.join("documents", target_filename).replace("\\", "/")}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
