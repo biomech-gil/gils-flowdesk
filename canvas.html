@@ -372,6 +372,16 @@ body.pie-active,body.pie-active *{user-select:none!important;-webkit-user-select
 body.sb-left .sb{order:-1;border-left:none;border-right:1px solid var(--border)}
 body.sb-left .sb .sb-resize{left:auto;right:0}
 body.sb-left #fp-panel{left:auto;right:66px}
+/* 🔖 북마크 탭 바 — 사이드바 상단에 여러 북마크를 탭으로 표시 */
+#sb-tabs{display:flex;flex-wrap:wrap;gap:2px;padding:4px 6px 0;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0;max-height:88px;overflow-y:auto}
+#sb-tabs:empty{display:none}
+.sb-tab{display:flex;align-items:center;gap:3px;padding:3px 4px 3px 8px;font-size:11px;background:var(--bg-3);color:var(--text-dim);border:1px solid var(--border);border-radius:4px 4px 0 0;cursor:pointer;max-width:160px;transition:.12s;user-select:none}
+.sb-tab:hover{background:var(--bg-4);color:var(--text)}
+.sb-tab.active{background:var(--bg-1);color:var(--accent);border-color:var(--accent);border-bottom-color:var(--bg-1);font-weight:700;margin-bottom:-1px;z-index:1;position:relative}
+.sb-tab .sb-tab-ic{font-size:11px}
+.sb-tab .sb-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+.sb-tab .sb-tab-x{background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 3px;font-size:13px;line-height:1;border-radius:3px}
+.sb-tab .sb-tab-x:hover{color:#fca5a5;background:rgba(239,68,68,.15)}
 .sb-hd{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
 .sb-hd h3{flex:1;font-size:.85em;color:var(--accent);font-weight:600}.sb-hd button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:3px}.sb-hd button:hover{color:var(--text);background:var(--bg-3)}
 .sb-ct{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column}
@@ -2217,7 +2227,8 @@ body.focus-mode #canvas-controls{display:none}
   </div>
   <div class="sb hid" id="sb">
     <div class="sb-resize" id="sb-resize"></div>
-    <div class="sb-hd"><h3 id="sb-title">노드</h3><span id="sb-spin" class="sb-spin" title="실행 중"></span><button id="sb-pin-toggle" onclick="toggleSbPin()" title="핀 고정 — 배경 클릭해도 사이드바 유지 (기억됨)" style="font-size:13px">📌</button><button id="sb-side-toggle" onclick="toggleSbSide()" title="사이드바를 반대편으로 (기억됨)" style="font-size:13px">⇆</button><button onclick="deleteSelectedNode()" title="이 노드 삭제" style="color:#bf616a;font-size:12px">🗑</button><button onclick="closeSb()">&#x2715;</button></div>
+    <div id="sb-tabs"></div>
+    <div class="sb-hd"><h3 id="sb-title">노드</h3><span id="sb-spin" class="sb-spin" title="실행 중"></span><button id="sb-pin-toggle" onclick="toggleSbPin()" title="이 노드를 북마크 탭으로 추가 (여러 개 가능)" style="font-size:13px">📌</button><button id="sb-side-toggle" onclick="toggleSbSide()" title="사이드바를 반대편으로 (기억됨)" style="font-size:13px">⇆</button><button onclick="deleteSelectedNode()" title="이 노드 삭제" style="color:#bf616a;font-size:12px">🗑</button><button onclick="closeSb()">&#x2715;</button></div>
     <div class="sb-ct" style="display:flex;flex-direction:column">
       <div class="sb-row"><button class="r" onclick="engine.execSelected()" style="background:#2d6a2d;color:#a3be8c;font-weight:700;padding:3px 10px" title="실행">▶</button><button class="s" onclick="engine.stopNode(selectedNode)" style="background:#6a2d2d;color:#bf616a;font-weight:700;padding:3px 8px" title="정지">■</button><input type="text" id="sb-name" onchange="sbName(this.value)" placeholder="이름" style="flex:1;min-width:0"><label style="font-size:10px;cursor:pointer;display:flex;align-items:center;gap:2px;color:var(--text-muted);white-space:nowrap"><input type="checkbox" id="sb-chatonly" onchange="sbChatOnly(this.checked)" style="margin:0"> 💬대화전용</label></div>
       <div class="sb-row" style="gap:3px;flex-wrap:wrap" id="sb-mode-sec">
@@ -3278,14 +3289,26 @@ cw.addEventListener('mousedown',e=>{
   }
 });
 
-// 노드·CE·연결 모든 선택 해제 + 사이드바 닫기 (핀 고정 시에는 사이드바 유지)
+// 노드·CE·연결 모든 선택 해제 — 🔖 북마크 모드면 활성 탭 유지, 아니면 사이드바 닫음
 function _deselectAll(){
-  nodes.forEach(n=>{n.el.classList.remove('sel','multi-sel')});
   canvasEls.forEach(c=>c.el.classList.remove('sel'));
-  selectedNode=null;selectedCe=null;multiSel=[];multiCeSel=[];selectedConn=null;
+  selectedCe=null;multiCeSel=[];selectedConn=null;
   canvasEls.forEach(c=>c.el&&c.el.classList.remove('multi-sel'));
-  // 📌 핀 고정 상태면 사이드바 닫지 않음 — 배경 클릭/팬 시에도 유지
-  if(!window._sbPinned) closeSb();
+  const bm = window._sbBookmarks || [];
+  if(bm.length > 0){
+    // 북마크 모드 — 사이드바는 활성 탭 유지. 노드 시각 선택만 활성 북마크 노드로 복귀.
+    nodes.forEach(n=>n.el.classList.remove('sel','multi-sel'));
+    multiSel = [];
+    const active = window._sbActiveBookmark;
+    const n = active ? nodes.find(x=>String(x.id)===String(active)) : null;
+    if(n){ n.el.classList.add('sel'); selectedNode = n; }
+    else selectedNode = null;
+  } else {
+    nodes.forEach(n=>n.el.classList.remove('sel','multi-sel'));
+    multiSel = [];
+    selectedNode = null;
+    closeSb();
+  }
   drawConns();
 }
 
@@ -4803,6 +4826,8 @@ function buildDom(n){
       });
     }
     if(selectedNode===n){document.getElementById('sb-name').value=newName;document.getElementById('sb-title').textContent=`${ti.icon} ${newName}`}
+    // 🔖 북마크 탭 라벨 갱신
+    if(typeof _sbRenderTabs==='function' && window._sbBookmarks && window._sbBookmarks.some(x=>String(x)===String(n.id))) _sbRenderTabs();
     autoSave();
   }
   if(nmInp){
@@ -4937,9 +4962,32 @@ async function addNode(type='agent',x,y){
   else if(type==='document')docRenderMini(n);
   autoSave();return n;
 }
-function selNode(n){nodes.forEach(nd=>nd.el.classList.remove('sel','multi-sel'));multiSel=[];n.el.classList.add('sel');selectedNode=n;selectedConn=null;openSb(n);drawConns();document.getElementById('ctx').classList.remove('show');
-  // 📌 핀 고정 상태라면 마지막 포커스 노드 id 갱신 (재진입 시 복원용)
-  if(window._sbPinned){ try{ localStorage.setItem('sbPinnedNodeId', String(n.id)); }catch(e){} }
+function selNode(n){
+  nodes.forEach(nd=>nd.el.classList.remove('sel','multi-sel'));
+  multiSel=[];
+  n.el.classList.add('sel');
+  selectedNode = n;
+  selectedConn = null;
+  // 🔖 북마크 모드: 북마크된 노드 클릭 = 탭 전환, 아닌 노드 클릭 = 사이드바 유지 (실수 클릭 보호)
+  const bm = window._sbBookmarks || [];
+  const isBookmarked = bm.some(x=>String(x)===String(n.id));
+  if(bm.length > 0 && !isBookmarked){
+    // 북마크 모드 ON 인데 클릭된 노드는 북마크 아님 → 사이드바 건드리지 않음
+    // (사용자가 '이걸 북마크에 추가'하려면 📌 버튼 누르면 됨)
+    drawConns();
+    document.getElementById('ctx').classList.remove('show');
+    if(typeof applySbPinUI==='function') applySbPinUI();
+    return;
+  }
+  if(isBookmarked){
+    window._sbActiveBookmark = n.id;
+    if(typeof _sbSaveBookmarks==='function') _sbSaveBookmarks();
+    if(typeof _sbRenderTabs==='function') _sbRenderTabs();
+  }
+  openSb(n);
+  drawConns();
+  document.getElementById('ctx').classList.remove('show');
+  if(typeof applySbPinUI==='function') applySbPinUI();
 }
 function toggleMultiSel(n){const idx=multiSel.indexOf(n);if(idx>=0){multiSel.splice(idx,1);n.el.classList.remove('multi-sel')}else{multiSel.push(n);n.el.classList.add('multi-sel')}if(multiSel.length===1){selectedNode=multiSel[0];openSb(multiSel[0])}}
 function togCollapse(n){
@@ -4962,7 +5010,13 @@ function deleteSelectedNode(){
 function delNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i].el.remove();nodes.splice(i,1);conns=conns.filter(c=>c.sid!==id&&c.tid!==id);
   // 스크롤 박스 멤버에서도 제거
   canvasEls.forEach(ce=>{if(ce.type==='region'&&ce.scrollable&&ce.memberIds&&ce.memberIds.includes(id)){ce.memberIds=ce.memberIds.filter(x=>x!==id);_regionApplyScroll(ce);}});
-  drawConns();if(typeof _refreshAllChecklists==='function')_refreshAllChecklists();if(selectedNode&&selectedNode.id===id){selectedNode=null;closeSb()}autoSave()}
+  // 🔖 문서 노드 사이드바 holder 캐시 정리
+  if(typeof _purgeSbDocHolder==='function') _purgeSbDocHolder(id);
+  // 🔖 북마크 탭에서도 제거
+  if(typeof _sbRemoveBookmark==='function' && window._sbBookmarks && window._sbBookmarks.some(x=>String(x)===String(id))){
+    _sbRemoveBookmark(id);
+  }
+  drawConns();if(typeof _refreshAllChecklists==='function')_refreshAllChecklists();if(selectedNode&&selectedNode.id===id){selectedNode=null;if(!(window._sbBookmarks&&window._sbBookmarks.length))closeSb()}autoSave()}
 
 // ═══ CONTEXT MENU ═══
 cw.addEventListener('contextmenu',e=>{e.preventDefault();if(e.target===cw||e.target===cvs||e.target.tagName==='svg')showCtx(e.clientX,e.clientY,'canvas')});
@@ -9757,27 +9811,20 @@ function showCopyToast(msg){
 
 // ═══ SIDEBAR ═══
 // 📄 Document 노드 — 사이드바 전체 영역에 문서 에디터 마운트 + AI 입출력은 토글로 숨김/표시
-// (doc/docx/hwp 도 html/pdf CE 처럼 우측 사이드바에서 바로 편집·저장 가능)
+// 🔖 holder DOM 을 window._sbDocHolders[n.id] 에 캐시 → 노드 전환·재선택 시 엔진 재로드 없음.
+//    (rhwp/docx 같이 무거운 엔진은 detach/reattach 만으로 상태 유지)
+window._sbDocHolders = window._sbDocHolders || {};
 function _openDocNodeSidebar(n){
   const ti = TYPES[n.type] || {icon:'📄', name:'Document'};
   const sb = document.getElementById('sb');
   sb.classList.remove('hid');
   document.getElementById('sb-title').textContent = `${ti.icon} ${n.name}`;
-  // 사이드바 ce-area 에 마운트된 다른 문서 에디터가 있으면 먼저 언마운트 (중복·고아 DOM 방지)
-  try{
-    _DOC_INLINE.forEach((state)=>{
-      if(state._holder && state._holder.closest && state._holder.closest('#ce-area') && state.node && state.node.id !== n.id){
-        docInlineUnmount(state.node, {skipSave:false});
-      }
-    });
-  }catch(e){}
   // AI 섹션 초기 숨김 — 🔗 버튼으로 토글
   ['sb-mode-sec','sb-input-sec','sb-output-sec','sb-div','sb-dl-sec','sb-sheet-sec','sb-workdir-sec'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none';
   });
   const nameRow=document.querySelector('.sb-ct > .sb-row');
   if(nameRow) nameRow.style.display='none';
-  // 노드 이름 입력 필드(sb-name) 에 기존 값 동기 — AI 토글 시 보이게 됨
   const nameEl=document.getElementById('sb-name'); if(nameEl) nameEl.value=n.name||'';
   const inEl=document.getElementById('sb-input'); if(inEl) inEl.value=n.inputTemplate||'';
   const outEl=document.getElementById('sb-output'); if(outEl) outEl.textContent=n.outputCapture||'';
@@ -9785,10 +9832,12 @@ function _openDocNodeSidebar(n){
   let ceArea = document.getElementById('ce-area');
   if(!ceArea){ ceArea=document.createElement('div'); ceArea.id='ce-area'; ct.insertBefore(ceArea, ct.querySelector('#sb-input-sec')); }
   ceArea.style.cssText = 'display:flex;flex-direction:column;gap:4px;flex:1;min-height:0;overflow:hidden';
+  ceArea.style.display = 'flex';
   ct.style.overflow = 'hidden';
   const filename = (n.doc && n.doc.filename) || '';
   const esc = s => String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const curZ = Math.round(((n.doc && n.doc.sbZoom)||1)*100);
+  // 툴바 + 본문 자리(placeholder) + 상태바 — 본문은 캐시된 holder 를 append 할 것
   ceArea.innerHTML = `
     <div class="sb-row" style="gap:3px;margin:0;flex-shrink:0;align-items:center;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:700;color:#fde68a;white-space:nowrap">📄</span>
@@ -9800,10 +9849,26 @@ function _openDocNodeSidebar(n){
       <button id="sb-doc-save" title="저장 (Ctrl+S)" style="font-size:11px;padding:3px 9px;background:rgba(76,175,80,.15);color:#a7f3d0;border:1px solid rgba(76,175,80,.4);border-radius:3px;cursor:pointer;font-weight:700">💾 저장</button>
       <button id="sb-doc-io"  title="AI 입출력 섹션 표시/숨김 (다른 노드에 연결해서 송출할 때)" style="font-size:11px;padding:3px 9px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:3px;cursor:pointer;font-weight:700">🔗 I/O</button>
     </div>
-    <div id="sb-doc-holder" data-doc-editor style="flex:1;min-height:0;background:#fff;border:1px solid var(--border);border-radius:4px;overflow:auto;color:#111"></div>
+    <div id="sb-doc-mainwrap" style="flex:1;min-height:0;display:flex;flex-direction:column"></div>
     <div id="sb-doc-status" class="sb-row" style="gap:4px;margin:0;flex-shrink:0;font-size:10px;color:var(--text-muted)"></div>`;
   document.querySelectorAll('#sb-exec, #sb-conv').forEach(el=>{const row=el.closest('.sb-row');if(row)row.style.display='none'});
-  // 파일명 편집 — blur 시 적용. 실제 파일 rename 은 아직 지원 안 함 (저장 시 새 파일로)
+  // 🔖 holder 캐시에서 가져오거나 최초 생성
+  let holder = window._sbDocHolders[n.id];
+  const isFresh = !holder;
+  if(!holder){
+    holder = document.createElement('div');
+    holder.id = 'sb-doc-holder-' + n.id;
+    holder.className = 'doc-inline-editor';
+    holder.setAttribute('data-doc-editor','');
+    holder.style.cssText = 'flex:1;min-height:0;background:#fff;border:1px solid var(--border);border-radius:4px;overflow:auto;color:#111';
+    window._sbDocHolders[n.id] = holder;
+  }
+  // 공통 id `sb-doc-holder` 도 부여 — 기존 코드(줌 쿼리 등)가 getElementById 로 찾게
+  holder.setAttribute('data-sb-doc','1');
+  // main 래퍼에 holder 부착 — 기존에 다른 부모(다른 ce-area 인스턴스나 detached)에 있어도 appendChild 가 이동시킴
+  const mw = document.getElementById('sb-doc-mainwrap');
+  if(mw) mw.appendChild(holder);
+  // 파일명 동기화
   const fnInp = document.getElementById('sb-doc-fn');
   if(fnInp){
     fnInp.addEventListener('change', ()=>{
@@ -9816,13 +9881,12 @@ function _openDocNodeSidebar(n){
   document.getElementById('sb-doc-save')?.addEventListener('click', ()=>{
     if(typeof docInlineSave==='function') docInlineSave(n);
   });
-  // 🔎 사이드바 내부 확대/축소 — holder 에 CSS zoom 적용 (엔진 무관, 스크롤도 정상)
-  const _docHolder = document.getElementById('sb-doc-holder');
-  const _docZlbl   = document.getElementById('sb-doc-zlbl');
+  // 🔎 줌 — holder 에 CSS zoom 적용 (엔진 무관)
+  const _docZlbl = document.getElementById('sb-doc-zlbl');
   const _docApplyZoom = ()=>{
     if(!n.doc) n.doc={};
     const z = Math.max(0.3, Math.min(4, n.doc.sbZoom||1));
-    if(_docHolder) _docHolder.style.zoom = String(z);
+    if(holder) holder.style.zoom = String(z);
     if(_docZlbl) _docZlbl.textContent = Math.round(z*100)+'%';
   };
   const _docAdjustZoom = (delta, reset)=>{
@@ -9834,22 +9898,30 @@ function _openDocNodeSidebar(n){
   document.getElementById('sb-doc-zo')?.addEventListener('click', (e)=>{ e.stopPropagation(); _docAdjustZoom(-0.1); });
   document.getElementById('sb-doc-zi')?.addEventListener('click', (e)=>{ e.stopPropagation(); _docAdjustZoom(+0.1); });
   document.getElementById('sb-doc-zfit')?.addEventListener('click',(e)=>{ e.stopPropagation(); _docAdjustZoom(0, true); });
-  if(_docHolder){
-    _docHolder.addEventListener('wheel', (ev)=>{
+  if(!holder._wheelBound){
+    holder.addEventListener('wheel', (ev)=>{
       if(!ev.ctrlKey) return;
       ev.preventDefault();
-      _docAdjustZoom(ev.deltaY > 0 ? -0.1 : +0.1);
+      // 최신 selectedNode 기준으로 조정 (holder 가 재활용되므로)
+      const sn = selectedNode || n;
+      if(!sn.doc) sn.doc={};
+      if(ev.deltaY>0) sn.doc.sbZoom = Math.max(0.3, (sn.doc.sbZoom||1)-0.1);
+      else            sn.doc.sbZoom = Math.min(4,   (sn.doc.sbZoom||1)+0.1);
+      holder.style.zoom = String(sn.doc.sbZoom);
+      const zl = document.getElementById('sb-doc-zlbl');
+      if(zl) zl.textContent = Math.round(sn.doc.sbZoom*100)+'%';
+      if(typeof autoSave==='function') autoSave();
     }, {passive:false});
+    holder._wheelBound = true;
   }
   setTimeout(_docApplyZoom, 0);
-  // 🔗 I/O 토글 — AI 입출력 섹션 보이기/숨기기 (체이닝 필요한 경우)
+  // 🔗 I/O 토글
   let ioVisible = !!n._sbIoOpen;
   const syncIo = ()=>{
     const ids = ['sb-input-sec','sb-output-sec','sb-div'];
     ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display = ioVisible ? '' : 'none' });
     const btn = document.getElementById('sb-doc-io');
     if(btn) btn.style.outline = ioVisible ? '2px solid var(--accent)' : 'none';
-    // I/O 표시되면 ce-area flex 를 줄여 공간 분배
     if(ceArea) ceArea.style.flex = ioVisible ? '0 1 50%' : '1';
   };
   document.getElementById('sb-doc-io')?.addEventListener('click', ()=>{
@@ -9858,25 +9930,31 @@ function _openDocNodeSidebar(n){
     syncIo();
   });
   syncIo();
-  // 노드 body 에 기존에 마운트된 에디터가 있다면 먼저 언마운트 (중복 방지)
-  try{ docInlineUnmount(n, {skipSave:true}); }catch(e){}
-  // 사이드바 holder 에 에디터 마운트
-  const holder = document.getElementById('sb-doc-holder');
-  if(holder){
-    docInlineMount(n, holder).catch(e=>{ console.warn('[sb doc mount]', e); });
+  // 🚀 엔진 마운트 — holder 가 캐시에서 온 것이고 이미 이 노드용 엔진이 살아있으면 그대로 재사용 (재로드 없음)
+  if(isFresh){
+    // 노드 body 에 있을 수도 있는 기존 마운트 해제 (중복 방지)
+    try{ docInlineUnmount(n, {skipSave:true}); }catch(e){}
   }
+  docInlineMount(n, holder).catch(e=>{ console.warn('[sb doc mount]', e); });
+}
+// 📄 문서 노드 holder 캐시 정리 — 노드 삭제/프로젝트 전환 시 호출
+function _purgeSbDocHolder(nodeId){
+  if(!window._sbDocHolders) return;
+  const h = window._sbDocHolders[nodeId];
+  if(h){
+    try{ h.remove(); }catch(e){}
+    delete window._sbDocHolders[nodeId];
+  }
+  try{
+    const st = _DOC_INLINE && _DOC_INLINE.get && _DOC_INLINE.get(nodeId);
+    if(st) docInlineUnmount(st.node, {skipSave:true});
+  }catch(e){}
 }
 function openSb(n){
   // 📄 document 노드는 전용 사이드바 플로우로 라우팅
   if(n.type==='document'){ _openDocNodeSidebar(n); return; }
-  // 문서 아닌 노드로 전환 — 사이드바에 문서 에디터가 마운트돼 있으면 정리 (노드 body 는 재렌더 시 자동 복원)
-  try{
-    _DOC_INLINE.forEach((state)=>{
-      if(state._holder && state._holder.closest && state._holder.closest('#ce-area')){
-        docInlineUnmount(state.node, {skipSave:false});
-      }
-    });
-  }catch(e){}
+  // 📌 문서 노드 holder 는 언마운트하지 않고 DOM 만 detach — 엔진 상태를 유지해 재진입 시 즉시 표시
+  //    (문서 holder 가 ce-area 에 붙어 있으면 innerHTML 교체로 자동 detach 되고 캐시에 남음)
   const ti=TYPES[n.type];const isAgent=isAgentType(n.type);const isDl=n.type==='downloader';const isSheet=n.type==='sheet';document.getElementById('sb').classList.remove('hid');
   // ce 영역 숨기고 노드 영역 다시 표시 + 이름 행 복원
   const ceArea=document.getElementById('ce-area');if(ceArea)ceArea.style.display='none';
@@ -10128,11 +10206,13 @@ function sbSetModel(val){
   autoSave();
 }
 function closeSb(){
-  // ✕ 버튼으로 닫을 때는 핀 고정도 해제 (사용자 명시적 닫기로 간주)
-  if(window._sbPinned){
-    window._sbPinned = false;
-    try{ localStorage.setItem('sbPinned','0'); localStorage.removeItem('sbPinnedNodeId'); }catch(e){}
-    applySbPinUI();
+  // ✕ 명시적 닫기 = 북마크 전체 해제 (탭 모드 종료)
+  if(window._sbBookmarks && window._sbBookmarks.length){
+    window._sbBookmarks = [];
+    window._sbActiveBookmark = null;
+    try{ localStorage.removeItem('sbBookmarks'); localStorage.removeItem('sbActiveBookmark'); }catch(e){}
+    if(typeof _sbRenderTabs==='function') _sbRenderTabs();
+    if(typeof applySbPinUI==='function') applySbPinUI();
   }
   document.getElementById('sb').classList.add('hid');
   setTimeout(drawConns,10);
@@ -10254,54 +10334,144 @@ function applySbSide(side){
   }catch(e){ applySbSide('right'); }
 })();
 
-// 📌 사이드바 핀 고정 — 배경/팬 클릭해도 사이드바 유지. 다른 노드 클릭 시에만 전환.
-// localStorage 에 on/off + 마지막 핀된 노드 id 를 저장해서 재진입 시 복원.
-function toggleSbPin(){
-  window._sbPinned = !window._sbPinned;
-  applySbPinUI();
+// 🔖 북마크 탭 사이드바 — 여러 노드를 탭으로 고정. 북마크 모드에서 다른 노드 클릭해도
+// 사이드바는 활성 탭 유지 (실수 클릭 시 편집 상태 보호). 탭 클릭 = 해당 노드로 활성 전환.
+// 캐시된 _sbDocHolders 와 결합하면 rhwp 등 무거운 엔진을 재로드 없이 탭처럼 왕복 가능.
+window._sbBookmarks = [];         // [nodeId, ...]
+window._sbActiveBookmark = null;  // nodeId | null
+function _sbSaveBookmarks(){
   try{
-    localStorage.setItem('sbPinned', window._sbPinned ? '1' : '0');
-    if(window._sbPinned && selectedNode) localStorage.setItem('sbPinnedNodeId', String(selectedNode.id));
-    else if(!window._sbPinned) localStorage.removeItem('sbPinnedNodeId');
+    localStorage.setItem('sbBookmarks', JSON.stringify(window._sbBookmarks));
+    if(window._sbActiveBookmark) localStorage.setItem('sbActiveBookmark', String(window._sbActiveBookmark));
+    else localStorage.removeItem('sbActiveBookmark');
   }catch(e){}
+}
+function _sbRenderTabs(){
+  const ct = document.getElementById('sb-tabs');
+  if(!ct) return;
+  ct.innerHTML = '';
+  const bm = window._sbBookmarks || [];
+  bm.forEach(id=>{
+    const n = (typeof nodes!=='undefined' && Array.isArray(nodes)) ? nodes.find(x=>String(x.id)===String(id)) : null;
+    if(!n) return;
+    const ti = (typeof TYPES!=='undefined' && TYPES[n.type]) ? TYPES[n.type] : {icon:'📄'};
+    const tab = document.createElement('div');
+    tab.className = 'sb-tab' + (String(id)===String(window._sbActiveBookmark) ? ' active' : '');
+    tab.dataset.id = id;
+    const nm = (n.name || '(이름 없음)');
+    const nmEsc = nm.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    tab.innerHTML = `<span class="sb-tab-ic">${ti.icon||'📄'}</span><span class="sb-tab-name" title="${nmEsc}">${nmEsc}</span><button class="sb-tab-x" title="탭 제거">×</button>`;
+    tab.addEventListener('click', (e)=>{
+      if(e.target.classList.contains('sb-tab-x')){
+        e.stopPropagation();
+        _sbRemoveBookmark(id);
+      } else {
+        _sbActivateBookmark(id);
+      }
+    });
+    ct.appendChild(tab);
+  });
+}
+function _sbAddBookmark(id){
+  if(!id) return;
+  const exists = window._sbBookmarks.some(x=>String(x)===String(id));
+  if(!exists) window._sbBookmarks.push(id);
+  window._sbActiveBookmark = id;
+  _sbSaveBookmarks();
+  _sbRenderTabs();
+  applySbPinUI();
+}
+function _sbRemoveBookmark(id){
+  const idx = window._sbBookmarks.findIndex(x=>String(x)===String(id));
+  if(idx < 0) return;
+  window._sbBookmarks.splice(idx, 1);
+  const wasActive = String(window._sbActiveBookmark)===String(id);
+  if(wasActive){
+    if(window._sbBookmarks.length > 0){
+      const nextId = window._sbBookmarks[Math.min(idx, window._sbBookmarks.length-1)];
+      _sbActivateBookmark(nextId);
+    } else {
+      window._sbActiveBookmark = null;
+      document.getElementById('sb').classList.add('hid');
+      setTimeout(drawConns,10);
+    }
+  }
+  _sbSaveBookmarks();
+  _sbRenderTabs();
+  applySbPinUI();
+}
+function _sbActivateBookmark(id){
+  const n = (typeof nodes!=='undefined' && Array.isArray(nodes)) ? nodes.find(x=>String(x.id)===String(id)) : null;
+  if(!n){ _sbRemoveBookmark(id); return; }
+  window._sbActiveBookmark = id;
+  // 시각적 선택 + 사이드바 열기 (openSb 경로는 document 분기 포함)
+  nodes.forEach(nd=>nd.el.classList.remove('sel','multi-sel'));
+  n.el.classList.add('sel');
+  selectedNode = n;
+  selectedConn = null;
+  openSb(n);
+  drawConns();
+  _sbRenderTabs();
+  applySbPinUI();
+  _sbSaveBookmarks();
+}
+// 📌 버튼 — 선택된 노드의 북마크 토글 (여러 개 가능)
+function toggleSbPin(){
+  const cur = selectedNode;
+  if(!cur) return;
+  const isBookmarked = window._sbBookmarks.some(x=>String(x)===String(cur.id));
+  if(isBookmarked){
+    _sbRemoveBookmark(cur.id);
+  } else {
+    _sbAddBookmark(cur.id);
+  }
 }
 function applySbPinUI(){
   const btn = document.getElementById('sb-pin-toggle');
   if(!btn) return;
-  if(window._sbPinned){
+  const cur = selectedNode;
+  const isBookmarked = cur && window._sbBookmarks.some(x=>String(x)===String(cur.id));
+  if(isBookmarked){
     btn.textContent = '📍';
     btn.style.color = '#fde047';
     btn.style.background = 'rgba(253,224,71,.15)';
-    btn.title = '핀 고정 ON — 배경 클릭해도 사이드바 유지됨 (클릭하면 해제)';
+    btn.title = '북마크됨 — 클릭하면 탭 제거';
   } else {
     btn.textContent = '📌';
     btn.style.color = '';
     btn.style.background = '';
-    btn.title = '핀 고정 — 배경 클릭해도 사이드바 유지 (기억됨)';
+    btn.title = '이 노드를 북마크 탭으로 추가 (여러 개 가능)';
   }
 }
-(function _loadSbPin(){
+// 북마크 복원 — 프로젝트 로드 후 stale id 정리 + 활성 탭 복원
+(function _loadBookmarks(){
   try{
-    window._sbPinned = localStorage.getItem('sbPinned') === '1';
-  }catch(e){ window._sbPinned = false; }
-  applySbPinUI();
-  // 마지막 핀된 노드 복원 — DOMContentLoaded 후 프로젝트 로드가 끝나면 노드가 존재할 수 있음
-  if(window._sbPinned){
-    const tryRestore = ()=>{
-      try{
-        const id = localStorage.getItem('sbPinnedNodeId');
-        if(!id) return;
-        const n = (typeof nodes!=='undefined' && Array.isArray(nodes)) ? nodes.find(x=>String(x.id)===String(id)) : null;
-        if(n && typeof selNode==='function'){ selNode(n); return true; }
-      }catch(e){}
-      return false;
-    };
-    // 프로젝트 로드 완료 이후 몇 번 재시도 (최대 3초)
-    let tries = 0;
-    const iv = setInterval(()=>{
-      if(tryRestore() || ++tries > 30) clearInterval(iv);
-    }, 100);
-  }
+    const saved = JSON.parse(localStorage.getItem('sbBookmarks')||'[]');
+    window._sbBookmarks = Array.isArray(saved) ? saved : [];
+    window._sbActiveBookmark = localStorage.getItem('sbActiveBookmark') || null;
+  }catch(e){ window._sbBookmarks=[]; window._sbActiveBookmark=null; }
+  let tries = 0;
+  const iv = setInterval(()=>{
+    if(typeof nodes === 'undefined' || !Array.isArray(nodes)){
+      if(++tries > 50) clearInterval(iv);
+      return;
+    }
+    if(nodes.length === 0){
+      // 프로젝트가 아직 로드 안 됐을 수도 — 몇 번 더 기다림
+      if(++tries > 50) clearInterval(iv);
+      return;
+    }
+    window._sbBookmarks = window._sbBookmarks.filter(id=>nodes.some(n=>String(n.id)===String(id)));
+    if(window._sbActiveBookmark && !window._sbBookmarks.some(id=>String(id)===String(window._sbActiveBookmark))){
+      window._sbActiveBookmark = window._sbBookmarks[0] || null;
+    }
+    _sbSaveBookmarks();
+    _sbRenderTabs();
+    if(window._sbActiveBookmark){
+      _sbActivateBookmark(window._sbActiveBookmark);
+    }
+    clearInterval(iv);
+  }, 150);
 })();
 
 // ═══ MODAL ═══
@@ -10891,7 +11061,7 @@ window.addEventListener('beforeunload',()=>{
 let _isLoadingState = false;
 function loadState(st){
   _isLoadingState = true;
-  nodes.forEach(n=>n.el.remove());nodes=[];conns=[];ncnt=0;selectedNode=null;closeSb();
+  nodes.forEach(n=>{ if(typeof _purgeSbDocHolder==='function') _purgeSbDocHolder(n.id); n.el.remove(); });nodes=[];conns=[];ncnt=0;selectedNode=null;closeSb();
   canvasEls.forEach(c=>c.el.remove());canvasEls=[];selectedCe=null;
   // work_dir이 있으면 그것을, 없으면 기존 cwd를 캔버스 CWD로 (Project = Folder 우선)
   window._currentWorkDir = st.workDir||'';
@@ -18439,7 +18609,7 @@ function showAuthHealthDetails(){
 }
 function newProject(){
   if(nodes.length>0&&!confirm('현재 작업을 지우고 새 빈 프로젝트를 시작합니다. 계속?'))return;
-  nodes.forEach(n=>n.el.remove());nodes=[];
+  nodes.forEach(n=>{ if(typeof _purgeSbDocHolder==='function') _purgeSbDocHolder(n.id); n.el.remove(); });nodes=[];
   conns=[];
   canvasEls.forEach(c=>c.el.remove());canvasEls=[];
   selectedNode=null;selectedConn=null;selectedCe=null;multiSel=[];
@@ -18462,7 +18632,7 @@ function newProject(){
 
 async function resetSession(){if(!confirm('tmux 세션 리셋?\n\n캔버스 상태와 tmux 세션이 모두 초기화됩니다.'))return;engine.stop();localStorage.removeItem(LS_KEY);
   await api('POST','/api/state/save',{nodes:[],connections:[]}); // DB __current__ 비우기
-  nodes.forEach(n=>n.el.remove());nodes=[];conns=[];selectedNode=null;closeSb();ncnt=0;workflowId=null;wfName='';
+  nodes.forEach(n=>{ if(typeof _purgeSbDocHolder==='function') _purgeSbDocHolder(n.id); n.el.remove(); });nodes=[];conns=[];selectedNode=null;closeSb();ncnt=0;workflowId=null;wfName='';
   await api('POST','/api/reset-session',{});await new Promise(ok=>setTimeout(ok,2000));await init(true);alert('리셋!')}
 
 // ═══ INIT ═══
