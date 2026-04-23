@@ -406,6 +406,11 @@ def init_db():
             ("fav_items", "kind", "ALTER TABLE fav_items ADD COLUMN kind TEXT DEFAULT 'project'"),
             ("fav_items", "target_id", "ALTER TABLE fav_items ADD COLUMN target_id TEXT"),
             ("fav_folders", "kind", "ALTER TABLE fav_folders ADD COLUMN kind TEXT DEFAULT 'project'"),
+            ("memos", "file_path", "ALTER TABLE memos ADD COLUMN file_path TEXT"),
+            ("memos", "file_name", "ALTER TABLE memos ADD COLUMN file_name TEXT"),
+            ("memos", "file_size", "ALTER TABLE memos ADD COLUMN file_size BIGINT"),
+            ("executions", "run_cwd", "ALTER TABLE executions ADD COLUMN run_cwd TEXT"),
+            ("memos", "file_mime", "ALTER TABLE memos ADD COLUMN file_mime TEXT"),
         ]
         for tbl, col, alter_sql in alter_checks:
             cur.execute("""
@@ -595,6 +600,11 @@ def init_db():
             "ALTER TABLE fav_items ADD COLUMN target_id TEXT",
             "ALTER TABLE fav_folders ADD COLUMN kind TEXT DEFAULT 'project'",
             "ALTER TABLE conversations ADD COLUMN project_id TEXT",
+            "ALTER TABLE memos ADD COLUMN file_path TEXT",
+            "ALTER TABLE memos ADD COLUMN file_name TEXT",
+            "ALTER TABLE memos ADD COLUMN file_size INTEGER",
+            "ALTER TABLE memos ADD COLUMN file_mime TEXT",
+            "ALTER TABLE executions ADD COLUMN run_cwd TEXT",
         ]:
             try:
                 db.execute(stmt)
@@ -1044,6 +1054,72 @@ _cleanup_stale_recovery_slots(days=2)
 SYNOLOGY_CONTAINER_ROOT = "/synology"
 TEMP_ROOT = os.path.join(SYNOLOGY_CONTAINER_ROOT, "_temp")
 TRASH_ROOT = os.path.join(SYNOLOGY_CONTAINER_ROOT, ".trash", "_temp")
+# 📛 프로젝트 메타파일 — 일반적인 이름은 실수로 지우기 쉬워 브랜드 접두로 통일
+PROJECT_FILE_NAME = "gils-flowdesk.json"
+PROJECT_FILE_LEGACY = "project.json"   # 하위 호환 (자동 마이그레이션)
+
+def _proj_file_path(work_dir):
+    """work_dir 내부의 gils-flowdesk.json 경로 — 없으면 레거시 project.json 반환(읽기용)"""
+    if not work_dir: return ""
+    new_p = os.path.join(work_dir, PROJECT_FILE_NAME)
+    if os.path.exists(new_p): return new_p
+    legacy_p = os.path.join(work_dir, PROJECT_FILE_LEGACY)
+    if os.path.exists(legacy_p): return legacy_p
+    return new_p  # 신규 저장용 — 기본은 새 이름
+
+def _proj_file_write_locked(work_dir, payload_str):
+    """gils-flowdesk.json 안전하게 쓰기 + 읽기전용 잠금.
+    - 쓰기 전: 기존 파일이 있으면 권한을 0644 로 잠시 풀고 덮어씀
+    - 쓴 직후: 0444 (모두 읽기 전용) 로 잠금 → 사용자 실수 삭제/수정 방지
+    - 레거시 project.json 이 있으면 동일 내용으로 함께 유지 (안전 이중화)
+      then 레거시는 0444 로 잠금, 또는 새 이름으로만 두고 레거시 제거(옵션)
+    """
+    if not work_dir or not os.path.isdir(work_dir):
+        raise ValueError(f"work_dir invalid: {work_dir}")
+    new_p = os.path.join(work_dir, PROJECT_FILE_NAME)
+    # 기존 잠금 풀기 (있으면)
+    for p in [new_p, os.path.join(work_dir, PROJECT_FILE_LEGACY)]:
+        if os.path.exists(p):
+            try: os.chmod(p, 0o644)
+            except Exception: pass
+    # 새 이름으로 원자적 쓰기 (tmp → rename)
+    tmp_p = new_p + ".tmp"
+    with open(tmp_p, "w", encoding="utf-8") as f:
+        f.write(payload_str)
+    try:
+        os.replace(tmp_p, new_p)
+    except Exception:
+        # fallback: 직접 쓰기
+        with open(new_p, "w", encoding="utf-8") as f: f.write(payload_str)
+        try: os.remove(tmp_p)
+        except Exception: pass
+    # 레거시 파일 자동 마이그레이션 — 있으면 삭제 (새 이름으로 통일)
+    legacy_p = os.path.join(work_dir, PROJECT_FILE_LEGACY)
+    if os.path.exists(legacy_p):
+        try:
+            os.chmod(legacy_p, 0o644)
+            os.remove(legacy_p)
+            log(f"[PROJECT_FILE] 레거시 project.json 제거됨: {legacy_p}")
+        except Exception as e:
+            log(f"[PROJECT_FILE] 레거시 제거 실패(무시): {e}")
+    # 🔒 읽기 전용 잠금 — 0444 (user/group/other 모두 읽기만)
+    try:
+        os.chmod(new_p, 0o444)
+    except Exception as e:
+        log(f"[PROJECT_FILE] chmod 0444 실패(무시): {e}")
+    return new_p
+
+def _proj_file_unlock_for_delete(work_dir):
+    """프로젝트 삭제 시 호출 — 잠금 풀어서 rmtree 가능하게"""
+    if not work_dir: return
+    for name in [PROJECT_FILE_NAME, PROJECT_FILE_LEGACY]:
+        p = os.path.join(work_dir, name)
+        if os.path.exists(p):
+            try: os.chmod(p, 0o644)
+            except Exception: pass
+
+# 메모폴더에 첨부된 파일들의 디스크 베이스 — 사용자 폴더 트리(이름)를 그대로 디렉토리로 사용
+MEMO_FILES_BASE = os.path.join(SYNOLOGY_CONTAINER_ROOT, "_memo_files")
 TEMP_TTL_DAYS = 2       # 임시 폴더 → 휴지통 이동
 TRASH_TTL_DAYS = 5      # 휴지통 → 영구 삭제 (즉 총 2+3=5일 후 삭제)
 PROJECT_SUB_PATTERN = "{year}"
@@ -1928,8 +2004,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/doc/list": self._json(self._doc_list(params))
         elif p == "/api/doc/versions": self._json(self._doc_versions(params))
         elif p == "/api/project/files": self._json(self._project_files(params))
+        elif p == "/api/project/tree": self._json(self._project_tree(params))
         elif p == "/api/project/file":
             self._project_file_serve(params)
+            return
+        elif p == "/api/memo/file":
+            self._memo_file_serve(params)
             return
         elif p == "/api/settings/get": self._json(self._settings_get())
         elif p == "/api/auth/health": self._json(self._auth_health(params))
@@ -1997,6 +2077,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/temp/delete": self._temp_delete,
             "/api/memo/save": self._memo_save,
             "/api/memo/delete": self._memo_delete,
+            "/api/memo/file/upload": self._memo_file_upload,
             "/api/folder/save": self._folder_save,
             "/api/folder/delete": self._folder_delete,
             "/api/scratchpad/save": self._scratchpad_save,
@@ -2069,6 +2150,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/rmdir": self._project_rmdir,
             "/api/project/copy-files": self._project_copy_files,
             "/api/project/move-files": self._project_move_files,
+            "/api/project/move-within": self._project_move_within,
             "/api/project/create-empty": self._project_create_empty,
             "/api/fs/mkdir": self._fs_mkdir,
             "/api/doc/delete": self._doc_delete,
@@ -2122,13 +2204,33 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         def run():
             try:
                 # run_cwd 결정 우선순위:
-                # 1) body.cwd (명시적 지정)
+                # 0) body.nodeWorkDir (노드별 외부 작업 폴더 — 사이드바에서 지정)  ← 최우선
+                # 1) body.cwd (캔버스 전역 명시)
                 # 2) projects.work_dir (저장된 정식 프로젝트)
                 # 3) /synology/_temp/<date>_<projname>__<id>/ (임시 프로젝트 — 저장 안 됨)
                 run_cwd = None
-                if cwd and os.path.isdir(cwd):
+                node_wd = (body.get("nodeWorkDir") or "").strip()
+                if node_wd:
+                    # 보안: SYNOLOGY_CONTAINER_ROOT 밖은 허용 안 함 (컨테이너 bind mount 밖)
+                    safe_root = os.path.abspath(SYNOLOGY_CONTAINER_ROOT)
+                    abs_wd = os.path.abspath(node_wd)
+                    if not abs_wd.startswith(safe_root):
+                        log(f"EXEC [{exec_id}] ⚠ 노드 workDir 거부 — {safe_root} 밖: {abs_wd}")
+                    elif not os.path.isdir(abs_wd):
+                        log(f"EXEC [{exec_id}] ⚠ 노드 workDir 존재 안 함 (자동 생성 시도): {abs_wd}")
+                        try:
+                            os.makedirs(abs_wd, exist_ok=True)
+                            if os.path.isdir(abs_wd):
+                                run_cwd = abs_wd
+                                log(f"EXEC [{exec_id}] 노드 workDir 생성 + 사용: {run_cwd}")
+                        except Exception as e:
+                            log(f"EXEC [{exec_id}] 노드 workDir 생성 실패: {e}")
+                    else:
+                        run_cwd = abs_wd
+                        log(f"EXEC [{exec_id}] 노드 workDir(외부) 사용: {run_cwd}")
+                if not run_cwd and cwd and os.path.isdir(cwd):
                     run_cwd = cwd
-                else:
+                if not run_cwd:
                     try:
                         wf_id = (body.get("projectId") or "").strip()
                         if wf_id:
@@ -2174,8 +2276,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 log(f"EXEC [{exec_id}] done! {len(output)}자 [{fb_msg}]")
                 with open(out_file, "w", encoding="utf-8") as f: f.write(output)
                 with open(done_file, "w") as f: f.write("done")
-                db_exec("UPDATE executions SET output=?, status='complete', finished=? WHERE id=?",
-                        (output, datetime.now().isoformat(), exec_id))
+                db_exec("UPDATE executions SET output=?, status='complete', finished=?, run_cwd=? WHERE id=?",
+                        (output, datetime.now().isoformat(), run_cwd or "", exec_id))
             except Exception as e:
                 log(f"EXEC [{exec_id}] ERROR: {e}")
                 err_msg = f"(오류: {e})"
@@ -2378,7 +2480,17 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
     def _conv_list(self, params):
         node_id = params.get("nodeId", [""])[0]
-        if node_id:
+        standalone = params.get("standalone", ["0"])[0] == "1"
+        if standalone or node_id == "_standalone":
+            # node_id 없는 (독립) 대화만 — 새 채팅 사이드바용
+            rows = db_exec(
+                "SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, c.project_id, "
+                "(SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count "
+                "FROM conversations c WHERE (c.node_id IS NULL OR c.node_id='') "
+                "ORDER BY c.created DESC LIMIT 50",
+                fetch=True,
+            )
+        elif node_id:
             rows = db_exec("SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, (SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count FROM conversations c WHERE c.node_id=? ORDER BY c.created DESC LIMIT 50", (node_id,), fetch=True)
         else:
             rows = db_exec("SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, (SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count FROM conversations c ORDER BY c.created DESC LIMIT 100", fetch=True)
@@ -2449,6 +2561,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                     parent = os.path.dirname(work_dir)
                     os.makedirs(parent, exist_ok=True)
                     if os.path.exists(work_dir):
+                        _proj_file_unlock_for_delete(work_dir)
                         shutil.rmtree(work_dir)
                     shutil.move(promoted_from, work_dir)
                     log(f"[PROMOTE] 임시 폴더 → 정식: {promoted_from} → {work_dir}")
@@ -2473,16 +2586,16 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             db_exec("INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
                     (pid, name, data, now, now, work_dir))
 
-        # work_dir/project.json 실파일 기록 (실패해도 DB 저장은 유지)
+        # work_dir/gils-flowdesk.json 실파일 기록 + 읽기전용 잠금 (실패해도 DB 저장은 유지)
+        # 레거시 project.json 이 있으면 이 과정에서 자동 제거 (통일)
         json_written = False
         if ok_mk:
             try:
-                proj_json_path = os.path.join(work_dir, "project.json")
-                with open(proj_json_path, "w", encoding="utf-8") as f:
-                    json.dump(body, f, ensure_ascii=False, indent=2)
+                payload_str = json.dumps(body, ensure_ascii=False, indent=2)
+                _proj_file_write_locked(work_dir, payload_str)
                 json_written = True
             except Exception as e:
-                log(f"[PROJECT_SAVE] project.json 쓰기 실패: {e}")
+                log(f"[PROJECT_SAVE] {PROJECT_FILE_NAME} 쓰기 실패: {e}")
 
         log(f"PROJECT save [{pid}] {name} work_dir={work_dir} folder={ok_mk} json={json_written}")
         return {"ok": True, "id": pid, "workDir": work_dir,
@@ -2546,11 +2659,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         pid = str(uuid.uuid4())[:8]
         now = datetime.now().isoformat()
 
-        # project.json 있으면 그 상태를 그대로 복원
-        proj_json_path = os.path.join(folder, "project.json")
+        # gils-flowdesk.json (또는 레거시 project.json) 있으면 그 상태를 그대로 복원
+        proj_json_path = _proj_file_path(folder)
         restored = False
         payload = None
-        if os.path.exists(proj_json_path):
+        if proj_json_path and os.path.exists(proj_json_path):
             try:
                 with open(proj_json_path, "r", encoding="utf-8") as f:
                     payload = json.load(f)
@@ -2560,9 +2673,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 payload["workDir"] = folder
                 payload["cwd"] = folder
                 restored = True
-                log(f"[PROJECT_ADOPT] project.json 복원: {folder} · 노드 {len(payload.get('nodes') or [])}개 · 연결 {len(payload.get('connections') or [])}개 · 캔버스요소 {len(payload.get('canvasElements') or [])}개")
+                log(f"[PROJECT_ADOPT] {os.path.basename(proj_json_path)} 복원: {folder} · 노드 {len(payload.get('nodes') or [])}개 · 연결 {len(payload.get('connections') or [])}개 · 캔버스요소 {len(payload.get('canvasElements') or [])}개")
             except Exception as e:
-                log(f"[PROJECT_ADOPT] project.json 파싱 실패 ({e}) — 빈 플로우로 시작")
+                log(f"[PROJECT_ADOPT] 파싱 실패 ({e}) — 빈 플로우로 시작")
                 payload = None
         if payload is None:
             payload = {"id": pid, "name": name, "workDir": folder,
@@ -2573,13 +2686,12 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "INSERT INTO projects (id, name, data, created, modified, work_dir) VALUES (?,?,?,?,?,?)",
             (pid, name, data, now, now, folder),
         )
-        # 새 pid로 project.json 도 갱신 (일관성)
+        # 새 pid 로 메타파일 갱신 + 새 이름으로 통일 + 읽기전용 잠금
         if restored:
             try:
-                with open(proj_json_path, "w", encoding="utf-8") as f:
-                    json.dump(payload, f, ensure_ascii=False, indent=2)
+                _proj_file_write_locked(folder, json.dumps(payload, ensure_ascii=False, indent=2))
             except Exception as e:
-                log(f"[PROJECT_ADOPT] project.json 재기록 실패: {e}")
+                log(f"[PROJECT_ADOPT] 메타파일 재기록 실패: {e}")
         log(f"[PROJECT_ADOPT] {pid} {name} ← {folder} (restored={restored})")
         return {"ok": True, "id": pid, "name": name, "workDir": folder, "restored": restored,
                 "nodeCount": len((payload.get("nodes") or [])),
@@ -3632,13 +3744,122 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             )
         except Exception as e:
             return {"ok": False, "error": f"DB INSERT 실패: {e}"}
-        # project.json 함께 생성
+        # gils-flowdesk.json 함께 생성 + 읽기전용 잠금
         try:
-            with open(os.path.join(work_dir, "project.json"), "w", encoding="utf-8") as f:
-                f.write(empty_state)
-        except Exception: pass
+            _proj_file_write_locked(work_dir, empty_state)
+        except Exception as e:
+            log(f"[PROJECT_CREATE_EMPTY] 메타파일 쓰기 실패(무시): {e}")
         log(f"[PROJECT_CREATE_EMPTY] {name} → {work_dir} (id={pid})")
         return {"ok": True, "id": pid, "work_dir": work_dir, "name": name}
+
+    # ═══ 🌳 프로젝트 폴더 트리 — 형식분류 없이 실제 폴더 구조 그대로 (재귀 최대 5단계) ═══
+    def _project_tree(self, params):
+        pid = params.get("projectId", [""])[0]
+        try: max_depth = int(params.get("maxDepth", ["5"])[0])
+        except Exception: max_depth = 5
+        max_depth = max(1, min(max_depth, 8))
+        show_hidden = params.get("showHidden", ["0"])[0] == "1"
+        if not pid:
+            return {"ok": False, "error": "projectId required"}
+        row = db_exec("SELECT work_dir, name FROM projects WHERE id=?", (pid,), fetchone=True)
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "work_dir 없음"}
+        root = os.path.abspath(row["work_dir"])
+        safe_root = os.path.abspath(SYNOLOGY_CONTAINER_ROOT)
+        if not root.startswith(safe_root):
+            return {"ok": False, "error": "안전 가드: /synology 밖"}
+        if not os.path.isdir(root):
+            return {"ok": False, "error": "폴더 존재 안 함"}
+
+        HIDDEN_DIRS = {'.versions','.trash-doc','_dl_tmp','.locks','.trash','_temp'}
+        HIDDEN_FILES = {'gils-flowdesk.json','project.json','.DS_Store','Thumbs.db','desktop.ini'}
+        count = {'files':0, 'folders':0, 'skipped':0}
+
+        def walk(abs_dir, rel_path, depth):
+            if depth > max_depth:
+                count['skipped'] += 1
+                return {'name': os.path.basename(abs_dir), 'path': rel_path, 'isDir': True, 'children': [], 'truncated': True}
+            node = {'name': os.path.basename(abs_dir) or '/', 'path': rel_path, 'isDir': True, 'children': []}
+            try:
+                entries = sorted(os.listdir(abs_dir), key=lambda s: (not os.path.isdir(os.path.join(abs_dir,s)), s.lower()))
+            except Exception as e:
+                node['error'] = str(e)
+                return node
+            for name in entries:
+                if not show_hidden:
+                    if name.startswith('.'): continue
+                    if name in HIDDEN_DIRS or name in HIDDEN_FILES: continue
+                full = os.path.join(abs_dir, name)
+                rel = (rel_path + '/' + name).lstrip('/') if rel_path else name
+                try:
+                    st = os.stat(full)
+                except Exception:
+                    continue
+                if os.path.isdir(full):
+                    count['folders'] += 1
+                    node['children'].append(walk(full, rel, depth+1))
+                else:
+                    count['files'] += 1
+                    # 파일 잠금 상태(gils-flowdesk.json 관련 외 일반)
+                    is_locked = False
+                    try: is_locked = not (st.st_mode & 0o200)   # 쓰기 권한 없으면 잠김
+                    except Exception: pass
+                    node['children'].append({
+                        'name': name, 'path': rel, 'isDir': False,
+                        'size': st.st_size, 'mtime': int(st.st_mtime),
+                        'locked': is_locked,
+                    })
+            return node
+
+        tree = walk(root, '', 0)
+        return {'ok': True, 'tree': tree, 'root': root, 'counts': count, 'maxDepth': max_depth}
+
+    # ═══ 같은 프로젝트 내부 파일/폴더 이동 — 트리뷰 드래그 대상 ═══
+    def _project_move_within(self, body):
+        pid = (body.get("projectId") or "").strip()
+        src_rel = (body.get("src") or "").strip().replace("\\","/").strip("/")
+        # dst 는 '대상 폴더' 의 상대경로 — 파일명은 src 에서 유지
+        dst_rel = (body.get("dst") or "").strip().replace("\\","/").strip("/")
+        if not pid or not src_rel:
+            return {"ok": False, "error": "projectId, src 필요"}
+        row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트 미저장"}
+        root = os.path.abspath(row["work_dir"])
+        safe_root = os.path.abspath(SYNOLOGY_CONTAINER_ROOT)
+        src_abs = os.path.abspath(os.path.join(root, src_rel))
+        dst_parent_abs = os.path.abspath(os.path.join(root, dst_rel)) if dst_rel else root
+        # 경로 이탈 방지
+        if not src_abs.startswith(root) or not dst_parent_abs.startswith(root):
+            return {"ok": False, "error": "경로 이탈"}
+        if not src_abs.startswith(safe_root) or not dst_parent_abs.startswith(safe_root):
+            return {"ok": False, "error": "안전 가드"}
+        if not os.path.exists(src_abs):
+            return {"ok": False, "error": "원본 없음"}
+        if not os.path.isdir(dst_parent_abs):
+            return {"ok": False, "error": "대상 폴더 없음"}
+        # 자기 자신 하위로 이동하는 것 방지 (폴더일 때)
+        if os.path.isdir(src_abs) and dst_parent_abs.startswith(src_abs + os.sep):
+            return {"ok": False, "error": "자기 자신의 하위로 이동 불가"}
+        name = os.path.basename(src_abs)
+        dst_abs = os.path.join(dst_parent_abs, name)
+        if os.path.exists(dst_abs):
+            # 이름 충돌 — 자동 suffix
+            stem, ext = os.path.splitext(name)
+            for i in range(2, 1000):
+                cand = os.path.join(dst_parent_abs, f"{stem} ({i}){ext}")
+                if not os.path.exists(cand):
+                    dst_abs = cand; break
+        try:
+            # gils-flowdesk.json 은 잠금 파일이라 이동 전 해제
+            if os.path.basename(src_abs) in (PROJECT_FILE_NAME, PROJECT_FILE_LEGACY):
+                try: os.chmod(src_abs, 0o644)
+                except Exception: pass
+            shutil.move(src_abs, dst_abs)
+            log(f"[PROJECT_MOVE_WITHIN] {pid}: {src_rel} → {dst_abs}")
+            return {"ok": True, "newPath": os.path.relpath(dst_abs, root).replace("\\","/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     def _project_mkdir(self, body):
         """프로젝트 폴더 안에 임의 하위 폴더 생성.
@@ -4113,7 +4334,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         'other': {'label':'📎 기타', 'exts': set()},
     }
     _PROJ_HIDDEN_DIRS = {'.versions','.trash-doc','_dl_tmp','.locks','.trash','_temp','_dl_tmp'}
-    _PROJ_HIDDEN_FILES = {'project.json', '.DS_Store', 'Thumbs.db', 'desktop.ini'}
+    _PROJ_HIDDEN_FILES = {'gils-flowdesk.json', 'project.json', '.DS_Store', 'Thumbs.db', 'desktop.ini'}
 
     def _classify_ext(self, ext):
         e=(ext or '').lower()
@@ -4532,7 +4753,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         """메모 목록 (folder_id 또는 is_temp 필터)"""
         folder_id = params.get("folderId", [None])[0]
         is_temp = params.get("isTemp", [None])[0]
-        sql = "SELECT id, name, folder_id, is_temp, pinned, color, substr(content,1,100) as preview, created, modified FROM memos WHERE name!='__scratchpad__'"
+        sql = "SELECT id, name, folder_id, is_temp, pinned, color, file_path, file_name, file_size, file_mime, substr(content,1,100) as preview, created, modified FROM memos WHERE name!='__scratchpad__'"
         cond = []
         args = []
         if folder_id is not None:
@@ -4587,6 +4808,15 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 updates.append("pinned=?"); params.append(1 if body.get("pinned") else 0)
             if "color" in body:
                 updates.append("color=?"); params.append(body.get("color") or "")
+            if "filePath" in body:
+                updates.append("file_path=?"); params.append(body.get("filePath") or None)
+            if "fileName" in body:
+                updates.append("file_name=?"); params.append(body.get("fileName") or None)
+            if "fileSize" in body:
+                fs = body.get("fileSize")
+                updates.append("file_size=?"); params.append(int(fs) if fs is not None else None)
+            if "fileMime" in body:
+                updates.append("file_mime=?"); params.append(body.get("fileMime") or None)
             params.append(mid)
             db_exec(f"UPDATE memos SET {', '.join(updates)} WHERE id=?", tuple(params))
             log(f"[MEMO_SAVE] partial update id={mid} fields={list(body.keys())}")
@@ -4612,13 +4842,181 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _memo_delete(self, body):
         mid = body.get("id", "")
         if not mid: return {"ok": False, "error": "id required"}
-        row = db_exec("SELECT id, name, content, folder_id, is_temp, pinned, color, created, modified FROM memos WHERE id=?", (mid,), fetchone=True)
+        row = db_exec("SELECT id, name, content, folder_id, is_temp, pinned, color, file_path, file_name, file_size, file_mime, created, modified FROM memos WHERE id=?", (mid,), fetchone=True)
         if row:
             trash_data = json.dumps(dict(row), ensure_ascii=False, default=str)
             db_exec("INSERT INTO trash (original_table, original_id, name, data, deleted_at) VALUES (?,?,?,?,?)",
                     ("memos", str(mid), row.get("name", ""), trash_data, datetime.now().isoformat()))
+            # 첨부 파일이 있으면 디스크에서도 삭제 (휴지통 trash row에 메타는 남음)
+            fp = row.get("file_path")
+            if fp:
+                try:
+                    full = os.path.abspath(fp)
+                    if full.startswith(os.path.abspath(MEMO_FILES_BASE)) and os.path.isfile(full):
+                        os.remove(full)
+                        log(f"[MEMO_DELETE] file removed: {full}")
+                except Exception as e:
+                    log(f"[MEMO_DELETE] file remove failed (non-fatal): {e}")
         db_exec("DELETE FROM memos WHERE id=?", (mid,))
         return {"ok": True}
+
+    # ── Memo File Attachments (사용자 폴더 트리 기반 디스크 저장) ──
+
+    def _memo_safe_segment(self, name):
+        """폴더/파일명 sanitize — 시스템에서 안전한 형태로."""
+        s = (name or "").strip()
+        s = re.sub(r'[^\w\s.\-_가-힣()]', '_', s)
+        s = s.strip().strip('.')
+        if not s: s = "_"
+        return s[:120]
+
+    def _memo_folder_disk_path(self, folder_id):
+        """메모폴더 트리를 따라 디스크 경로 계산.
+        분류 없음/None → {base}/_uncategorized
+        하위 폴더 → {base}/{최상위}/{...}/{현재}"""
+        base = MEMO_FILES_BASE
+        os.makedirs(base, exist_ok=True)
+        if folder_id is None or folder_id == "" or folder_id == "null":
+            return os.path.join(base, "_uncategorized")
+        try:
+            fid = int(folder_id)
+        except Exception:
+            return os.path.join(base, "_uncategorized")
+        chain = []
+        cur = fid
+        visited = set()
+        for _ in range(50):  # 순환 방지
+            if cur in visited: break
+            visited.add(cur)
+            row = db_exec("SELECT id, name, parent_id FROM memo_folders WHERE id=?", (cur,), fetchone=True)
+            if not row: break
+            chain.insert(0, self._memo_safe_segment(row.get("name") or f"folder_{row['id']}"))
+            par = row.get("parent_id")
+            if not par: break
+            cur = par
+        if not chain:
+            return os.path.join(base, "_uncategorized")
+        return os.path.join(base, *chain)
+
+    def _memo_file_upload(self, body):
+        """메모폴더에 파일 업로드 — 사용자 폴더 트리(이름)를 디스크 경로로 사용.
+        body: {folderId, filename, data(base64), mime?}
+        새 메모 row 생성 (file_* 메타 포함). content는 비어 있고 name=원본 파일명.
+        return: {ok, id, filePath, fileName, fileSize, fileMime}"""
+        import base64 as _b64
+        folder_id = body.get("folderId")
+        if folder_id in ("", 0, "null"): folder_id = None
+        filename = (body.get("filename") or "").strip()
+        b64 = body.get("data") or ""
+        mime = (body.get("mime") or "").strip()
+        if not filename or not b64:
+            return {"ok": False, "error": "filename 과 data 필요"}
+        # mime 자동 판정
+        if not mime:
+            try:
+                import mimetypes
+                mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+            except Exception:
+                mime = "application/octet-stream"
+        # 디스크 경로
+        try:
+            target_dir = self._memo_folder_disk_path(folder_id)
+            os.makedirs(target_dir, exist_ok=True)
+        except Exception as e:
+            return {"ok": False, "error": f"폴더 생성 실패: {e}"}
+        base_name = self._memo_safe_segment(filename)
+        target = os.path.join(target_dir, base_name)
+        if os.path.exists(target):
+            stem, ext = os.path.splitext(base_name)
+            for i in range(2, 1000):
+                cand = os.path.join(target_dir, f"{stem} ({i}){ext}")
+                if not os.path.exists(cand):
+                    target = cand; base_name = f"{stem} ({i}){ext}"; break
+        # 데이터 디코드 + 저장
+        try:
+            if "," in b64 and b64.startswith("data:"):
+                b64 = b64.split(",", 1)[1]
+            data = _b64.b64decode(b64)
+            with open(target, "wb") as f: f.write(data)
+            size = os.path.getsize(target)
+        except Exception as e:
+            return {"ok": False, "error": f"저장 실패: {e}"}
+        # 메모 row 생성 (이름 = 원본 파일명, content = 빈 문자열, file_* 메타)
+        now = datetime.now().isoformat()
+        new_id = db_exec(
+            "INSERT INTO memos (name, content, folder_id, is_temp, file_path, file_name, file_size, file_mime, created, modified) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (filename, "", folder_id, 0, target, filename, size, mime, now, now)
+        )
+        log(f"[MEMO_FILE_UPLOAD] folder={folder_id} → {target} ({size} bytes, mime={mime}, memo_id={new_id})")
+        return {"ok": True, "id": new_id, "filePath": target, "fileName": filename,
+                "fileSize": size, "fileMime": mime}
+
+    def _memo_file_serve(self, params):
+        """메모 첨부 파일 다운로드/표시 (Range 지원).
+        쿼리: id (memo id) [&download=1] """
+        mid = params.get("id", [""])[0]
+        force_dl = params.get("download", ["0"])[0] == "1"
+        if not mid:
+            self.send_error(400, "id required"); return
+        row = db_exec("SELECT file_path, file_name, file_mime, file_size FROM memos WHERE id=?", (mid,), fetchone=True)
+        if not row or not row.get("file_path"):
+            self.send_error(404, "not a file memo"); return
+        full = os.path.abspath(row["file_path"])
+        if not full.startswith(os.path.abspath(MEMO_FILES_BASE)):
+            self.send_error(403, "forbidden"); return
+        if not os.path.isfile(full):
+            self.send_error(404, "file missing on disk"); return
+        try:
+            mime = row.get("file_mime") or "application/octet-stream"
+            size = os.path.getsize(full)
+            etag = f'"{int(os.path.getmtime(full))}-{size}"'
+            range_hdr = self.headers.get("Range", "")
+            start, end = 0, size - 1
+            is_range = False
+            if range_hdr and range_hdr.startswith("bytes="):
+                try:
+                    rng = range_hdr[6:].split("-", 1)
+                    s = rng[0].strip(); e = rng[1].strip() if len(rng) > 1 else ""
+                    if s:
+                        start = int(s)
+                        if e: end = int(e)
+                    elif e:
+                        n = int(e); start = max(0, size - n); end = size - 1
+                    start = max(0, min(start, size - 1))
+                    end = max(start, min(end, size - 1))
+                    is_range = True
+                except Exception:
+                    is_range = False
+            length = end - start + 1
+            if is_range:
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            else:
+                self.send_response(200)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(length))
+            self.send_header("ETag", etag)
+            if force_dl:
+                fname = row.get("file_name") or os.path.basename(full)
+                from urllib.parse import quote as _q
+                self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{_q(fname)}")
+            self.end_headers()
+            with open(full, "rb") as f:
+                f.seek(start)
+                remaining = length
+                while remaining > 0:
+                    chunk = f.read(min(65536, remaining))
+                    if not chunk: break
+                    try:
+                        self.wfile.write(chunk)
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
+                    remaining -= len(chunk)
+        except Exception as e:
+            log(f"[MEMO_FILE_SERVE] {full}: {e}")
+            try: self.send_error(500, str(e))
+            except Exception: pass
 
     def _folder_list(self):
         rows = db_exec("SELECT f.id, f.name, f.icon, f.sort_order, f.color, f.parent_id, f.created, (SELECT COUNT(*) FROM memos WHERE folder_id=f.id) as memo_count FROM memo_folders f ORDER BY sort_order, name", fetch=True)
@@ -4628,6 +5026,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         fid = body.get("id")
         now = datetime.now().isoformat()
         if fid:
+            # 디스크 폴더 mv를 위해 변경 전 경로를 미리 계산
+            old_disk = None
+            try:
+                if "name" in body or "parentId" in body:
+                    old_disk = self._memo_folder_disk_path(fid)
+            except Exception:
+                old_disk = None
             # Partial update: only update fields explicitly provided in body.
             updates = []
             params = []
@@ -4643,6 +5048,33 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             if updates:
                 params.append(fid)
                 db_exec(f"UPDATE memo_folders SET {', '.join(updates)} WHERE id=?", tuple(params))
+            # 이름/parent가 바뀌었으면 디스크 폴더 mv + 자식 메모들의 file_path도 갱신
+            if old_disk and ("name" in body or "parentId" in body):
+                try:
+                    new_disk = self._memo_folder_disk_path(fid)
+                    if old_disk != new_disk and os.path.isdir(old_disk) and os.path.abspath(old_disk).startswith(os.path.abspath(MEMO_FILES_BASE)):
+                        os.makedirs(os.path.dirname(new_disk), exist_ok=True)
+                        # 충돌 시 (existing) 자동 번호
+                        final_dst = new_disk
+                        if os.path.exists(final_dst):
+                            for i in range(2, 1000):
+                                cand = f"{new_disk} ({i})"
+                                if not os.path.exists(cand):
+                                    final_dst = cand; break
+                        shutil.move(old_disk, final_dst)
+                        # 영향받은 메모들의 file_path 일괄 갱신
+                        try:
+                            affected = db_exec("SELECT id, file_path FROM memos WHERE file_path LIKE ?", (old_disk + os.sep + "%",), fetch=True) or []
+                            for row in affected:
+                                old_fp = row.get("file_path") or ""
+                                if old_fp.startswith(old_disk + os.sep):
+                                    new_fp = final_dst + old_fp[len(old_disk):]
+                                    db_exec("UPDATE memos SET file_path=? WHERE id=?", (new_fp, row["id"]))
+                            log(f"[FOLDER_SAVE] mv {old_disk} → {final_dst}, {len(affected)} memos updated")
+                        except Exception as e:
+                            log(f"[FOLDER_SAVE] file_path 갱신 실패: {e}")
+                except Exception as e:
+                    log(f"[FOLDER_SAVE] 디스크 폴더 mv 실패 (non-fatal): {e}")
             return {"ok": True, "id": fid}
         else:
             name = body.get("name", "새 폴더")
@@ -4656,6 +5088,14 @@ class TmuxHandler(SimpleHTTPRequestHandler):
     def _folder_delete(self, body):
         fid = body.get("id", "")
         if fid:
+            # 디스크 폴더 정리 — 안의 첨부 파일들도 같이 사라지도록
+            try:
+                disk = self._memo_folder_disk_path(fid)
+                if disk and os.path.isdir(disk) and os.path.abspath(disk).startswith(os.path.abspath(MEMO_FILES_BASE)):
+                    shutil.rmtree(disk)
+                    log(f"[FOLDER_DELETE] disk removed: {disk}")
+            except Exception as e:
+                log(f"[FOLDER_DELETE] disk remove failed (non-fatal): {e}")
             db_exec("UPDATE memos SET folder_id=NULL WHERE folder_id=?", (fid,))
             db_exec("DELETE FROM memo_folders WHERE id=?", (fid,))
         return {"ok": True}
@@ -4678,6 +5118,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             norm = os.path.normpath(work_dir)
             if norm.startswith(SYNOLOGY_CONTAINER_ROOT + os.sep) and os.path.isdir(norm):
                 try:
+                    # 메타파일 읽기전용 잠금 풀어주기 — 안 풀면 rmtree 도중 Permission denied
+                    _proj_file_unlock_for_delete(norm)
                     shutil.rmtree(norm)
                     folder_removed = True
                     log(f"[PROJECT_DELETE] work_dir removed: {norm}")
@@ -4721,17 +5163,18 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             log(f"[PROJECT_RENAME_FOLDER] rename 실패: {old_wd} → {new_wd}: {e}")
             return {"ok": False, "error": str(e)}
         db_exec("UPDATE projects SET work_dir=? WHERE id=?", (new_wd, pid))
-        # project.json 내부의 workDir 필드도 갱신 (있으면)
+        # 메타파일 내부의 workDir 필드도 갱신 (있으면) — 새 이름 또는 레거시 둘 다 처리
         try:
-            pj_path = os.path.join(new_wd, "project.json")
-            if os.path.isfile(pj_path):
+            pj_path = _proj_file_path(new_wd)
+            if pj_path and os.path.isfile(pj_path):
+                try: os.chmod(pj_path, 0o644)
+                except Exception: pass
                 with open(pj_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 data["workDir"] = new_wd
-                with open(pj_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
+                _proj_file_write_locked(new_wd, json.dumps(data, ensure_ascii=False, indent=2))
         except Exception as e:
-            log(f"[PROJECT_RENAME_FOLDER] project.json 갱신 실패(무시): {e}")
+            log(f"[PROJECT_RENAME_FOLDER] 메타파일 갱신 실패(무시): {e}")
         log(f"[PROJECT_RENAME_FOLDER] {pid}: {old_wd} → {new_wd}")
         return {"ok": True, "workDir": new_wd, "oldWorkDir": old_wd}
 
@@ -5239,17 +5682,20 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         return {"ok": True}
 
     def _state_save(self, body):
-        """자동 저장 — workflowId 있으면 해당 프로젝트 갱신, 없으면 탭별 임시 슬롯
+        """자동 저장 — workflowId 있으면 해당 프로젝트 갱신, 또한 탭별 복구 슬롯도 항상 같이 갱신
+        (탭 이동/새로고침 시 어느 프로젝트를 보고 있었는지 복원하기 위함)
         (멀티 탭 분리: 각 탭이 sessionStorage tabId를 보내서 서로 안 섞임)"""
         now = datetime.now().isoformat()
         data = json.dumps(body, ensure_ascii=False)
         wf_id = body.get("workflowId")
         tab_id = body.get("tabId", "default")
+        saved_to = None
         if wf_id:
             existing = db_exec("SELECT id FROM projects WHERE id=?", (wf_id,), fetchone=True)
             if existing:
                 db_exec("UPDATE projects SET data=?, modified=? WHERE id=?", (data, now, wf_id))
-                return {"ok": True, "savedTo": wf_id}
+                saved_to = wf_id
+        # 복구 슬롯도 항상 갱신 (워크플로우 ID 포함된 상태 그대로 저장 → 탭 이동 시 복원)
         recovery_id = f"__current_{tab_id}__"
         existing = db_exec("SELECT id FROM projects WHERE id=?", (recovery_id,), fetchone=True)
         if existing:
@@ -5257,7 +5703,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         else:
             db_exec("INSERT INTO projects (id, name, data, created, modified) VALUES (?,?,?,?,?)",
                     (recovery_id, "__current__", data, now, now))
-        return {"ok": True, "savedTo": recovery_id}
+        return {"ok": True, "savedTo": saved_to or recovery_id, "recoverySlot": recovery_id}
 
     def _state_load(self, params=None):
         """탭별 복구 슬롯에서 상태 복원 (없으면 legacy __current__ fallback)"""

@@ -67,8 +67,9 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .chat-panel.render-mode .msg-bubble th,.chat-panel.render-mode .msg-bubble td{border:1px solid var(--border);padding:4px 8px}
 .chat-panel.render-mode .msg-bubble blockquote{border-left:3px solid var(--accent);padding-left:10px;margin:.5em 0;color:var(--text-dim)}
 .chat-panel.empty{flex:1;align-items:center;justify-content:center;color:var(--text-muted);font-size:.82em}
-.chat-header{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.82em;font-weight:600;display:flex;align-items:center;gap:8px;flex-shrink:0}
-.chat-header .ttl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-header{padding:6px 12px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);font-size:.82em;font-weight:600;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.chat-header .hd-top{display:flex;align-items:center;gap:8px;min-width:0}
+.chat-header .ttl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1.15em;font-weight:800;color:var(--accent);letter-spacing:.2px}
 .chat-header .x{cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px;font-size:14px}
 .chat-header .x:hover{background:var(--red);color:#fff}
 .chat-messages{flex:1;overflow-y:auto;padding:14px;min-height:0}
@@ -94,7 +95,37 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 .mode-badge.chat{background:rgba(33,150,243,.18);color:#7ecfff;border:1px solid rgba(33,150,243,.35)}
 .mode-badge.tool{background:rgba(245,158,11,.2);color:#ebcb8b;border:1px solid rgba(245,158,11,.4)}
 /* 패널 헤더 토글/툴 버튼 */
-.chat-header .tools{display:flex;gap:4px;align-items:center}
+/* 버튼 줄: 가로가 좁으면 줄바꿈 허용 → 모든 버튼이 한 번에 다 노출됨 */
+.chat-header .tools{display:flex;gap:3px;align-items:center;flex-wrap:wrap;row-gap:3px;max-width:100%;min-width:0}
+.chat-header .tools button,.chat-header .tools .toggle,.chat-header .tools .x{flex-shrink:0;white-space:nowrap}
+/* 패널 배경색 사용자 지정 — .chat-panel 에 data-bg 로 저장 */
+.chat-panel[data-bg]{background:var(--panel-bg,var(--bg-0))!important}
+/* 메시지 행 호버 시 이동 버튼 노출 — 말풍선 내부 모서리에 위치 (호버 영역 끊김 방지) */
+.msg{position:relative}
+.msg-bubble{position:relative}
+.msg .msg-send{position:absolute;top:4px;display:none;background:rgba(26,26,46,.88);color:#a3e635;border:1px solid var(--accent);padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;font-weight:800;line-height:1.2;z-index:5;box-shadow:1px 1px 0 #000}
+.msg.user .msg-bubble .msg-send{right:4px}
+.msg.assistant .msg-bubble .msg-send{right:4px}
+.msg:hover .msg-send{display:inline-block}
+.msg .msg-send:hover{background:var(--accent);color:#000}
+/* 메모 브라우저 팝오버 */
+#memo-browser{position:fixed;right:16px;top:96px;width:540px;max-height:calc(100vh - 120px);background:var(--bg-1);border:2px solid #F59E0B;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:9999;display:none;flex-direction:column;overflow:hidden}
+#memo-browser.show{display:flex}
+.mb-hd{padding:10px 14px;background:linear-gradient(to right,rgba(245,158,11,.22),rgba(245,158,11,.05));border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:.9em;font-weight:700;color:#ebcb8b}
+.mb-hd .x{margin-left:auto;cursor:pointer;padding:2px 8px;border-radius:4px;color:var(--text-muted);font-size:1em}
+.mb-hd .x:hover{background:var(--red);color:#fff}
+.mb-body{display:flex;flex:1;min-height:260px;overflow:hidden}
+.mb-list{flex:0 0 40%;border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-2)}
+.mb-list .folder-row,.mb-list .memo-row{padding:6px 10px;font-size:.78em;cursor:pointer;border-bottom:1px solid rgba(51,51,85,.3);display:flex;align-items:center;gap:5px}
+.mb-list .folder-row{color:#fde68a;font-weight:600;background:rgba(245,158,11,.06)}
+.mb-list .folder-row:hover,.mb-list .memo-row:hover{background:var(--bg-3)}
+.mb-list .memo-row{color:var(--text)}
+.mb-list .memo-row.active{background:var(--bg-4);border-left:3px solid #F59E0B}
+.mb-preview{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg-0)}
+.mb-prev-hd{padding:6px 10px;font-size:.78em;color:var(--text-dim);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.mb-prev-hd .ttl{flex:1;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mb-prev-body{flex:1;overflow-y:auto;padding:10px 14px;font-size:.78em;white-space:pre-wrap;word-break:break-word;font-family:var(--mono);color:var(--text);line-height:1.5}
+.mb-prev-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:.78em;padding:20px;text-align:center}
 .chat-header .tools .toggle{display:flex;align-items:center;gap:3px;font-size:.65em;color:var(--text-dim);cursor:pointer;padding:2px 6px;border-radius:3px;background:var(--bg-3);border:1px solid var(--border)}
 .chat-header .tools .toggle:hover{background:var(--bg-4)}
 .chat-header .tools .toggle.tool-mode{color:#ebcb8b;border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.1)}
@@ -105,11 +136,13 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 </style>
 </head>
 <body>
-<nav class="nav"><a href="/">캔버스</a><a href="/chat.html" class="active">채팅</a><a href="/index.html">컨트롤러</a></nav>
+<nav class="nav"><a href="/">캔버스</a><a href="/chat.html" class="active">채팅</a></nav>
 <div class="tb">
   <span class="lbl">CWD:</span>
   <input type="text" id="chat-cwd" placeholder="작업 디렉토리 (모든 패널 공통)" style="width:240px">
   <div class="sep"></div>
+  <button onclick="newStandaloneChat()" title="노드와 무관한 새 Claude 채팅 세션 시작 (claude --dangerously-skip-permissions)" style="background:rgba(139,92,246,.35);color:#fff;border-color:#7c3aed;font-weight:800">＋ 새 채팅</button>
+  <button onclick="openMemoBrowser(event)" title="캔버스의 메모/폴더 브라우즈 — 작은 팝업으로 내용 확인·복사" style="background:rgba(245,158,11,.25);color:#fde68a;border-color:#F59E0B">📝 메모</button>
   <button onclick="closeAllPanels()" title="모든 채팅 닫기">🗑 모두닫기</button>
   <div class="sep"></div>
   <span class="lbl" style="color:#ebcb8b">💬 채팅 즐겨찾기</span>
@@ -129,10 +162,28 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 <div class="chat-area">
   <div class="side" id="side-panel"></div>
-  <div class="chat-multi" id="chat-multi"><div class="chat-panel empty"><div class="empty-msg">← 좌측에서 노드 또는 분기를 선택하면 채팅 패널이 열립니다.<br><br>여러 채팅을 동시에 진행할 수 있어요 (가로 스크롤).</div></div></div>
+  <div class="chat-multi" id="chat-multi"><div class="chat-panel empty"><div class="empty-msg">
+    <button onclick="newStandaloneChat()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:2px solid #000;box-shadow:3px 3px 0 #000;padding:12px 24px;border-radius:8px;font-weight:800;font-size:1.05em;cursor:pointer;margin-bottom:16px">＋ 새 채팅 시작</button>
+    <div style="color:var(--text-muted)">또는 좌측에서 노드 / 저장된 대화를 선택하세요.<br><br>여러 채팅을 동시에 진행할 수 있어요 (가로 스크롤).</div>
+  </div></div></div>
 </div>
 <div id="chat-ctx" style="position:fixed;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.5);z-index:1000;min-width:160px;padding:4px 0;display:none">
   <div style="padding:7px 14px;font-size:12px;cursor:pointer;transition:.1s" onmouseover="this.style.background='var(--bg-4)'" onmouseout="this.style.background=''" onclick="chatFork()">🔀 대화 분기 생성</div>
+</div>
+<!-- 메모 브라우저 팝오버 — 채팅 위에 떠있는 작은 패널 -->
+<div id="memo-browser">
+  <div class="mb-hd">
+    📝 메모 브라우저
+    <span id="mb-crumb" style="color:var(--text-muted);font-weight:400;font-size:.85em"></span>
+    <button onclick="loadMemoBrowser()" title="새로고침" style="background:var(--bg-3);border:1px solid var(--border);color:var(--text);padding:2px 8px;border-radius:4px;cursor:pointer;font-size:.78em">↻</button>
+    <span class="x" onclick="closeMemoBrowser()" title="닫기">✕</span>
+  </div>
+  <div class="mb-body">
+    <div class="mb-list" id="mb-list"></div>
+    <div class="mb-preview" id="mb-preview">
+      <div class="mb-prev-empty">왼쪽에서 메모를 선택하세요.</div>
+    </div>
+  </div>
 </div>
 <script>
 const API=location.origin;
@@ -246,16 +297,14 @@ function setupPanelResize(panel,key){
   });
 }
 
-// 글자 크기
+// 글자 크기 — 기본 1.64em (이전 0.82em의 2배)
+const CHAT_FONT_DEFAULT=1.64;
 function panelFontSize(key,delta){
   const el=document.querySelector(`[data-msgs="${key}"]`);
   if(!el)return;
-  const cur=parseFloat(getComputedStyle(el).fontSize);
-  const base=parseFloat(el.style.fontSize)||(cur/16);
-  // stored as em string; if px, fallback to em base .82
-  let emNow=parseFloat((el.style.fontSize||'0.82em').replace('em',''));
-  if(!emNow||isNaN(emNow))emNow=0.82;
-  emNow=Math.max(.6,Math.min(1.6,emNow+delta*0.08));
+  let emNow=parseFloat((el.style.fontSize||(CHAT_FONT_DEFAULT+'em')).replace('em',''));
+  if(!emNow||isNaN(emNow))emNow=CHAT_FONT_DEFAULT;
+  emNow=Math.max(.6,Math.min(3.2,emNow+delta*0.12));
   el.style.fontSize=emNow+'em';
   localStorage.setItem(panelFontKey(key),String(emNow));
 }
@@ -273,14 +322,35 @@ async function ensureMarked(){
     document.head.appendChild(s);
   });
 }
+// 말풍선에 "→ 메시지 이동" 버튼이 항상 존재하도록 보장
+// (렌더 모드 토글이나 addMsgUI에서 bubble.innerHTML을 덮어쓸 때 버튼이 날아가는 현상 방지)
+function _ensureMsgSendBtn(bubble, key, role){
+  if(!bubble) return;
+  if(bubble.querySelector('.msg-send')) return;
+  const btn=document.createElement('button');
+  btn.className='msg-send';
+  btn.type='button';
+  btn.textContent='→';
+  btn.title='이 메시지를 다른 채팅 입력창에 보내기';
+  btn.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    openMsgSendPopover(key, role, '', btn);
+  });
+  bubble.appendChild(btn);
+}
+
 async function panelToggleRender(key){
   await ensureMarked();
   const panel=document.querySelector(`[data-panel-key="${key}"]`);
   if(!panel)return;
   const on=panel.classList.toggle('render-mode');
   localStorage.setItem(panelRenderKey(key),on?'1':'0');
-  // 기존 bubble들 렌더 or 원문 복구
-  panel.querySelectorAll('.msg-bubble').forEach(b=>{
+  // 기존 bubble들 렌더 or 원문 복구 + 이동 버튼 재주입
+  panel.querySelectorAll('.msg').forEach(m=>{
+    const b=m.querySelector('.msg-bubble');
+    if(!b) return;
+    // 이전에 innerHTML에 끼어있던 메시지 이동 버튼 제거 (dataset.raw 오염 방지)
+    b.querySelectorAll('.msg-send').forEach(x=>x.remove());
     if(on){
       const raw=b.dataset.raw||b.textContent;
       b.dataset.raw=raw;
@@ -288,7 +358,295 @@ async function panelToggleRender(key){
     } else {
       if(b.dataset.raw)b.textContent=b.dataset.raw;
     }
+    const role=m.classList.contains('user')?'user':'assistant';
+    _ensureMsgSendBtn(b, key, role);
   });
+}
+
+// ═══ 메모 브라우저 — 채팅 위에 떠있는 작은 팝업 뷰어 ═══
+let _mbCurrentFolderId=null, _mbAllFolders=[], _mbAllMemos=[], _mbSelectedMemoId=null;
+function openMemoBrowser(ev){
+  if(ev)ev.stopPropagation();
+  const el=document.getElementById('memo-browser');
+  const on=el.classList.contains('show');
+  if(on){closeMemoBrowser();return}
+  el.classList.add('show');
+  loadMemoBrowser();
+  // 바깥 클릭으로 닫기 (한 번만 바인딩)
+  setTimeout(()=>{
+    const onDocClick=(e)=>{
+      if(el.contains(e.target))return;
+      if(e.target.closest('button')&&/📝 메모/.test(e.target.textContent))return;
+      closeMemoBrowser();
+      document.removeEventListener('click',onDocClick);
+    };
+    document.addEventListener('click',onDocClick);
+    el._closeHandler=onDocClick;
+  },50);
+}
+function closeMemoBrowser(){
+  const el=document.getElementById('memo-browser');
+  el.classList.remove('show');
+  if(el._closeHandler){document.removeEventListener('click',el._closeHandler);el._closeHandler=null}
+}
+async function loadMemoBrowser(){
+  const [fr,mr]=await Promise.all([
+    api('GET','/api/folder/list'),
+    api('GET','/api/memo/list'),
+  ]);
+  _mbAllFolders=(fr.ok&&fr.folders)||[];
+  _mbAllMemos=(mr.ok&&mr.memos)||[];
+  renderMemoBrowserList();
+}
+function renderMemoBrowserList(){
+  const list=document.getElementById('mb-list');
+  const crumb=document.getElementById('mb-crumb');
+  const curId=_mbCurrentFolderId;
+  // 루트 → 루트 폴더들 + (folder_id IS NULL) 메모들
+  // 폴더 내부 → 부모로 뒤로가기 + 해당 폴더 자식 폴더 + 폴더 내 메모
+  let html='';
+  if(curId==null){
+    crumb.textContent='루트';
+    const rootFolders=_mbAllFolders.filter(f=>!f.parent_id);
+    rootFolders.forEach(f=>{
+      html+=`<div class="folder-row" onclick="_mbEnterFolder(${f.id})" title="폴더 열기">${f.icon||'📁'} ${escH(f.name)} <span style="margin-left:auto;font-size:.85em;color:var(--text-muted)">${f.memo_count||0}</span></div>`;
+    });
+    const rootMemos=_mbAllMemos.filter(m=>!m.folder_id && !m.file_path);
+    rootMemos.forEach(m=>{
+      html+=`<div class="memo-row${_mbSelectedMemoId==m.id?' active':''}" onclick="_mbOpenMemo(${m.id})">${m.pinned?'📌 ':'📝 '}${escH(m.name||'무제')}</div>`;
+    });
+    if(!rootFolders.length && !rootMemos.length){
+      html='<div style="padding:20px;color:var(--text-muted);font-size:.78em;text-align:center">메모/폴더가 없습니다</div>';
+    }
+  } else {
+    const cur=_mbAllFolders.find(f=>f.id==curId);
+    crumb.textContent= cur ? (cur.icon||'📁')+' '+cur.name : '폴더';
+    // 뒤로 가기
+    const parentId = cur ? (cur.parent_id||null) : null;
+    html+=`<div class="folder-row" onclick="_mbEnterFolder(${parentId===null?'null':parentId})" style="color:var(--text-dim)">↩ 상위로</div>`;
+    const childFolders=_mbAllFolders.filter(f=>f.parent_id==curId);
+    childFolders.forEach(f=>{
+      html+=`<div class="folder-row" onclick="_mbEnterFolder(${f.id})">${f.icon||'📁'} ${escH(f.name)} <span style="margin-left:auto;font-size:.85em;color:var(--text-muted)">${f.memo_count||0}</span></div>`;
+    });
+    const folderMemos=_mbAllMemos.filter(m=>m.folder_id==curId && !m.file_path);
+    folderMemos.forEach(m=>{
+      html+=`<div class="memo-row${_mbSelectedMemoId==m.id?' active':''}" onclick="_mbOpenMemo(${m.id})">${m.pinned?'📌 ':'📝 '}${escH(m.name||'무제')}</div>`;
+    });
+    if(childFolders.length===0 && folderMemos.length===0){
+      html+='<div style="padding:16px;color:var(--text-muted);font-size:.78em;text-align:center">빈 폴더</div>';
+    }
+  }
+  list.innerHTML=html;
+}
+function _mbEnterFolder(fid){
+  _mbCurrentFolderId = fid===null ? null : (fid==='null' ? null : parseInt(fid));
+  renderMemoBrowserList();
+}
+async function _mbOpenMemo(id){
+  _mbSelectedMemoId=id;
+  const prev=document.getElementById('mb-preview');
+  prev.innerHTML=`<div class="mb-prev-hd"><span class="ttl">로딩 중…</span></div><div class="mb-prev-body"></div>`;
+  const r=await api('GET','/api/memo/get?id='+encodeURIComponent(id));
+  if(!r.ok){prev.innerHTML=`<div class="mb-prev-empty">불러오기 실패: ${escH(r.error||'')}</div>`;return}
+  const m=r.memo||{};
+  const name=m.name||'무제';
+  const content=m.content||'';
+  prev.innerHTML=`
+    <div class="mb-prev-hd">
+      <span class="ttl">${escH(name)}</span>
+      <button onclick="_mbCopyCurrent()" title="내용 전체 복사" style="background:var(--accent);color:#000;border:none;padding:3px 10px;border-radius:3px;cursor:pointer;font-size:.78em;font-weight:700">📋 복사</button>
+      <button onclick="_mbSendToChat()" title="현재 열려있는 채팅 입력창에 붙여넣기" style="background:rgba(139,92,246,.7);color:#fff;border:none;padding:3px 10px;border-radius:3px;cursor:pointer;font-size:.78em;font-weight:700">📤 채팅에</button>
+    </div>
+    <div class="mb-prev-body" id="mb-prev-content"></div>`;
+  document.getElementById('mb-prev-content').textContent=content;
+  renderMemoBrowserList(); // active 상태 반영
+}
+function _mbGetCurrentContent(){
+  const body=document.getElementById('mb-prev-content');
+  return body ? (body.textContent||'') : '';
+}
+function _mbCopyCurrent(){
+  const text=_mbGetCurrentContent();
+  if(!text)return;
+  try{navigator.clipboard.writeText(text).then(()=>_mbFlashToast('✅ 복사됨'))}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    _mbFlashToast('✅ 복사됨');
+  }
+}
+function _mbSendToChat(){
+  const text=_mbGetCurrentContent();
+  if(!text)return;
+  // 현재 열려있는 패널 목록 → 하나면 바로 삽입, 여러 개면 선택 팝오버
+  const keys=[...panels.keys()];
+  if(keys.length===0)return alert('열려있는 채팅 패널이 없습니다');
+  if(keys.length===1){
+    const k=keys[0];
+    _mbInsertInto(k, text);
+    return;
+  }
+  // 선택 팝오버 — 기존 panelListForSendPopover 재사용
+  const pop=panelListForSendPopover('__mb__', text);
+  if(!pop)return;
+  const btn=event?.currentTarget;
+  if(btn){
+    const r=btn.getBoundingClientRect();
+    pop.style.left=Math.min(window.innerWidth-240,r.left)+'px';
+    pop.style.top=(r.bottom+4)+'px';
+  }
+}
+function _mbInsertInto(key, text){
+  const ta=document.querySelector(`[data-input="${key}"]`);
+  if(!ta)return alert('채팅 입력창을 찾을 수 없음');
+  const cur=(ta.value||'').trim();
+  ta.value=cur?(cur+'\n\n'+text):text;
+  ta.focus();ta.selectionStart=ta.selectionEnd=ta.value.length;
+  _mbFlashToast('✅ 채팅 입력창에 삽입');
+  closeMemoBrowser();
+}
+function _mbFlashToast(msg){
+  const t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);color:#fff;padding:10px 18px;border-radius:6px;z-index:99999;font-size:.9em;font-weight:700';
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),1400);
+}
+
+// ═══ 독립 채팅 (노드 없이 바로 claude --dangerously-skip-permissions) ═══
+function newStandaloneChat(){
+  // nodeId 비우고 nodeName만 태그 — 서버는 convId 없으면 새로 생성, work_dir 폴백 처리
+  const name='독립 채팅 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  openChat(null,'','🆓 '+name,'agent');
+}
+
+// ═══ 패널 배경색 ═══
+function panelBgKey(key){return 'chat_panel_bg_'+key}
+function loadPanelBg(key){return localStorage.getItem(panelBgKey(key))||''}
+function savePanelBg(key,color){if(color)localStorage.setItem(panelBgKey(key),color);else localStorage.removeItem(panelBgKey(key))}
+function applyPanelBg(key,color){
+  const panel=document.querySelector(`[data-panel-key="${key}"]`);
+  if(!panel)return;
+  if(color){
+    panel.style.setProperty('--panel-bg',color);
+    panel.setAttribute('data-bg','1');
+  } else {
+    panel.style.removeProperty('--panel-bg');
+    panel.removeAttribute('data-bg');
+  }
+}
+function panelPickBgColor(key){
+  // 프리셋 + color picker 팝오버
+  const panel=document.querySelector(`[data-panel-key="${key}"]`);
+  if(!panel)return;
+  const presets=['','#0d0d14','#1a1a2e','#141e2e','#1e2e1a','#2e1a1a','#2a1e2e','#1e2a2e','#2a2a2a','#f5f5f5','#fff7e6'];
+  // 간단 prompt형 대신 즉석 picker 팝오버
+  const old=document.getElementById('bg-pop');if(old)old.remove();
+  const pop=document.createElement('div');
+  pop.id='bg-pop';
+  pop.style.cssText='position:fixed;z-index:10000;background:var(--bg-1);border:2px solid var(--accent);border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.6);padding:8px;display:flex;flex-wrap:wrap;gap:4px;width:200px';
+  const r=panel.getBoundingClientRect();
+  pop.style.left=Math.min(window.innerWidth-220,r.left+40)+'px';
+  pop.style.top=(r.top+44)+'px';
+  presets.forEach(c=>{
+    const sw=document.createElement('div');
+    sw.style.cssText=`width:28px;height:28px;border-radius:4px;border:1px solid #555;cursor:pointer;${c?('background:'+c):'background:repeating-linear-gradient(45deg,#555 0 5px,#222 5px 10px)'}`;
+    sw.title=c||'기본 (초기화)';
+    sw.onclick=()=>{applyPanelBg(key,c);savePanelBg(key,c);pop.remove()};
+    pop.appendChild(sw);
+  });
+  const pick=document.createElement('input');
+  pick.type='color';pick.value=loadPanelBg(key)||'#1a1a2e';
+  pick.style.cssText='width:40px;height:28px;border:1px solid #555;cursor:pointer;background:transparent';
+  pick.oninput=()=>{applyPanelBg(key,pick.value);savePanelBg(key,pick.value)};
+  pop.appendChild(pick);
+  const close=document.createElement('button');
+  close.textContent='✕';
+  close.style.cssText='margin-left:auto;background:none;border:none;color:#aaa;cursor:pointer;font-size:12px';
+  close.onclick=()=>pop.remove();
+  pop.appendChild(close);
+  document.body.appendChild(pop);
+  setTimeout(()=>{
+    const out=(e)=>{if(pop.contains(e.target))return;pop.remove();document.removeEventListener('click',out)};
+    document.addEventListener('click',out);
+  },0);
+}
+
+// ═══ Ctrl+휠 텍스트 크기 (메시지 영역) ═══
+function setupPanelCtrlWheel(key){
+  const el=document.querySelector(`[data-msgs="${key}"]`);
+  if(!el)return;
+  el.addEventListener('wheel',(e)=>{
+    if(!e.ctrlKey)return;
+    e.preventDefault();e.stopPropagation();
+    panelFontSize(key, e.deltaY<0?1:-1);
+  },{passive:false});
+}
+
+// ═══ 메시지 → 다른 패널 입력창으로 이동 ═══
+function panelListForSendPopover(sourceKey,content){
+  const old=document.getElementById('msg-send-pop');if(old)old.remove();
+  const pop=document.createElement('div');
+  pop.id='msg-send-pop';
+  pop.style.cssText='position:fixed;z-index:10001;background:var(--bg-1);border:2px solid var(--accent);border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,.6);min-width:220px;max-height:320px;overflow-y:auto;padding:6px 0';
+  const items=[];
+  panels.forEach((st,k)=>{
+    if(k===sourceKey)return; // 자기 자신 제외
+    items.push({key:k,name:st.nodeName||'대화'});
+  });
+  if(items.length===0){
+    pop.innerHTML='<div style="padding:14px 18px;color:var(--text-muted);font-size:.82em;text-align:center">보낼 다른 채팅 패널이 없습니다.<br>먼저 다른 채팅을 여세요.</div>';
+  } else {
+    items.forEach(it=>{
+      const row=document.createElement('div');
+      row.style.cssText='padding:7px 14px;font-size:.82em;cursor:pointer;border-bottom:1px solid rgba(51,51,85,.3)';
+      row.onmouseover=()=>row.style.background='var(--bg-3)';
+      row.onmouseout=()=>row.style.background='';
+      row.onclick=()=>{
+        const ta=document.querySelector(`[data-input="${it.key}"]`);
+        if(!ta)return pop.remove();
+        const cur=(ta.value||'').trim();
+        ta.value=cur?(cur+'\n\n'+content):content;
+        ta.focus();
+        ta.selectionStart=ta.selectionEnd=ta.value.length;
+        // 수신 패널로 스크롤
+        const p=document.querySelector(`[data-panel-key="${it.key}"]`);
+        if(p)p.scrollIntoView({behavior:'smooth',inline:'center'});
+        pop.remove();
+      };
+      row.textContent='→ '+it.name;
+      pop.appendChild(row);
+    });
+  }
+  document.body.appendChild(pop);
+  return pop;
+}
+function openMsgSendPopover(sourceKey,role,contentEsc,btn){
+  // 버튼은 말풍선 내부에 위치 — 부모 말풍선의 data-raw 사용
+  const b=btn.closest('.msg-bubble');
+  const content=b?(b.dataset.raw||b.textContent.replace('→','').trim()):'';
+  const pop=panelListForSendPopover(sourceKey,content);
+  if(!pop)return;
+  const r=btn.getBoundingClientRect();
+  pop.style.left=Math.min(window.innerWidth-240,r.left)+'px';
+  pop.style.top=(r.bottom+4)+'px';
+  setTimeout(()=>{
+    const out=(e)=>{if(pop.contains(e.target)||btn.contains(e.target))return;pop.remove();document.removeEventListener('click',out)};
+    document.addEventListener('click',out);
+  },0);
+}
+// 전체 대화를 다른 패널로
+function panelSendAllTo(sourceKey,btn){
+  const all=_panelAllText(sourceKey);
+  if(!all)return alert('보낼 내용이 없습니다');
+  const pop=panelListForSendPopover(sourceKey,all);
+  if(!pop)return;
+  const r=btn.getBoundingClientRect();
+  pop.style.left=Math.min(window.innerWidth-240,r.left)+'px';
+  pop.style.top=(r.bottom+4)+'px';
+  setTimeout(()=>{
+    const out=(e)=>{if(pop.contains(e.target)||btn.contains(e.target))return;pop.remove();document.removeEventListener('click',out)};
+    document.addEventListener('click',out);
+  },0);
 }
 
 // 대화 전체 텍스트
@@ -389,19 +747,40 @@ async function renderSidePanel(){
   const proj=loadProjectInfo();
   // 프로젝트 헤더 — 현재 어느 프로젝트의 채팅인지 명시
   let html='';
+  // ── 최상단 항상: 새 채팅 시작 버튼 ──
+  const newChatBtn=`<div style="padding:10px 10px 8px;border-bottom:1px solid var(--border);background:var(--bg-2)">
+    <button onclick="newStandaloneChat()" style="width:100%;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:2px solid #000;box-shadow:2px 2px 0 #000;padding:8px 10px;border-radius:6px;font-weight:800;font-size:.85em;cursor:pointer" title="노드와 무관한 새 Claude 채팅 세션">＋ 새 채팅</button>
+  </div>`;
+  html+=newChatBtn;
   if(proj.id){
     html+=`<div class="side-hd" style="background:rgba(76,175,80,.1);color:#a3e635;border-bottom-color:rgba(76,175,80,.3)" title="이 탭에 열린 프로젝트의 노드들만 표시">📂 ${escH(proj.name||'무제')}</div>`;
   }else if(nodesList.length>0){
     html+=`<div class="side-hd" style="background:rgba(168,85,247,.1);color:#c4b5fd;border-bottom-color:rgba(168,85,247,.3)" title="저장 안 된 빈 캔버스 — 노드만 표시">📄 빈 캔버스 (저장 안 됨)</div>`;
   }else{
-    panel.innerHTML=`<div class="side-hd">노드</div>
-      <div style="padding:20px 12px;color:var(--text-muted);font-size:.78em;line-height:1.5;text-align:center">
-        ⚠ 캔버스가 비어있거나<br>이 탭에 프로젝트가 안 열렸습니다.<br><br>
-        <a href="/" style="color:#7ecfff;text-decoration:underline">캔버스로 가서 프로젝트 열기</a>
+    // 프로젝트 없음 — 그래도 새 채팅은 가능
+    html+=`<div class="side-hd">노드</div>
+      <div style="padding:14px 12px;color:var(--text-muted);font-size:.78em;line-height:1.5;text-align:center">
+        ⚠ 프로젝트가 열려 있지 않아<br>노드 목록은 비어 있습니다.<br><br>
+        위의 <b style="color:#c4b5fd">＋ 새 채팅</b> 으로 바로 시작하거나<br>
+        <a href="/" style="color:#7ecfff;text-decoration:underline">캔버스</a>에서 프로젝트를 여세요.
       </div>`;
+    panel.innerHTML=html;
     document.getElementById('panel-count').textContent=panels.size;
     return;
   }
+  // ── 독립 채팅 (노드 없이 시작된 대화) 섹션 — 최근순 ──
+  try{
+    const sr=await api('GET','/api/conv/list?standalone=1');
+    if(sr.ok && sr.conversations && sr.conversations.length){
+      html+=`<div class="side-hd" style="background:rgba(139,92,246,.12);color:#c4b5fd;border-bottom-color:rgba(139,92,246,.35)" title="노드와 무관한 독립 채팅 세션 목록">🆓 독립 채팅 <span style="color:var(--text-muted);font-weight:400;font-size:.85em">(${sr.conversations.length})</span></div>`;
+      for(const c of sr.conversations){
+        const isOpen=panels.has(c.id);
+        const title=escH(c.node_name||c.title||'대화');
+        html+=`<div class="conv-item${isOpen?' active':''}" style="padding-left:14px" onclick="openChat('${c.id}','','${title}','agent')" title="${new Date(c.created).toLocaleString('ko-KR')}">🆓 ${title} <span class="nl-badge">${c.msg_count}</span></div>`;
+      }
+    }
+  }catch(e){console.warn('[SIDE] standalone list 실패',e)}
+
   html+='<div class="side-hd">노드 + 분기</div>';
   for(const n of nodesList){
     const t=TYPES[n.type]||TYPES.agent;
@@ -447,26 +826,30 @@ async function openChat(convId,nodeId,nodeName,nodeType){
   const t=TYPES[nodeType]||TYPES.agent;
   panel.innerHTML=`
     <div class="chat-header">
-      <span style="font-size:1.1em">${t.icon}</span>
-      <span class="ttl">${escH(nodeName)}${isNew?' <span style="color:var(--text-muted);font-size:.85em">(새 대화)</span>':''}</span>
+      <div class="hd-top">
+        <span style="font-size:1.3em;flex-shrink:0">${t.icon}</span>
+        <span class="ttl" title="${escH(nodeName)}">${escH(nodeName)}${isNew?' <span style="color:var(--text-muted);font-size:.75em;font-weight:500">(새 대화)</span>':''}</span>
+        <span class="x" onclick="closePanel('${key}')" title="닫기" style="cursor:pointer;color:var(--text-muted);padding:2px 8px;border-radius:4px;font-size:1em;flex-shrink:0">✕</span>
+      </div>
       <div class="tools">
         <label class="toggle ${state.chatOnly?'':'tool-mode'}" data-toggle="${key}" title="대화전용 = 도구 안 씀 (빠름) / 툴사용 = 파일·웹 등 사용 가능 (느림)">
           <input type="checkbox" ${state.chatOnly?'':'checked'} onchange="togglePanelMode('${key}',!this.checked)" style="cursor:pointer">
           <span data-mode-label="${key}">${state.chatOnly?'💬 대화전용':'🔧 툴사용'}</span>
         </label>
-        <button onclick="panelFontSize('${key}',-1)" title="글자 축소">A-</button>
-        <button onclick="panelFontSize('${key}',1)" title="글자 확대">A+</button>
+        <button onclick="panelFontSize('${key}',-1)" title="글자 축소 (또는 Ctrl+휠↓)">A-</button>
+        <button onclick="panelFontSize('${key}',1)" title="글자 확대 (또는 Ctrl+휠↑)">A+</button>
         <button onclick="panelToggleRender('${key}')" title="마크다운 렌더 on/off" data-btn="render-${key}">🖋 렌더</button>
+        <button onclick="panelPickBgColor('${key}')" title="패널 배경색 변경">🎨 배경</button>
+        <button onclick="panelSendAllTo('${key}',this)" title="대화 전체를 다른 채팅 입력창에 보내기">📤 보내기</button>
         <button onclick="panelOpenHtmlTab('${key}')" title="전체 대화를 HTML 페이지로 열기">📄 HTML</button>
         <button onclick="panelOpenStandaloneHtml('${key}')" title="마지막 어시스턴트 응답 내 단독 HTML 블록만 새 탭으로 렌더" style="color:#c4b5fd">🌐 단독HTML</button>
         <button onclick="panelDownloadStandaloneHtml('${key}')" title="마지막 응답 내 단독 HTML 블록을 .html 파일로 다운로드" style="color:#c4b5fd">⬇ HTML</button>
         <button onclick="panelCopyAll('${key}')" title="대화 전체 복사">📋 복사</button>
         <button onclick="addChatToFav('${key}')" title="이 대화를 즐겨찾기에 저장 (다시 열어 이어가기)">⭐ 즐찾</button>
         <button onclick="exportChatToMemo('${key}')" title="이 대화 전체를 메모로 저장">📝 메모</button>
-        <span class="x" onclick="closePanel('${key}')" title="닫기" style="cursor:pointer;color:var(--text-muted);padding:2px 6px;border-radius:4px">✕</span>
       </div>
     </div>
-    <div class="chat-messages" data-msgs="${key}" style="font-size:${loadPanelFontSize(key)||.82}em"></div>
+    <div class="chat-messages" data-msgs="${key}" style="font-size:${loadPanelFontSize(key)||CHAT_FONT_DEFAULT}em"></div>
     <div class="chat-input-bar">
       <textarea data-input="${key}" placeholder="메시지... (Enter=전송, Shift+Enter=줄바꿈)" onkeydown="if(event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey){event.preventDefault();sendChat('${key}')}"></textarea>
       <button data-send="${key}" onclick="sendChat('${key}')">전송</button>
@@ -475,6 +858,13 @@ async function openChat(convId,nodeId,nodeName,nodeType){
   multi.appendChild(panel);
   // 리사이즈 핸들 이벤트
   setupPanelResize(panel, key);
+  // Ctrl+휠 → 텍스트 크기
+  setupPanelCtrlWheel(key);
+  // 저장된 패널 배경색 복원
+  const savedBg=loadPanelBg(key);
+  if(savedBg)applyPanelBg(key,savedBg);
+  // 렌더 모드 기본 강제 ON — 새 패널은 항상 렌더로 시작 (세션 중 🖋 렌더 버튼으로 임시 토글 가능)
+  setTimeout(()=>{if(!panel.classList.contains('render-mode'))panelToggleRender(key)},0);
 
   // 메시지 로드 + 폴링 재개 판단
   if(convId){
@@ -545,14 +935,17 @@ function addMsgUI(key,role,content,ts,label,chatOnlyFlag){
     modeBadge=`<span class="mode-badge ${isChat?'chat':'tool'}" title="${isChat?'대화전용 모드 (도구 사용 안 함)':'툴사용 모드 (파일/웹/Bash 등 가능)'}">${isChat?'💬':'🔧'}</span>`;
   }
   const rawAttr=content.replace(/"/g,'&quot;');
+  // 말풍선 — 이동 버튼은 innerHTML 에 넣지 않고 렌더 후 JS 로 주입 (렌더 모드에서 살아남게)
   d.innerHTML=`<div class="msg-label">${label||role.toUpperCase()}${modeBadge}</div><div class="msg-bubble" data-raw="${rawAttr}">${escH(content)}</div><div class="msg-time">${time}</div>`;
   el.appendChild(d);el.scrollTop=el.scrollHeight;
+  const b=d.querySelector('.msg-bubble');
   // 패널이 렌더 모드라면 새 메시지도 즉시 마크다운 렌더
   const panel=el.closest('.chat-panel');
   if(panel&&panel.classList.contains('render-mode')&&window.marked){
-    const b=d.querySelector('.msg-bubble');
     try{b.innerHTML=window.marked.parse(content)}catch(e){}
   }
+  // → 메시지 이동 버튼 (렌더 여부와 무관하게 항상 주입)
+  _ensureMsgSendBtn(b, key, role);
 }
 
 function showTyping(key){
