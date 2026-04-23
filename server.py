@@ -2005,6 +2005,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/doc/versions": self._json(self._doc_versions(params))
         elif p == "/api/project/files": self._json(self._project_files(params))
         elif p == "/api/project/tree": self._json(self._project_tree(params))
+        elif p == "/api/fs/browse": self._json(self._fs_browse(params))
         elif p == "/api/project/file":
             self._project_file_serve(params)
             return
@@ -2151,6 +2152,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/copy-files": self._project_copy_files,
             "/api/project/move-files": self._project_move_files,
             "/api/project/move-within": self._project_move_within,
+            "/api/project/rename": self._project_rename,
             "/api/project/create-empty": self._project_create_empty,
             "/api/fs/mkdir": self._fs_mkdir,
             "/api/doc/delete": self._doc_delete,
@@ -3814,12 +3816,49 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         tree = walk(root, '', 0)
         return {'ok': True, 'tree': tree, 'root': root, 'counts': count, 'maxDepth': max_depth}
 
-    # ═══ 같은 프로젝트 내부 파일/폴더 이동 — 트리뷰 드래그 대상 ═══
+    # ═══ /synology 하위 폴더 브라우저 — 노드 workDir 지정용 클릭 탐색 ═══
+    def _fs_browse(self, params):
+        """현재 경로 바로 아래 1단계(폴더만)를 반환.
+        안전 가드: /synology 밖 경로 요청 차단."""
+        path = params.get("path", ["/synology"])[0] or "/synology"
+        # 상대경로 차단 + 정규화
+        abs_p = os.path.abspath(path)
+        safe_root = os.path.abspath(SYNOLOGY_CONTAINER_ROOT)
+        if not (abs_p == safe_root or abs_p.startswith(safe_root + os.sep)):
+            return {"ok": False, "error": f"{safe_root} 밖 경로 접근 불가"}
+        if not os.path.isdir(abs_p):
+            return {"ok": False, "error": "폴더 없음"}
+        HIDDEN_DIRS = {'.versions','.trash-doc','_dl_tmp','.locks','.trash','_temp'}
+        folders = []
+        try:
+            for name in sorted(os.listdir(abs_p), key=lambda s: s.lower()):
+                if name.startswith('.'): continue
+                if name in HIDDEN_DIRS: continue
+                full = os.path.join(abs_p, name)
+                if os.path.isdir(full):
+                    # 하위 폴더 개수(빈 폴더 표시용)
+                    try:
+                        child_cnt = sum(1 for x in os.listdir(full) if not x.startswith('.') and os.path.isdir(os.path.join(full,x)))
+                    except Exception:
+                        child_cnt = 0
+                    folders.append({"name": name, "path": full, "childFolders": child_cnt})
+        except PermissionError as e:
+            return {"ok": False, "error": f"권한 없음: {e}"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        # 부모 경로 (상위로 버튼용)
+        parent = None
+        if abs_p != safe_root:
+            parent = os.path.dirname(abs_p)
+            if not parent.startswith(safe_root): parent = safe_root
+        return {"ok": True, "path": abs_p, "parent": parent, "root": safe_root, "folders": folders}
+
+    # ═══ 같은 프로젝트 내부 파일/폴더 이동 또는 복사 — 트리뷰 드래그 대상 ═══
     def _project_move_within(self, body):
         pid = (body.get("projectId") or "").strip()
         src_rel = (body.get("src") or "").strip().replace("\\","/").strip("/")
-        # dst 는 '대상 폴더' 의 상대경로 — 파일명은 src 에서 유지
         dst_rel = (body.get("dst") or "").strip().replace("\\","/").strip("/")
+        copy_mode = bool(body.get("copy"))
         if not pid or not src_rel:
             return {"ok": False, "error": "projectId, src 필요"}
         row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
@@ -3829,34 +3868,86 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         safe_root = os.path.abspath(SYNOLOGY_CONTAINER_ROOT)
         src_abs = os.path.abspath(os.path.join(root, src_rel))
         dst_parent_abs = os.path.abspath(os.path.join(root, dst_rel)) if dst_rel else root
-        # 경로 이탈 방지
         if not src_abs.startswith(root) or not dst_parent_abs.startswith(root):
             return {"ok": False, "error": "경로 이탈"}
         if not src_abs.startswith(safe_root) or not dst_parent_abs.startswith(safe_root):
             return {"ok": False, "error": "안전 가드"}
         if not os.path.exists(src_abs):
             return {"ok": False, "error": "원본 없음"}
+        # 대상 폴더가 없으면 자동 생성 (휴지통 .trash 같은 숨김 폴더 포함)
         if not os.path.isdir(dst_parent_abs):
-            return {"ok": False, "error": "대상 폴더 없음"}
-        # 자기 자신 하위로 이동하는 것 방지 (폴더일 때)
+            try:
+                os.makedirs(dst_parent_abs, exist_ok=True)
+                log(f"[PROJECT_MOVE_WITHIN] 대상 폴더 자동 생성: {dst_parent_abs}")
+            except Exception as e:
+                return {"ok": False, "error": f"대상 폴더 생성 실패: {e}"}
+            if not os.path.isdir(dst_parent_abs):
+                return {"ok": False, "error": "대상 폴더 없음 (생성도 실패)"}
         if os.path.isdir(src_abs) and dst_parent_abs.startswith(src_abs + os.sep):
-            return {"ok": False, "error": "자기 자신의 하위로 이동 불가"}
+            return {"ok": False, "error": "자기 자신의 하위로 이동/복사 불가"}
         name = os.path.basename(src_abs)
         dst_abs = os.path.join(dst_parent_abs, name)
         if os.path.exists(dst_abs):
-            # 이름 충돌 — 자동 suffix
             stem, ext = os.path.splitext(name)
             for i in range(2, 1000):
                 cand = os.path.join(dst_parent_abs, f"{stem} ({i}){ext}")
                 if not os.path.exists(cand):
                     dst_abs = cand; break
         try:
-            # gils-flowdesk.json 은 잠금 파일이라 이동 전 해제
             if os.path.basename(src_abs) in (PROJECT_FILE_NAME, PROJECT_FILE_LEGACY):
                 try: os.chmod(src_abs, 0o644)
                 except Exception: pass
-            shutil.move(src_abs, dst_abs)
-            log(f"[PROJECT_MOVE_WITHIN] {pid}: {src_rel} → {dst_abs}")
+            if copy_mode:
+                if os.path.isdir(src_abs):
+                    shutil.copytree(src_abs, dst_abs)
+                else:
+                    shutil.copy2(src_abs, dst_abs)
+                # 원본이 잠금 파일이었으면 복원
+                if os.path.basename(src_abs) in (PROJECT_FILE_NAME, PROJECT_FILE_LEGACY):
+                    try: os.chmod(src_abs, 0o444)
+                    except Exception: pass
+                log(f"[PROJECT_COPY] {pid}: {src_rel} → {dst_abs}")
+            else:
+                shutil.move(src_abs, dst_abs)
+                log(f"[PROJECT_MOVE_WITHIN] {pid}: {src_rel} → {dst_abs}")
+            return {"ok": True, "newPath": os.path.relpath(dst_abs, root).replace("\\","/"), "copied": copy_mode}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ═══ 같은 부모 폴더 안에서 이름만 변경 (파일/폴더 공용) ═══
+    def _project_rename(self, body):
+        pid = (body.get("projectId") or "").strip()
+        src_rel = (body.get("path") or body.get("src") or "").strip().replace("\\","/").strip("/")
+        new_name = (body.get("newName") or "").strip()
+        if not pid or not src_rel or not new_name:
+            return {"ok": False, "error": "projectId, path, newName 필수"}
+        if "/" in new_name or "\\" in new_name or new_name in (".", ".."):
+            return {"ok": False, "error": "이름에 / \\ . .. 사용 불가"}
+        row = db_exec("SELECT work_dir FROM projects WHERE id=?", (pid,), fetchone=True)
+        if not row or not row.get("work_dir"):
+            return {"ok": False, "error": "프로젝트 미저장"}
+        root = os.path.abspath(row["work_dir"])
+        safe_root = os.path.abspath(SYNOLOGY_CONTAINER_ROOT)
+        src_abs = os.path.abspath(os.path.join(root, src_rel))
+        dst_abs = os.path.abspath(os.path.join(os.path.dirname(src_abs), new_name))
+        if not src_abs.startswith(root) or not dst_abs.startswith(root):
+            return {"ok": False, "error": "경로 이탈"}
+        if not src_abs.startswith(safe_root):
+            return {"ok": False, "error": "안전 가드"}
+        if not os.path.exists(src_abs):
+            return {"ok": False, "error": "원본 없음"}
+        if os.path.exists(dst_abs) and dst_abs != src_abs:
+            return {"ok": False, "error": "같은 이름의 파일/폴더가 이미 있음"}
+        try:
+            if os.path.basename(src_abs) in (PROJECT_FILE_NAME, PROJECT_FILE_LEGACY):
+                try: os.chmod(src_abs, 0o644)
+                except Exception: pass
+            os.rename(src_abs, dst_abs)
+            # 새 이름이 메타파일이면 잠금
+            if os.path.basename(dst_abs) in (PROJECT_FILE_NAME,):
+                try: os.chmod(dst_abs, 0o444)
+                except Exception: pass
+            log(f"[PROJECT_RENAME] {pid}: {src_rel} → {new_name}")
             return {"ok": True, "newPath": os.path.relpath(dst_abs, root).replace("\\","/")}
         except Exception as e:
             return {"ok": False, "error": str(e)}

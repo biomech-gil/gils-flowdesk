@@ -210,7 +210,10 @@ function loadProjectInfo(){const s=loadCanvasState();return s?{id:s.workflowId,n
 // 열린 패널 정보 저장 (새로고침/이동 후 복원용)
 function savePanelList(){
   const arr=[];
-  panels.forEach(p=>arr.push({convId:p.convId,nodeId:p.nodeId,nodeName:p.nodeName}));
+  panels.forEach(p=>arr.push({
+    convId:p.convId, nodeId:p.nodeId, nodeName:p.nodeName,
+    projectId: p.projectId||''   // 패널이 속한 프로젝트 id (없으면 독립 채팅)
+  }));
   try{localStorage.setItem(LS_PANELS,JSON.stringify(arr))}catch(e){}
 }
 function loadPanelList(){
@@ -813,7 +816,11 @@ async function openChat(convId,nodeId,nodeName,nodeType){
 
   // chatOnly 기본 = false (툴사용 — 파일/웹/Bash 가능), localStorage에 패널별 저장된 값 우선
   const savedMode=loadPanelMode(convId);
-  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew,chatOnly:savedMode!==null?savedMode:false};
+  // 이 패널이 속한 프로젝트 id — 노드 기반이면 현재 캔버스의 projectId, 독립 채팅은 빈 문자열
+  const _projNow=(typeof loadProjectInfo==='function')?loadProjectInfo():{id:'',name:''};
+  const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew,
+    projectId: nodeId ? (_projNow.id||'') : '',
+    chatOnly:savedMode!==null?savedMode:false};
   panels.set(key,state);
 
   const multi=document.getElementById('chat-multi');
@@ -1195,8 +1202,13 @@ window.addEventListener('beforeunload',()=>{
     }
   }catch(e){}
   // 2) 이전에 열려있던 패널들 복원 (응답 대기 중이었으면 폴링 재개)
+  //    단, 현재 열린 프로젝트와 다른 프로젝트의 노드 기반 패널은 복원하지 않음
+  //    (독립 채팅 — projectId 비어있으면 항상 복원)
   const saved=loadPanelList();
+  const _curProj=(typeof loadProjectInfo==='function')?loadProjectInfo():{id:''};
+  const curPid=_curProj.id||'';
   for(const p of saved){
+    if(p.nodeId && p.projectId && p.projectId!==curPid) continue;   // 다른 프로젝트 패널 스킵
     if(!panels.has(p.convId)){
       await openChat(p.convId,p.nodeId,p.nodeName);
     }
@@ -1205,6 +1217,55 @@ window.addEventListener('beforeunload',()=>{
 
 // 주기적 노드 목록 갱신
 setInterval(()=>renderSidePanel(),10000);
+
+// ═══ 프로젝트 전환 감지 — 캔버스에서 다른 프로젝트 열고 챗탭으로 돌아오면 이전 프로젝트 패널 자동 닫기 ═══
+let _lastSeenProjectId = (typeof loadProjectInfo==='function') ? (loadProjectInfo().id||'') : '';
+function _detectProjectSwitch(){
+  const cur=(typeof loadProjectInfo==='function') ? (loadProjectInfo().id||'') : '';
+  if(cur === _lastSeenProjectId) return;
+  const prev = _lastSeenProjectId;
+  _lastSeenProjectId = cur;
+  // 이전 프로젝트 소속 노드 기반 패널들 모두 닫기 (독립 채팅은 유지)
+  const toClose = [];
+  panels.forEach((st, key)=>{
+    if(st.nodeId && st.projectId && st.projectId !== cur){
+      toClose.push(key);
+    }
+  });
+  if(toClose.length){
+    console.log(`[PROJ_SWITCH] ${prev||'(없음)'} → ${cur||'(없음)'} · 이전 프로젝트 패널 ${toClose.length}개 자동 닫기`);
+    toClose.forEach(k=>{
+      const state=panels.get(k);
+      if(state){
+        if(state.polling){clearInterval(state.polling);state.polling=null}
+        panels.delete(k);
+        const el=document.querySelector(`[data-panel-key="${k}"]`);
+        if(el) el.remove();
+      }
+    });
+    // 빈 패널 안내 복원
+    if(panels.size===0){
+      document.getElementById('chat-multi').innerHTML='<div class="chat-panel empty"><div class="empty-msg"><button onclick="newStandaloneChat()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:2px solid #000;box-shadow:3px 3px 0 #000;padding:12px 24px;border-radius:8px;font-weight:800;font-size:1.05em;cursor:pointer;margin-bottom:16px">＋ 새 채팅 시작</button><div style="color:var(--text-muted)">또는 좌측에서 노드 / 저장된 대화를 선택하세요.</div></div></div>';
+    }
+    savePanelList();
+    // 토스트 알림
+    _flashProjSwitchToast(prev, cur, toClose.length);
+  }
+  // 사이드바는 어쨌든 재렌더 (프로젝트 헤더 갱신)
+  renderSidePanel();
+}
+function _flashProjSwitchToast(prev, cur, count){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;top:60px;right:20px;background:rgba(0,0,0,.88);color:#fde68a;padding:10px 16px;border-radius:8px;border:2px solid #F59E0B;box-shadow:3px 3px 0 #000;font-size:.82em;font-weight:700;z-index:99999;max-width:320px;line-height:1.5';
+  t.innerHTML=`🔄 프로젝트 전환 감지<br><span style="color:var(--text-dim);font-size:.9em;font-weight:500">이전 프로젝트의 채팅 패널 ${count}개를 닫았습니다</span>`;
+  document.body.appendChild(t);
+  setTimeout(()=>t.style.opacity='0', 2400);
+  setTimeout(()=>t.remove(), 3000);
+}
+// 탭 활성화·포커스 돌아올 때 + 주기적으로 감지
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _detectProjectSwitch() });
+window.addEventListener('focus', _detectProjectSwitch);
+setInterval(_detectProjectSwitch, 3000);
 </script>
 </body>
 </html>
