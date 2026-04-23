@@ -2160,6 +2160,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/doc/milestone": self._doc_milestone,
             "/api/doc/delete-version": self._doc_delete_version,
             "/api/doc/hwp-to-docx": self._doc_hwp_to_docx,
+            "/api/ce/file/read": self._ce_file_read,
+            "/api/ce/file/write": self._ce_file_write,
         }
         handler = handlers.get(p)
         if handler:
@@ -4230,6 +4232,82 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             log(f"[DOC_WRITE] {filename} ({st.st_size} bytes)")
             return {"ok": True, "size": st.st_size, "mtime": st.st_mtime,
                     "path": os.path.join("documents", filename).replace("\\", "/")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    # ────────────────────────────────────────────────────────────────
+    # 📄 CE 용 파일 읽기/쓰기 — html/pdf CE 의 src 경로를 사이드바에서 직접 편집·저장
+    # 경로 화이트리스트: /synology 아래만 허용, '..' 경로 traversal 차단, 심볼릭 링크 escape 차단.
+    # ────────────────────────────────────────────────────────────────
+    def _ce_resolve_safe_path(self, raw):
+        """raw 경로를 정규화해서 /synology 아래인지 검증. 성공 시 abs path, 실패 시 None + error."""
+        if not raw or not isinstance(raw, str):
+            return None, "경로가 비어있음"
+        # URL 프리픽스·쿼리 제거
+        p = raw.split("?", 1)[0].split("#", 1)[0]
+        # 앞에 붙는 http(s):// 또는 origin 제거 (src 가 풀 URL 로 저장된 경우 대비)
+        if p.startswith("http://") or p.startswith("https://"):
+            try:
+                from urllib.parse import urlparse as _up
+                p = _up(p).path or ""
+            except Exception:
+                return None, "URL 파싱 실패"
+        if not p.startswith("/"):
+            return None, "절대 경로가 아님"
+        # 정규화 + 심볼릭 링크 escape 방지
+        try:
+            real = os.path.realpath(p)
+        except Exception as e:
+            return None, f"경로 정규화 실패: {e}"
+        root_real = os.path.realpath(SYNOLOGY_CONTAINER_ROOT)
+        if not (real == root_real or real.startswith(root_real + os.sep)):
+            return None, "허용된 루트(/synology) 밖의 경로"
+        return real, None
+
+    def _ce_file_read(self, body):
+        """body: {path}. 텍스트 파일 내용(utf-8) 반환. 바이너리일 경우 에러."""
+        raw = (body.get("path") or "").strip()
+        full, err = self._ce_resolve_safe_path(raw)
+        if err: return {"ok": False, "error": err}
+        if not os.path.isfile(full): return {"ok": False, "error": "파일 없음"}
+        try:
+            with open(full, "rb") as f:
+                data = f.read()
+            # 텍스트로 디코딩 시도 (utf-8 → cp949 → latin-1 fallback)
+            for enc in ("utf-8", "utf-8-sig", "cp949", "latin-1"):
+                try:
+                    content = data.decode(enc)
+                    return {"ok": True, "content": content, "encoding": enc,
+                            "size": len(data), "mtime": os.path.getmtime(full)}
+                except Exception:
+                    continue
+            return {"ok": False, "error": "텍스트로 디코딩 실패 (바이너리 파일)"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _ce_file_write(self, body):
+        """body: {path, content}. UTF-8 로 저장. 덮어쓰기 전 .bak.{ts} 백업 하나만 남김."""
+        raw = (body.get("path") or "").strip()
+        content = body.get("content")
+        if not isinstance(content, str):
+            return {"ok": False, "error": "content 가 문자열이 아님"}
+        full, err = self._ce_resolve_safe_path(raw)
+        if err: return {"ok": False, "error": err}
+        try:
+            # 백업 — 기존 파일이 있으면 .bak 으로 이동(덮어쓰기)
+            if os.path.isfile(full):
+                try:
+                    import shutil as _sh
+                    _sh.copy2(full, full + ".bak")
+                except Exception as e:
+                    log(f"[CE_WRITE] backup fail: {e}")
+            # 쓰기
+            os.makedirs(os.path.dirname(full) or "/", exist_ok=True)
+            with open(full, "w", encoding="utf-8", newline="") as f:
+                f.write(content)
+            st = os.stat(full)
+            log(f"[CE_WRITE] {full} ({st.st_size} bytes)")
+            return {"ok": True, "size": st.st_size, "mtime": st.st_mtime}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
