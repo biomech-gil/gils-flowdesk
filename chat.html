@@ -136,7 +136,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg-0);co
 </style>
 </head>
 <body>
-<nav class="nav"><a href="/">캔버스</a><a href="/chat.html" class="active">채팅</a></nav>
+<nav class="nav"><a href="/" id="nav-canvas" onclick="return _navToCanvasFromChat(event)">캔버스</a><a href="/chat.html" class="active">채팅</a></nav>
 <div class="tb">
   <span class="lbl">CWD:</span>
   <input type="text" id="chat-cwd" placeholder="작업 디렉토리 (모든 패널 공통)" style="width:240px">
@@ -206,6 +206,21 @@ function loadCanvasState(){
 }
 function loadNodes(){const s=loadCanvasState();return(s&&s.nodes)||[]}
 function loadProjectInfo(){const s=loadCanvasState();return s?{id:s.workflowId,name:s.wfName}:{id:null,name:''}}
+
+// 🧭 캔버스 nav 클릭 — 채팅에서 작업 중인 패널의 프로젝트로 정확히 복귀.
+// 분기/서버에서 받은 conv 의 projectId 가 있으면 그 프로젝트의 캔버스로 deep-link.
+// 모든 패널이 독립(이름없는 새 채팅)이면 기본 / 로 이동 → 마지막 작업 캔버스가 자연 복원.
+function _navToCanvasFromChat(ev){
+  let pid='';
+  // 마지막에 열린(최근 인서트) 패널 우선 — Map 순회로 덮어쓰며 마지막 non-empty 채택
+  panels.forEach(st=>{ if(st && st.projectId) pid = st.projectId; });
+  if(pid){
+    if(ev) ev.preventDefault();
+    window.location.href = '/#' + encodeURIComponent(pid);
+    return false;
+  }
+  return true;  // 패널 모두 독립 → 기본 동작 (/)
+}
 
 // 열린 패널 정보 저장 (새로고침/이동 후 복원용)
 function savePanelList(){
@@ -517,9 +532,12 @@ function _mbFlashToast(msg){
 
 // ═══ 독립 채팅 (노드 없이 바로 claude --dangerously-skip-permissions) ═══
 function newStandaloneChat(){
-  // nodeId 비우고 nodeName만 태그 — 서버는 convId 없으면 새로 생성, work_dir 폴백 처리
+  // nodeId 비우고 nodeName만 태그 — 서버는 convId 없으면 새로 생성, work_dir 폴백 처리.
+  // 🔗 직전 작업 프로젝트로 묶음 — 채팅 후 캔버스 복귀 시 그 프로젝트로 정확히 이동.
+  //    프로젝트 정보가 없으면 hint 비워서 기존 독립 동작 유지.
   const name='독립 채팅 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-  openChat(null,'','🆓 '+name,'agent');
+  const proj = (typeof loadProjectInfo==='function') ? loadProjectInfo() : {};
+  openChat(null,'','🆓 '+name,'agent', (proj && proj.id) ? proj.id : undefined);
 }
 
 // ═══ 패널 배경색 ═══
@@ -779,7 +797,8 @@ async function renderSidePanel(){
       for(const c of sr.conversations){
         const isOpen=panels.has(c.id);
         const title=escH(c.node_name||c.title||'대화');
-        html+=`<div class="conv-item${isOpen?' active':''}" style="padding-left:14px" onclick="openChat('${c.id}','','${title}','agent')" title="${new Date(c.created).toLocaleString('ko-KR')}">🆓 ${title} <span class="nl-badge">${c.msg_count}</span></div>`;
+        const pidArg = c.project_id?`'${c.project_id}'`:'undefined';
+        html+=`<div class="conv-item${isOpen?' active':''}" style="padding-left:14px" onclick="openChat('${c.id}','','${title}','agent',${pidArg})" title="${new Date(c.created).toLocaleString('ko-KR')}">🆓 ${title} <span class="nl-badge">${c.msg_count}</span></div>`;
       }
     }
   }catch(e){console.warn('[SIDE] standalone list 실패',e)}
@@ -792,7 +811,8 @@ async function renderSidePanel(){
     if(r.ok&&r.conversations&&r.conversations.length>0){
       for(const c of r.conversations){
         const isOpen=panels.has(c.id);
-        html+=`<div class="conv-item${isOpen?' active':''}" onclick="openChat('${c.id}','${n.id}','${escH(n.name)}')">↳ ${escH(c.title)} <span class="nl-badge">${c.msg_count}</span></div>`;
+        const pidArg = c.project_id?`'${c.project_id}'`:'undefined';
+        html+=`<div class="conv-item${isOpen?' active':''}" onclick="openChat('${c.id}','${n.id}','${escH(n.name)}',undefined,${pidArg})">↳ ${escH(c.title)} <span class="nl-badge">${c.msg_count}</span></div>`;
       }
     }
   }
@@ -801,7 +821,8 @@ async function renderSidePanel(){
 }
 
 // 채팅 패널 열기 (이미 열려있으면 스크롤만)
-async function openChat(convId,nodeId,nodeName,nodeType){
+// projectIdHint: 명시적으로 알고 있는 프로젝트 id (분기 라우팅·서버 conv.project_id 등) — loadProjectInfo() 보다 우선
+async function openChat(convId,nodeId,nodeName,nodeType,projectIdHint){
   // 새 채팅 (convId=null)인 경우: 임시 ID로 생성, 첫 메시지 전송시 서버가 진짜 ID 발급
   const isNew=!convId;
   const key=convId||`new_${nodeId}_${Date.now()}`;
@@ -816,10 +837,14 @@ async function openChat(convId,nodeId,nodeName,nodeType){
 
   // chatOnly 기본 = false (툴사용 — 파일/웹/Bash 가능), localStorage에 패널별 저장된 값 우선
   const savedMode=loadPanelMode(convId);
-  // 이 패널이 속한 프로젝트 id — 노드 기반이면 현재 캔버스의 projectId, 독립 채팅은 빈 문자열
+  // 이 패널이 속한 프로젝트 id — 명시 hint > 현재 캔버스 LS_KEY > 빈문자열.
+  // hint 가 있는 분기 채팅은 캔버스 LS_KEY 가 다른 프로젝트로 덮였더라도 원래 프로젝트로 묶임.
   const _projNow=(typeof loadProjectInfo==='function')?loadProjectInfo():{id:'',name:''};
+  const _resolvedPid = (projectIdHint && String(projectIdHint).trim())
+    ? String(projectIdHint).trim()
+    : (nodeId ? (_projNow.id||'') : '');
   const state={convId:convId||'',nodeId,nodeName,key,polling:null,pending:false,isNew,
-    projectId: nodeId ? (_projNow.id||'') : '',
+    projectId: _resolvedPid,
     chatOnly:savedMode!==null?savedMode:false};
   panels.set(key,state);
 
@@ -978,10 +1003,10 @@ async function sendChat(key){
   const cwd=document.getElementById('chat-cwd').value.trim()||undefined;
   // 패널별 chatOnly 사용 (전역이 아님 — 각 패널이 독립 모드)
   state._lastSentChatOnly=state.chatOnly;
-  // 현재 캔버스 탭에 열린 프로젝트 id 같이 전달 → 서버가 프로젝트 work_dir 로 cwd 폴백
+  // 패널 생성 시점의 프로젝트가 우선 — 도중에 캔버스에서 다른 프로젝트 열어도 이 채팅은 원래 프로젝트로 유지
   const _proj = (typeof loadProjectInfo==='function') ? loadProjectInfo() : {};
-  const projectId = _proj && _proj.id ? _proj.id : '';
-  const projectName = _proj && _proj.name ? _proj.name : '';
+  const projectId = state.projectId || (_proj && _proj.id ? _proj.id : '');
+  const projectName = (state.projectId && _proj && _proj.id===state.projectId) ? (_proj.name||'') : (_proj && _proj.name ? _proj.name : '');
   const r=await api('POST','/api/chat',{convId:state.convId||'',nodeId:state.nodeId,nodeName:state.nodeName,message:msg,cwd,chatOnly:state.chatOnly,projectId,projectName});
 
   if(r.ok&&r.convId){
@@ -1198,7 +1223,8 @@ window.addEventListener('beforeunload',()=>{
     const pending=JSON.parse(localStorage.getItem('open_conv'));
     if(pending&&pending.convId){
       localStorage.removeItem('open_conv');
-      await openChat(pending.convId,pending.nodeId,pending.nodeName);
+      // pending.projectId 가 있으면 캔버스 LS_KEY 와 무관하게 그 프로젝트로 묶임 (분기 라우팅 보장)
+      await openChat(pending.convId,pending.nodeId,pending.nodeName,undefined,pending.projectId||undefined);
     }
   }catch(e){}
   // 2) 이전에 열려있던 패널들 복원 (응답 대기 중이었으면 폴링 재개)

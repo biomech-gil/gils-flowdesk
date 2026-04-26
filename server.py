@@ -2496,9 +2496,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 fetch=True,
             )
         elif node_id:
-            rows = db_exec("SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, (SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count FROM conversations c WHERE c.node_id=? ORDER BY c.created DESC LIMIT 50", (node_id,), fetch=True)
+            rows = db_exec("SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, c.project_id, (SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count FROM conversations c WHERE c.node_id=? ORDER BY c.created DESC LIMIT 50", (node_id,), fetch=True)
         else:
-            rows = db_exec("SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, (SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count FROM conversations c ORDER BY c.created DESC LIMIT 100", fetch=True)
+            rows = db_exec("SELECT c.id, c.title, c.node_name, c.created, c.parent_exec_id, c.project_id, (SELECT COUNT(*) FROM messages WHERE conv_id=c.id) as msg_count FROM conversations c ORDER BY c.created DESC LIMIT 100", fetch=True)
         return {"ok": True, "conversations": rows}
 
     def _conv_messages(self, params):

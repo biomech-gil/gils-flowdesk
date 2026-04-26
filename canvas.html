@@ -333,8 +333,9 @@ body.pie-active,body.pie-active *{user-select:none!important;-webkit-user-select
 /* 엣지 리사이즈 핸들 — 4방향 단독 변경 (E/W/S/N) */
 .nd-resize-e{position:absolute;right:0;top:18px;bottom:18px;width:6px;cursor:ew-resize;z-index:3;opacity:0;transition:opacity .12s}
 .nd-resize-w{position:absolute;left:0;top:18px;bottom:18px;width:6px;cursor:ew-resize;z-index:3;opacity:0;transition:opacity .12s}
-.nd-resize-s{position:absolute;left:18px;right:18px;bottom:0;height:6px;cursor:ns-resize;z-index:3;opacity:0;transition:opacity .12s}
-.nd-resize-n{position:absolute;left:18px;right:18px;top:0;height:6px;cursor:ns-resize;z-index:3;opacity:0;transition:opacity .12s}
+/* N/S 핸들은 노드 외곽으로 살짝 밀어내서 헤더/본문 클릭과 겹치지 않게 함 (선택 시 헤더 클릭이 N 핸들에 가로채져 노드가 아래로 내려가던 버그 방지) */
+.nd-resize-s{position:absolute;left:18px;right:18px;bottom:-3px;height:4px;cursor:ns-resize;z-index:3;opacity:0;transition:opacity .12s}
+.nd-resize-n{position:absolute;left:18px;right:18px;top:-3px;height:4px;cursor:ns-resize;z-index:3;opacity:0;transition:opacity .12s}
 .nd:hover .nd-resize-e,.nd.sel .nd-resize-e,
 .nd:hover .nd-resize-w,.nd.sel .nd-resize-w,
 .nd:hover .nd-resize-s,.nd.sel .nd-resize-s,
@@ -385,13 +386,17 @@ body.sb-left #fp-panel{left:auto;right:66px}
 .sb-hd{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0}
 .sb-hd h3{flex:1;font-size:.85em;color:var(--accent);font-weight:600}.sb-hd button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:3px}.sb-hd button:hover{color:var(--text);background:var(--bg-3)}
 .sb-ct{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column}
-.sb-sec{margin-bottom:4px}
+.sb-sec{margin-bottom:4px;position:relative;isolation:isolate}
 .sb-sec label{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:3px;letter-spacing:.3px;flex-wrap:wrap;gap:2px}
 .sb-sec label span{display:flex;gap:3px;flex-wrap:wrap}
 .sb-sec label button{background:var(--bg-3);border:1px solid var(--border);cursor:pointer;font-size:12px;padding:3px 8px;border-radius:var(--radius-sm);transition:.15s;color:#d8dee9}.sb-sec label button:hover{background:var(--bg-4);filter:brightness(1.3)}
-.sb-sec textarea,.sb-sec .ov{width:100%;height:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;font-family:var(--mono);font-size:14px;resize:none;min-height:60px;line-height:1.5;box-sizing:border-box}
+/* 인풋 textarea 와 아웃풋 .ov 가 겹쳐 보이던 버그 — 두 박스 모두 자체 스크롤 + 불투명 배경 + 자체 stacking 으로 격리 */
+.sb-sec textarea,.sb-sec .ov{width:100%;height:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;font-family:var(--mono);font-size:14px;resize:none;min-height:60px;line-height:1.5;box-sizing:border-box;overflow-y:auto;position:relative;z-index:1}
+.sb-sec textarea{overflow-x:hidden}
 .sb-sec textarea:focus{outline:none;border-color:var(--accent)}
-.sb-sec .ov{max-height:none;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.sb-sec .ov{max-height:none;white-space:pre-wrap;word-break:break-all}
+/* sb-input-sec / sb-output-sec — 부모도 격리 + clip 으로 내부 텍스트가 절대 다른 섹션에 침범 못 함 */
+#sb-input-sec, #sb-output-sec{overflow:hidden;contain:content}
 .sb-sec select,.sb-sec input[type=text]{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:5px 6px;border-radius:var(--radius-sm);font-size:11px}
 .sb-sec input:focus,.sb-sec select:focus{outline:none;border-color:var(--accent)}
 .sb-row{display:flex;gap:4px;margin-bottom:4px;align-items:center}
@@ -1647,6 +1652,7 @@ body.focus-mode #canvas-controls{display:none}
     <div class="rail-group">
       <button class="rail-btn rail-btn-run" onclick="engine.startAll()" data-tip="전체 실행 (Shift+Alt+A)">▶</button>
       <button class="rail-btn rail-btn-stop" onclick="engine.stop()" data-tip="정지">■</button>
+      <button class="rail-btn" onclick="engine.retryErrors()" data-tip="에러 상태 노드만 일괄 재시도">🔁</button>
       <button class="rail-btn" data-rail-exec-order onclick="toggleExecOrderMode()" data-tip="영역 순서 지정 모드 · 영역 클릭 순서대로 번호 부여">🔢</button>
       <button class="rail-btn" onclick="executeOrderedRegions()" data-tip="순서대로 영역 실행 🎬">🎬</button>
       <button class="rail-btn" onclick="execProgressShow()" data-tip="영역 진행 패널 표시">📊</button>
@@ -1742,14 +1748,27 @@ body.focus-mode #canvas-controls{display:none}
       <div class="cc-row"><span class="cc-k">색상</span><input type="color" id="cc-gc" oninput="ccUpdateGrid()" onchange="ccUpdateGrid()"></div>
     </div>
     <div class="cc-section">
-      <div class="cc-label">배경</div>
-      <div class="cc-row"><span class="cc-k">색상</span><input type="color" id="cc-bg" oninput="ccUpdateBg()" onchange="ccUpdateBg()"></div>
+      <div class="cc-label">배경 / 텍스트</div>
+      <div class="cc-row"><span class="cc-k">배경</span><input type="color" id="cc-bg" oninput="ccUpdateBg()" onchange="ccUpdateBg()"></div>
+      <div class="cc-row"><span class="cc-k">텍스트</span><input type="color" id="cc-tc" oninput="ccUpdateText()" onchange="ccUpdateText()"></div>
+      <div style="display:flex;gap:4px;margin-top:4px">
+        <button class="cc-action" onclick="ccApplyDarkPair()" style="flex:1;background:rgba(33,33,55,.6);color:#e0e0e0;font-size:10px" title="배경 다크 + 텍스트 밝게 한번에">🌙 다크</button>
+        <button class="cc-action" onclick="ccApplyLightPair()" style="flex:1;background:rgba(220,220,230,.7);color:#222;font-size:10px" title="배경 밝게 + 텍스트 어둡게 한번에">☀ 라이트</button>
+      </div>
     </div>
     <div class="cc-section">
       <div class="cc-label">노드 외곽선 <span style="color:var(--text-muted);font-size:9px">(어두운 테마용 밝은 색)</span></div>
       <div class="cc-row"><span class="cc-k">선 색</span><input type="color" id="cc-nbc" oninput="ccUpdateNode()" onchange="ccUpdateNode()"></div>
       <div class="cc-row"><span class="cc-k">두께</span><input type="range" min="1" max="8" step="1" id="cc-nbw" oninput="ccUpdateNode()"><span class="cc-v" id="cc-nbw-v">3</span></div>
       <div class="cc-row"><span class="cc-k">그림자</span><input type="color" id="cc-nsc" oninput="ccUpdateNode()" onchange="ccUpdateNode()"></div>
+    </div>
+    <div class="cc-section">
+      <div class="cc-label">연결선 동작</div>
+      <div class="cc-row" style="cursor:pointer" onclick="(()=>{const cb=document.getElementById('cc-conn-fixed');cb.checked=!cb.checked;ccUpdateConnFixedDefault();})()">
+        <span class="cc-k">위치 고정</span>
+        <input type="checkbox" id="cc-conn-fixed" onclick="event.stopPropagation()" onchange="ccUpdateConnFixedDefault()" style="margin-left:auto;cursor:pointer">
+      </div>
+      <div style="font-size:9px;color:var(--text-muted);padding:0 2px;line-height:1.4">신규 연결선이 사용자가 드롭한 위치에 그대로 붙음. 끄면 노드 상대위치로 자동 재배치(AutoSide). 기존 연결선은 우클릭 메뉴에서 개별 토글.</div>
     </div>
     <div style="display:flex;gap:4px;margin-top:4px">
       <button class="cc-reset" onclick="ccSaveAsGlobalDefault()" style="flex:1;background:rgba(76,175,80,.1);border-color:rgba(76,175,80,.3);color:#a7f3d0" title="현재 배경·그리드 설정을 모든 신규 프로젝트의 기본값으로 저장">💾 기본값으로 저장</button>
@@ -2242,6 +2261,16 @@ body.focus-mode #canvas-controls{display:none}
         <span id="sb-images" style="font-size:9px;color:var(--text-dim)"></span>
         <span style="flex:1"></span>
         <span id="sb-charcount" style="font-size:10px;font-weight:600"></span>
+      </div>
+      <div class="sb-row" id="sb-memo-bg-sec" style="display:none;gap:6px;align-items:center;padding:4px 0">
+        <span style="font-size:10px;color:var(--text-muted);font-weight:600">🎨 배경</span>
+        <input type="color" id="sb-memo-bg" oninput="sbMemoBgChange(this.value)" onchange="sbMemoBgChange(this.value)" style="width:32px;height:24px;padding:0;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:transparent" title="이 메모/인풋 노드의 배경색">
+        <button onclick="sbMemoBgPreset('#fef3c7')" title="포스트잇 노랑" style="font-size:10px;padding:2px 6px;background:#fef3c7;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">📒</button>
+        <button onclick="sbMemoBgPreset('#fee2e2')" title="장미 분홍" style="font-size:10px;padding:2px 6px;background:#fee2e2;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">🌸</button>
+        <button onclick="sbMemoBgPreset('#dcfce7')" title="민트" style="font-size:10px;padding:2px 6px;background:#dcfce7;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">🌿</button>
+        <button onclick="sbMemoBgPreset('#dbeafe')" title="하늘" style="font-size:10px;padding:2px 6px;background:#dbeafe;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">☁</button>
+        <button onclick="sbMemoBgPreset('#f3f4f6')" title="종이 회색" style="font-size:10px;padding:2px 6px;background:#f3f4f6;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">📄</button>
+        <button onclick="sbMemoBgPreset('')" title="기본 다크 복원" style="font-size:10px;padding:2px 6px;background:#0d0d14;color:#e0e0e0;border:1px solid #000;border-radius:3px;cursor:pointer">🌙</button>
       </div>
       <div class="sb-sec" id="sb-input-sec" style="display:flex;flex-direction:column;flex:3;min-height:80px"><label>입력 (Input) <span><button onclick="inputToMemo()" title="이 입력을 메모장으로 열기" style="color:#ebcb8b">📝→메모</button><button onclick="clearInput()" title="입력 내용 삭제" style="color:#bf616a">🗑지우기</button><button onclick="copyText('resolved')" title="{{노드명}}이 실제 내용으로 바뀐 완성본 복사" style="color:#88c0d0">📋완성본</button><button onclick="copyText('input')" title="입력 원문 복사" style="color:#d8dee9">📋원문</button><button onclick="openHtmlTab('input')" title="마크다운·텍스트를 HTML 페이지로 렌더 (일반)" style="color:#88c0d0">📄일반HTML</button><button onclick="openStandaloneHtml('input')" title="단독 HTML 블록만 파싱해 새 탭으로 렌더 (DOCTYPE/html/```html 감지)" style="color:#A78BFA">🌐단독HTML</button><button onclick="downloadStandaloneHtml('input')" title="단독 HTML 블록만 .html 파일로 다운로드" style="color:#A78BFA">⬇단독</button><button onclick="openModal('input')" title="전체화면 확대 (Shift+Space+I)" style="color:#a3be8c">⤢확대</button><button class="rv-toggle" id="rv-toggle" onclick="toggleResolvedPreview()" title="변수 치환 미리보기" style="color:#b48ead">👁미리보기</button></span></label><textarea id="sb-input" rows="5" oninput="sbInput(this.value);handleAtTrigger(this,selectedNode)" onkeydown="handleAtPickerKeydown(event,this,selectedNode)" placeholder="@ 누르면 메모 삽입 / {{노드명}} 으로 다른 노드 출력 참조" style="flex:1"></textarea><div class="resolved-preview" id="sb-resolved" style="display:none;flex:1"></div></div>
       <div class="sb-divider" id="sb-div"></div>
@@ -2917,6 +2946,8 @@ let appearance={
   bgColor:'#0a0a14', gridColor:'#ffffff', gridAlpha:0.05, gridThickness:1, gridSize:40,
   // 🎛 노드 외곽선(형광 초록) + 그림자(검정 — 고전 브루탈리즘 기본)
   nodeBorderColor:'#4ade80', nodeBorderWidth:3, nodeShadowColor:'#000000',
+  // 🆎 텍스트 기본색 — 다크 테마 기준. 밝은 배경 쓰면 사용자가 어둡게 바꿔야 가독성 확보.
+  textColor:'#e0e0e0',
 };
 function hexToRgba(hex,a){
   const m=(hex||'').replace('#','').match(/.{2}/g);if(!m||m.length<3)return `rgba(255,255,255,${a})`;
@@ -2936,6 +2967,7 @@ function applyAppearance(){
   const nodeBrd  = a.nodeBorderColor  || '#4ade80';
   const nodeBrdW = (typeof a.nodeBorderWidth==='number' && !isNaN(a.nodeBorderWidth)) ? a.nodeBorderWidth : 3;
   const nodeSh   = a.nodeShadowColor  || '#000000';
+  const textC    = a.textColor        || '#e0e0e0';
   // 다양한 엘리먼트에 CSS var 설정 (cw만 있어도 충분하지만 상속 차단 대비 root에도)
   const targets = [document.documentElement, cw].filter(Boolean);
   targets.forEach(el=>{
@@ -2946,6 +2978,7 @@ function applyAppearance(){
     el.style.setProperty('--node-border-color', nodeBrd);
     el.style.setProperty('--node-border-width', nodeBrdW+'px');
     el.style.setProperty('--node-shadow-color', nodeSh);
+    el.style.setProperty('--text', textC);
   });
   // .cw 직접 스타일도 강제 (CSS var 우선순위 문제 대비)
   if(cw){
@@ -3000,6 +3033,12 @@ function _loadConnSwing(){
   }catch(e){ window._connSwing = 0; }
 }
 _loadConnSwing();
+// 📌 신규 연결선 위치 고정 디폴트 — true 면 사용자가 드롭한 side 가 AutoSide 에 의해 재할당되지 않음
+(function _loadConnFixedDefault(){
+  let v = true;
+  try{ const s=localStorage.getItem('connFixedDefault'); if(s==='0') v=false; }catch(e){}
+  window._connFixedDefault = v;
+})();
 function resetAppearance(){
   appearance={bgColor:'#0a0a14',gridColor:'#ffffff',gridAlpha:0.05,gridThickness:1,gridSize:40};
   applyAppearance();
@@ -3029,9 +3068,14 @@ function ccSyncFromState(){
   if(gt){gt.value=appearance.gridThickness;document.getElementById('cc-gt-v').textContent=appearance.gridThickness+'px'}
   if(ga){ga.value=appearance.gridAlpha;document.getElementById('cc-ga-v').textContent=appearance.gridAlpha.toFixed(2)}
   if(gc){gc.value=appearance.gridColor}
-  // 배경
+  // 배경 / 텍스트
   const bg=document.getElementById('cc-bg');
   if(bg)bg.value=appearance.bgColor;
+  const tc=document.getElementById('cc-tc');
+  if(tc)tc.value=appearance.textColor||'#e0e0e0';
+  // 연결선 위치 고정 디폴트 (브라우저 로컬 설정 — appearance 와는 별도)
+  const ccf=document.getElementById('cc-conn-fixed');
+  if(ccf) ccf.checked = (window._connFixedDefault!==false);
   // 노드 외곽선/그림자
   const nbc=document.getElementById('cc-nbc'), nbw=document.getElementById('cc-nbw'), nsc=document.getElementById('cc-nsc');
   if(nbc) nbc.value=appearance.nodeBorderColor||'#4ade80';
@@ -3065,6 +3109,36 @@ function ccUpdateBg(){
   applyAppearance();
   if(typeof autoSave==='function')autoSave();
 }
+function ccUpdateText(){
+  appearance.textColor=document.getElementById('cc-tc').value;
+  applyAppearance();
+  if(typeof autoSave==='function')autoSave();
+}
+function ccApplyDarkPair(){
+  appearance.bgColor='#0a0a14'; appearance.textColor='#e0e0e0';
+  applyAppearance(); ccSyncFromState();
+  if(typeof autoSave==='function')autoSave();
+}
+function ccApplyLightPair(){
+  appearance.bgColor='#f1f1f4'; appearance.textColor='#1a1a2e';
+  applyAppearance(); ccSyncFromState();
+  if(typeof autoSave==='function')autoSave();
+}
+// 📌 신규 연결선 위치 고정 디폴트 — localStorage 에 브라우저 단위 저장
+function ccUpdateConnFixedDefault(){
+  const cb=document.getElementById('cc-conn-fixed');
+  if(!cb)return;
+  const on = !!cb.checked;
+  window._connFixedDefault = on;
+  try{ localStorage.setItem('connFixedDefault', on?'1':'0'); }catch(e){}
+}
+function _initConnFixedDefault(){
+  let v = true;
+  try{ const s=localStorage.getItem('connFixedDefault'); if(s==='0') v=false; }catch(e){}
+  window._connFixedDefault = v;
+  const cb=document.getElementById('cc-conn-fixed');
+  if(cb) cb.checked = v;
+}
 function ccUpdateNode(){
   const nbc=document.getElementById('cc-nbc'), nbw=document.getElementById('cc-nbw'), nsc=document.getElementById('cc-nsc');
   if(nbc) appearance.nodeBorderColor=nbc.value;
@@ -3092,14 +3166,26 @@ async function loadGlobalDefaultAppearance(){
     const raw=r?.settings?.default_appearance;
     if(!raw)return null;
     const obj=JSON.parse(raw);
-    if(obj && typeof obj==='object') return obj;
+    if(!obj || typeof obj!=='object') return null;
+    // 🛟 자동 복구 — 이전 버전이 textColor 없이 밝은 배경만 저장한 경우 글자가 묻혀 보임.
+    // 배경 luminance 가 높은데 textColor 미지정이면 자동으로 어두운 텍스트로 페어링해서 가독성 확보.
+    if(!obj.textColor && obj.bgColor){
+      const m=String(obj.bgColor).replace('#','').match(/.{2}/g);
+      if(m && m.length>=3){
+        const [rr,gg,bb]=m.map(x=>parseInt(x,16));
+        const lum = 0.299*rr + 0.587*gg + 0.114*bb;
+        obj.textColor = (lum > 140) ? '#1a1a2e' : '#e0e0e0';
+      }
+    }
+    return obj;
   }catch(e){console.warn('[GLOBAL_APPEARANCE] 불러오기 실패',e)}
   return null;
 }
 function ccReset(){
   appearance={
     bgColor:'#0a0a14', gridColor:'#ffffff', gridAlpha:0.05, gridThickness:1, gridSize:40,
-    nodeBorderColor:'#4ade80', nodeBorderWidth:3, nodeShadowColor:'#000000'
+    nodeBorderColor:'#4ade80', nodeBorderWidth:3, nodeShadowColor:'#000000',
+    textColor:'#e0e0e0'
   };
   arrGapX=60;arrGapY=30;
   applyAppearance();
@@ -3635,8 +3721,13 @@ function anchorScreenPos(ce, anchorId){
   }
   const a=(ce.anchors||[]).find(x=>x.id===anchorId);
   if(!a)return null;
+  // 🛟 안전 클램프 — 노드 리사이즈/저장 데이터 손상 등으로 dx/dy 가 노드 바깥으로
+  //    튀어나가면 화살표가 노드와 멀리 떨어진 채 따라다니는 버그가 생김. 항상 노드 박스 안으로 끌어들임.
+  const w = ce.w || 280, h = ce.h || 240;
+  const dx = Math.max(0, Math.min(w, a.dx));
+  const dy = Math.max(0, Math.min(h, a.dy));
   // ce.x, ce.y 는 캔버스 좌표 → 화면 좌표 변환: x*zoom+cx, y*zoom+cy
-  return {x:(ce.x+a.dx)*zoom+cx, y:(ce.y+a.dy)*zoom+cy};
+  return {x:(ce.x+dx)*zoom+cx, y:(ce.y+dy)*zoom+cy};
 }
 
 // 모든 체크리스트 CE 재렌더 (연결 변경 후 has-child/잠금 갱신)
@@ -3784,6 +3875,12 @@ function showConnCtxMenu(x, y, c, ev){
       drawConns(); autoSave();
     }},
     {label:'🎨 연결선 스타일 (색·두께·선)', fn:()=>_showConnStylePop(c, ev?ev.clientX:undefined, ev?ev.clientY:undefined)},
+    {label:(c.fixedSide?'🧭 자동 진입 위치로 (현재: 📌고정)':'📌 위치 고정 (현재: 🧭자동)'), fn:()=>{
+      // 고정 ↔ 자동 토글 — 고정이면 사용자가 드롭한 fromSide/toSide 유지, 자동이면 노드 상대위치로 재계산
+      c.fixedSide = !c.fixedSide;
+      drawConns(); autoSave();
+      showCopyToast(c.fixedSide?'📌 이 연결선 위치 고정':'🧭 이 연결선 자동 재배치');
+    }},
     {label:'↔ 화살표 방향 뒤집기', fn:()=>{
       // src ↔ tgt, side 도 같이 스왑, 앵커도 스왑
       const oSid=c.sid, oTid=c.tid, oFrom=c.fromSide, oTo=c.toSide;
@@ -4559,6 +4656,10 @@ function addConn(sid,did,fromSide,toSide,extra){
            sid,tid:did,fromSide,toSide,waypoints:[],curve:0.5};
   if(extra&&extra.sourceAnchorId)c.sourceAnchorId=extra.sourceAnchorId;
   if(extra&&extra.targetAnchorId)c.targetAnchorId=extra.targetAnchorId;
+  // 📌 위치 고정 디폴트 — 사용자가 드롭한 side 를 AutoSide 가 멋대로 재할당하지 않도록.
+  //    전역 옵션(window._connFixedDefault) 으로 토글, 컨텍스트 메뉴로 개별 해제 가능.
+  if(extra && extra.fixedSide!==undefined) c.fixedSide = !!extra.fixedSide;
+  else c.fixedSide = (window._connFixedDefault!==false);
   conns.push(c);
   // 템플릿 자동 주입 (node → node 일 때만, 이름이 있을 때)
   const srcNd=nodes.find(n=>n.id===sid) || canvasEls.find(x=>x.id===sid);
@@ -4694,8 +4795,12 @@ function mkNode(opts={}){
     anchors:Array.isArray(opts.anchors)?opts.anchors:[],
     // 🏷️ 노드별 작업 폴더 — 빈 문자열이면 기본(프로젝트 폴더), 값 있으면 외부 폴더에서 실행
     workDir:opts.workDir||'',
+    // 🎨 메모/인풋 노드 개별 배경색 — 평범한 메모장처럼 노란색·종이색·임의 색 가능. 비어있으면 기본 다크.
+    bgColor:opts.bgColor||'',
     el:null};
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);
+  // 메모/인풋 노드 — 사용자 지정 배경색 적용 (텍스트색은 luminance 기반 자동)
+  if((n.type==='memo'||n.type==='input') && n.bgColor) _applyMemoBg(n);
   // 앵커 복원
   if(n.anchors && n.anchors.length) setTimeout(()=>renderCeAnchors(n), 50);
   // workDir 지정된 노드는 배지 표시
@@ -4760,7 +4865,7 @@ function buildDom(n){
           </div>
           <div class="doc-inline-editor" data-doc-editor></div>
         </div>`
-      : `<div class="nd-body"><div class="sec-lbl">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':n.type==='agent-gemini'?'INPUT ✨':'INPUT'}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`
+      : `<div class="nd-body"><div class="sec-lbl" style="display:flex;align-items:center;gap:4px">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':n.type==='agent-gemini'?'INPUT ✨':'INPUT'}${(n.type==='memo'||n.type==='input')?`<button data-act="render-toggle" title="텍스트 ↔ 렌더(마크다운) 토글" style="margin-left:auto;background:rgba(126,207,255,.15);color:#88c0d0;border:1px solid rgba(126,207,255,.3);font-size:9px;padding:1px 6px;border-radius:3px;cursor:pointer">👁 렌더</button>`:''}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${(n.type==='memo'||n.type==='input')?`<div class="nd-rendered" style="display:none;flex:1;overflow-y:auto;padding:6px 8px;background:var(--bg-0);font-size:${n.textSize}em;line-height:1.45;border-top:1px solid var(--border)"></div>`:''}${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`
     ):''}
     <div class="port port-l" data-node="${n.id}" data-side="l"></div>
     <div class="port port-r" data-node="${n.id}" data-side="r"></div>
@@ -4791,7 +4896,7 @@ function buildDom(n){
   d.querySelectorAll('[data-act]').forEach(btn=>btn.addEventListener('click',e=>{
     e.stopPropagation();
     const a=btn.dataset.act;
-    if(a==='run')engine.executeNode(n);
+    if(a==='run')engine.runManual(n);
     else if(a==='tog')togCollapse(n);
     else if(a==='clone')cloneNodeMulti(n);
     else if(a==='bgimg')changeNodeBgImage(n);
@@ -4804,6 +4909,7 @@ function buildDom(n){
     else if(a==='delete'){
       delNode(n.id);  // confirm 제거 — Ctrl+Z 로 되돌리기 가능
     }
+    else if(a==='render-toggle') toggleNodeRender(n);
   }));
   // 이름 span: 드래그 (헤더처럼 동작)
   const nmSpan=d.querySelector('[data-role="name"]');
@@ -4838,7 +4944,7 @@ function buildDom(n){
   }
   d.addEventListener('mousedown',e=>{if(!e.target.classList.contains('port')&&!e.target.classList.contains('nd-resize')&&e.target!==hd&&!hd.contains(e.target)&&e.target!==cb&&(!cb||!cb.contains(e.target))){if(e.ctrlKey)toggleMultiSel(n);else if(!multiSel.includes(n))selNode(n)}});
   const ta=d.querySelector('.nd-in textarea');if(ta){
-    ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value;checkTokenLimit(n);handleAtTrigger(ta,n)});
+    ta.addEventListener('input',()=>{n.inputTemplate=ta.value;if(selectedNode===n)document.getElementById('sb-input').value=ta.value;_syncMemoLikeOutput(n,ta.value);checkTokenLimit(n);handleAtTrigger(ta,n)});
     ta.addEventListener('keydown',e=>handleAtPickerKeydown(e,ta,n));
   }
   const dv=d.querySelector('.nd-div');if(dv&&ta)dv.addEventListener('mousedown',e=>{e.stopPropagation();isDiv=true;divNd=n;divSY=e.clientY;divSH=ta.offsetHeight});
@@ -9476,7 +9582,7 @@ function openCeSidebar(ce){
       </select>
     </div>
     <div class="sb-row" style="gap:3px;margin-bottom:4px;flex-wrap:wrap">
-      ${ce.nodeType==='agent'?'<button class="r" onclick="engine.executeNode(selectedCe)" style="background:#2d6a2d;color:#a3be8c;font-weight:700;padding:2px 8px">▶</button><button onclick="engine.stopNode(selectedCe)" style="background:#6a2d2d;color:#bf616a;padding:2px 6px">■</button>':''}
+      ${ce.nodeType==='agent'?'<button class="r" onclick="engine.runManual(selectedCe)" style="background:#2d6a2d;color:#a3be8c;font-weight:700;padding:2px 8px">▶</button><button onclick="engine.stopNode(selectedCe)" style="background:#6a2d2d;color:#bf616a;padding:2px 6px">■</button>':''}
       <button onclick="ceImgToTarget()" title="이 이미지를 다른 노드에 첨부" style="font-size:10px;padding:2px 6px;background:rgba(6,182,212,.12);border:1px solid rgba(6,182,212,.3);color:#88c0d0;border-radius:3px">📷→노드</button>
       <button onclick="ceImgConnectDrag()" title="연결된 노드에 이미지 자동 첨부" style="font-size:10px;padding:2px 6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#ebcb8b;border-radius:3px">🔗이미지연결</button>
       <button onclick="ceImgDownload('original')" title="원본 파일로 다운로드 (PNG/JPG)" style="font-size:10px;padding:2px 6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#86efac;border-radius:3px">⬇ 원본</button>
@@ -9979,6 +10085,16 @@ function openSb(n){
   if(isSheet){sheetLoadNodeToUI(n)}
   // compact toolbar: show/hide agent-only elements
   document.getElementById('sb-mode-sec').style.display=isAgent?'':'none';
+  // 메모/인풋 노드 배경색 picker — 평범한 메모장처럼 색칠 가능
+  const memoBgSec=document.getElementById('sb-memo-bg-sec');
+  if(memoBgSec){
+    const isMemoLike = n.type==='memo' || n.type==='input';
+    memoBgSec.style.display = isMemoLike ? 'flex' : 'none';
+    if(isMemoLike){
+      const inp=document.getElementById('sb-memo-bg');
+      if(inp) inp.value = n.bgColor || '#0d0d14';
+    }
+  }
   if(isAgent){
     document.getElementById('sb-chatonly').checked=n.chatOnly;
     // show images inline
@@ -10219,7 +10335,77 @@ function closeSb(){
 }
 function sbName(v){if(!selectedNode)return;const old=selectedNode.name;selectedNode.name=v;selectedNode.el.querySelector('[data-role="name"]').textContent=v;selectedNode.el.querySelector('.nd-name-edit').value=v;selectedNode.el.querySelector('.coll-badge').textContent=v;document.getElementById('sb-title').textContent=`${TYPES[selectedNode.type].icon} ${v}`;nodes.forEach(nd=>{if(nd.inputTemplate.includes(`{{${old}}}`)){nd.inputTemplate=nd.inputTemplate.replaceAll(`{{${old}}}`,`{{${v}}}`);const ta=nd.el.querySelector('.nd-in textarea');if(ta)ta.value=nd.inputTemplate}});autoSave()}
 function sbPane(v){if(selectedNode)selectedNode.paneIndex=v?parseInt(v):null;autoSave()}
-function sbInput(v){if(!selectedNode)return;selectedNode.inputTemplate=v;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=v;updateCharCount();checkTokenLimit(selectedNode);updateResolvedPreview()}
+// 👁 메모/인풋 노드 — 텍스트 ↔ 마크다운 렌더 토글 (노드 본체에서 직접 미리보기)
+function toggleNodeRender(n){
+  if(!n||!n.el) return;
+  const ta = n.el.querySelector('.nd-in textarea');
+  const rendered = n.el.querySelector('.nd-rendered');
+  const btn = n.el.querySelector('[data-act="render-toggle"]');
+  if(!ta || !rendered) return;
+  const isOn = rendered.style.display !== 'none';
+  if(!isOn){
+    rendered.innerHTML = (typeof renderMd==='function' ? renderMd(n.inputTemplate||'') : escapeHtml(n.inputTemplate||''));
+    ta.style.display='none';
+    rendered.style.display='';
+    if(btn){ btn.textContent='✏ 편집'; btn.style.background='rgba(76,175,80,.15)'; btn.style.color='#a3be8c'; btn.style.borderColor='rgba(76,175,80,.35)'; }
+  } else {
+    rendered.style.display='none';
+    ta.style.display='';
+    if(btn){ btn.textContent='👁 렌더'; btn.style.background='rgba(126,207,255,.15)'; btn.style.color='#88c0d0'; btn.style.borderColor='rgba(126,207,255,.3)'; }
+  }
+}
+// 🎨 메모/인풋 노드 배경색 — 노드 본체 텍스트 영역에 사용자 지정 배경 + 가독성 텍스트색 자동.
+function _applyMemoBg(n){
+  if(!n||!n.el) return;
+  const ta = n.el.querySelector('.nd-in textarea');
+  const body = n.el.querySelector('.nd-body');
+  if(!ta) return;
+  if(!n.bgColor){
+    ta.style.background=''; ta.style.color='';
+    if(body) body.style.background='';
+    return;
+  }
+  const m = String(n.bgColor).replace('#','').match(/.{2}/g);
+  let textC = '#e0e0e0';
+  if(m && m.length>=3){
+    const [r,g,b]=m.map(x=>parseInt(x,16));
+    const lum = 0.299*r+0.587*g+0.114*b;
+    textC = (lum>140) ? '#1a1a2e' : '#e0e0e0';
+  }
+  ta.style.background = n.bgColor;
+  ta.style.color = textC;
+  if(body) body.style.background = n.bgColor;
+}
+function sbMemoBgChange(v){
+  if(!selectedNode) return;
+  selectedNode.bgColor = v||'';
+  _applyMemoBg(selectedNode);
+  if(typeof autoSave==='function') autoSave();
+}
+function sbMemoBgPreset(v){
+  const inp=document.getElementById('sb-memo-bg');
+  if(inp && v) inp.value=v;
+  sbMemoBgChange(v);
+}
+// 메모/인풋 노드는 입력=출력. 편집 시 outputCapture·뱃지·UI 를 즉시 동기화해서
+// 하류 agent 가 수동 실행 없이 최신 내용을 받고, '대기중' 뱃지가 '완료'로 바뀌도록 함.
+function _syncMemoLikeOutput(n,v){
+  if(!n||(n.type!=='memo'&&n.type!=='input'))return;
+  let resolved=v;
+  nodes.forEach(nn=>{const ph=`{{${nn.name}}}`;if(resolved.includes(ph))resolved=resolved.replaceAll(ph,nn.outputCapture||'')});
+  if(typeof resolveMemoPlaceholdersSync==='function')resolved=resolveMemoPlaceholdersSync(resolved);
+  n.outputCapture=resolved;
+  if(typeof engine!=='undefined'&&engine.setSt)engine.setSt(n,'complete');
+  const oc=n.el&&n.el.querySelector('.out-c');if(oc)oc.textContent=resolved;
+  if(selectedNode===n){const out=document.getElementById('sb-output');if(out)out.textContent=resolved;}
+}
+function sbInput(v){
+  if(!selectedNode)return;
+  selectedNode.inputTemplate=v;
+  const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=v;
+  _syncMemoLikeOutput(selectedNode,v);
+  updateCharCount();checkTokenLimit(selectedNode);updateResolvedPreview();
+}
 async function updateCharCount(){
   const el=document.getElementById('sb-charcount');if(!el||!selectedNode)return;
   const raw=selectedNode.inputTemplate||'';
@@ -10276,7 +10462,9 @@ async function forkConv(){
     execId:latestExec?latestExec.id:'',
     nodeId:selectedNode.id,
     nodeName:selectedNode.name,
-    accountId:selectedNode.accountId||null
+    accountId:selectedNode.accountId||null,
+    // 📌 분기 대화는 반드시 현재 프로젝트로 묶음 — 채팅 탭에서 캔버스 복귀 시 정확한 프로젝트로 이동
+    projectId: workflowId || ''
   });
   if(res.ok){
     alert(`대화 분기 생성: ${res.convId}\n채팅 탭에서 이어서 대화하세요.`);
@@ -10292,8 +10480,8 @@ async function loadConvList(){
 }
 function sbConvSelect(convId){
   if(!convId)return;
-  // 채팅 탭으로 이동하여 해당 대화 열기
-  localStorage.setItem('open_conv',JSON.stringify({convId,nodeId:selectedNode?.id,nodeName:selectedNode?.name}));
+  // 채팅 탭으로 이동하여 해당 대화 열기 — 현재 프로젝트 ID 도 같이 넘겨야 채팅에서 캔버스 복귀 시 옳은 프로젝트로 이동
+  localStorage.setItem('open_conv',JSON.stringify({convId,nodeId:selectedNode?.id,nodeName:selectedNode?.name,projectId:workflowId||''}));
   window.location.href='/chat.html';
 }
 let sbResizing=false,sbSX=0,sbSW=0;
@@ -10481,7 +10669,7 @@ function openModal(type){if(!selectedNode)return;modalType=type;modalIsRendered=
   if(type==='input'){
     document.getElementById('mo-title').textContent=`Input — ${selectedNode.name}`;
     mb.innerHTML=`<textarea style="font-size:${modalFontSize}px">${selectedNode.inputTemplate||''}</textarea>`;
-    mb.querySelector('textarea').addEventListener('input',function(){selectedNode.inputTemplate=this.value;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=this.value;document.getElementById('sb-input').value=this.value});
+    mb.querySelector('textarea').addEventListener('input',function(){selectedNode.inputTemplate=this.value;const ta=selectedNode.el.querySelector('.nd-in textarea');if(ta)ta.value=this.value;document.getElementById('sb-input').value=this.value;_syncMemoLikeOutput(selectedNode,this.value);});
   }else{
     document.getElementById('mo-title').textContent=`Output — ${selectedNode.name}`;
     mb.innerHTML=`<pre style="font-size:${modalFontSize}px">${(selectedNode.outputCapture||'대기 중').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</pre>`;
@@ -10567,10 +10755,86 @@ const engine={
   },
   stop(){this.running=false;this.polls.forEach(id=>clearInterval(id));this.polls.clear();nodes.forEach(n=>{if(n.status==='running')this.setSt(n,'idle')})},
   stopNode(n){if(!n)return;const pid=this.polls.get(n.id);if(pid){clearInterval(pid);this.polls.delete(n.id)}this.setSt(n,'idle')},
-  execSelected(){if(selectedNode){this.running=true;this.executeNode(selectedNode)}},
+  // 수동 단일 실행 — 상류 준비 상태 먼저 확인, 다음 하류 체인 여부 선택.
+  runManual(nd){
+    if(!nd) return;
+    this.running = true;
+
+    // 1단계: 상류 준비 상태 확인 (runnable 인 상류만 검사)
+    const upstream = this.upstream(nd.id);
+    const notReady = upstream.filter(u=>{
+      const runnable = !('nodeType' in u) || u.nodeType;
+      if(!runnable) return false;
+      return u.status !== 'complete';
+    });
+    if(notReady.length > 0){
+      const errCount  = notReady.filter(u=>u.status==='error').length;
+      const runCount  = notReady.filter(u=>u.status==='running').length;
+      const idleCount = notReady.length - errCount - runCount;
+      const summary = [
+        errCount  ? `❌ 에러 ${errCount}`    : '',
+        runCount  ? `⏳ 실행중 ${runCount}`  : '',
+        idleCount ? `⏸ 미실행 ${idleCount}` : '',
+      ].filter(Boolean).join(' · ');
+      const force = confirm(
+        `"${nd.name || nd.nodeName || '이 노드'}" 상류에 준비 안 된 노드 ${notReady.length}개 (${summary}).\n\n` +
+        `[확인] 그래도 강제 실행 (이 노드만, 하류 대기. 상류의 낡은 출력이 입력으로 들어갈 수 있음)\n` +
+        `[취소] 중단 (에러 상류는 🔁 로 일괄 재시도 가능)`
+      );
+      if(!force) return;
+      this.executeNode(nd, 0, null, {chain:false, force:true});
+      return;
+    }
+
+    // 2단계: 하류 체인 여부
+    const downCount = conns.filter(c=>c.sid===nd.id).length;
+    if(downCount === 0){
+      this.executeNode(nd);
+      return;
+    }
+    const chain = confirm(
+      `"${nd.name || nd.nodeName || '이 노드'}" 뒤로 ${downCount}개 하류 노드가 연결되어 있습니다.\n\n` +
+      `[확인] 이어진 전체 큐 실행 (하류까지 자동 진행)\n` +
+      `[취소] 이 노드만 실행 (하류 대기)`
+    );
+    this.executeNode(nd, 0, null, {chain});
+  },
+  // 에러 상태 노드만 일괄 재시도. 상류가 complete 인 것부터 시작하고, 하류 체인은 기본 유지.
+  retryErrors(){
+    const errNodes = nodes.filter(n=>n.status==='error');
+    if(errNodes.length === 0){
+      if(typeof showCopyToast === 'function') showCopyToast('✓ 에러 상태 노드가 없습니다');
+      else alert('에러 상태 노드가 없습니다');
+      return;
+    }
+    console.log(`[ENGINE] 에러 노드 ${errNodes.length}개 재시도`);
+    this.running = true;
+    // 먼저 에러 노드들 상태 초기화
+    errNodes.forEach(n=>{
+      n.outputCapture=''; n.inputResolved=''; n.status='idle';
+      const oc=n.el.querySelector('.out-c'); if(oc) oc.textContent='';
+      this.setSt(n,'idle');
+    });
+    // 상류가 준비된 에러 노드부터 시작. 상류가 아직 에러/running 이면 하류 체인으로 자연 도달.
+    errNodes.forEach(n=>{
+      if(this.canExec(n.id)) this.executeNode(n);
+    });
+    if(typeof showCopyToast === 'function') showCopyToast(`🔁 ${errNodes.length}개 재시도 시작`);
+  },
+  execSelected(){if(selectedNode){this.runManual(selectedNode)}},
   upstream(nid){return conns.filter(c=>c.tid===nid).map(c=>findNodeOrCe(c.sid)).filter(Boolean)},
   downstream(nid){return conns.filter(c=>c.sid===nid).map(c=>findNodeOrCe(c.tid)).filter(Boolean)},
-  canExec(nid){return this.upstream(nid).every(n=>n.status==='complete'||(n.outputCapture&&n.outputCapture.trim()))},
+  // 상류 노드가 "실행 가능한 상태로 준비됐는지" 엄격 판정.
+  // 과거에는 outputCapture 문자열이 남아 있으면 통과시켰는데, 이전 실행의 잔여값에 속아 하류가
+  // running 중인 상류를 완료로 착각해 조기 실행되는 버그가 있었음. 항상 status 만 신뢰한다.
+  canExec(nid){
+    return this.upstream(nid).every(n=>{
+      // runnable: 플레인 노드(nodeType 필드 없음) 또는 nodeType 가 지정된 CE
+      const runnable = !('nodeType' in n) || n.nodeType;
+      if(!runnable) return true; // 정적 CE (이미지/텍스트/비디오) — 항상 준비됨
+      return n.status === 'complete';
+    });
+  },
   async resolve(nd){
     let t=nd.inputTemplate;
     const all=[...nodes,...canvasEls.filter(c=>c.nodeType)];
@@ -10579,12 +10843,14 @@ const engine={
     t=await resolveMemoPlaceholders(t);
     nd.inputResolved=t;return t;
   },
-  async executeNode(nd, retryCount=0, memberSet=null){
+  async executeNode(nd, retryCount=0, memberSet=null, options={}){
     this.running=true;
     // memberSet: Set<id> 이면 downstream 추적을 이 집합에 제한 (영역 실행용)
+    // options.chain===false 면 완료 후 하류 자동 실행 금지 (단일 노드 수동 실행 모드)
     const _chain = (dn)=>{
+      if(options.chain === false) return;
       if(memberSet && !memberSet.has(dn.id)) return;
-      if(this.canExec(dn.id)) this.executeNode(dn, 0, memberSet);
+      if(this.canExec(dn.id)) this.executeNode(dn, 0, memberSet, options);
     };
     if(nd.type==='trigger'){this.setSt(nd,'complete');this.downstream(nd.id).forEach(_chain);return}
     if(nd.type==='downloader'){
@@ -10652,7 +10918,17 @@ const engine={
       if(!errCount)this.downstream(nd.id).forEach(_chain);
       return;
     }
-    if(nd.type==='memo'||nd.type==='input'){nd.outputCapture=nd.inputTemplate;this.setSt(nd,'complete');this.downstream(nd.id).forEach(_chain);return}
+    if(nd.type==='memo'||nd.type==='input'){
+      // {{노드명}} / {{@메모}} placeholder 를 미리 풀어서 outputCapture 에 저장.
+      // raw 그대로 두면 하류 agent.resolve() 의 단일 패스가 nodes 순회 순서에 따라
+      // 중첩 placeholder 를 미해결로 남기는 버그가 있음.
+      nd.outputCapture = await this.resolve(nd);
+      this.setSt(nd,'complete');
+      const oc=nd.el&&nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+      if(selectedNode===nd){const out=document.getElementById('sb-output');if(out)out.textContent=nd.outputCapture||'';}
+      this.downstream(nd.id).forEach(_chain);
+      return;
+    }
     if(nd.type==='sheet'){
       sheetEnsureNodeData(nd);
       nd.outputCapture=sheetFormatFor(nd, nd.sheet.outputFormat||'markdown');
@@ -10719,11 +10995,16 @@ const engine={
       return;
     }
 
-    // 다중 upstream 대기 (complete / outputCapture / 이미지엘 / nodeType없는 캔버스엘 = 즉시 ready)
+    // 다중 upstream 대기 — canExec 와 동일 규칙 (runnable 은 반드시 complete).
+    // options.force 가 켜져 있으면 이 가드를 통과시켜 낡은 출력으로라도 실행한다.
     const upstream=this.upstream(nd.id);
-    const isReady=u=>u.status==='complete'||(u.outputCapture&&u.outputCapture.trim())||(u.type==='image'&&u.src)||!u.nodeType&&!u.type?.match(/^(agent|memo|input|trigger)$/);
+    const isReady=u=>{
+      const runnable = !('nodeType' in u) || u.nodeType;
+      if(!runnable) return true;       // 정적 CE (이미지/텍스트/비디오)
+      return u.status === 'complete';
+    };
     const incomplete=upstream.filter(u=>!isReady(u));
-    if(incomplete.length>0&&retryCount===0){
+    if(incomplete.length>0 && retryCount===0 && !options.force){
       console.log(`[${nd.name}] 상위 노드 미완료: ${incomplete.map(u=>u.name||u.nodeName).join(', ')} → 대기`);
       return;
     }
@@ -10757,7 +11038,7 @@ const engine={
 
     if(!exec.ok){
       console.log(`[${nd.name}] API 실패`);
-      return this._retryOrFail(nd,retryCount);
+      return this._retryOrFail(nd,retryCount,memberSet,options);
     }
 
     let pc=0;
@@ -10766,7 +11047,7 @@ const engine={
       pc++;
       if(pc%5===0)console.log(`[${nd.name}] 대기 ${pc*3}초`);
       // 10분 타임아웃
-      if(pc>200){clearInterval(pid);this.polls.delete(nd.id);console.log(`[${nd.name}] 타임아웃`);return this._retryOrFail(nd,retryCount)}
+      if(pc>200){clearInterval(pid);this.polls.delete(nd.id);console.log(`[${nd.name}] 타임아웃`);return this._retryOrFail(nd,retryCount,memberSet,options)}
 
       const ck=await api('GET',`/api/node-check?nodeId=${nd.id}`);
       if(ck.ok&&ck.done){
@@ -10775,7 +11056,7 @@ const engine={
         // 빈 응답 → 재시도
         if(!output){
           console.log(`[${nd.name}] 빈 응답 → 재시도`);
-          return this._retryOrFail(nd,retryCount);
+          return this._retryOrFail(nd,retryCount,memberSet,options);
         }
         nd.outputCapture=output;
         console.log(`[${nd.name}] 완료 ${output.length}자`);
@@ -10790,7 +11071,7 @@ const engine={
     this.polls.set(nd.id,pid);
   },
 
-  _retryOrFail(nd,retryCount){
+  _retryOrFail(nd,retryCount,memberSet=null,options={}){
     if(retryCount>=5){
       console.log(`[${nd.name}] 5회 재시도 모두 실패 → error`);
       this.setSt(nd,'error');
@@ -10800,7 +11081,7 @@ const engine={
       return;
     }
     console.log(`[${nd.name}] 1.5초 후 재시도 ${retryCount+1}/5`);
-    setTimeout(()=>this.executeNode(nd,retryCount+1),1500);
+    setTimeout(()=>this.executeNode(nd,retryCount+1,memberSet,options),1500);
   },
   setSt(nd,st){nd.status=st;nd.el.classList.remove('running','complete','error');if(st!=='idle')nd.el.classList.add(st);const dot=nd.el.querySelector('.nd-st');if(dot)dot.className='nd-st '+st;
     // 사이드바 스피너 — 선택된 노드면 동기화
@@ -10811,7 +11092,7 @@ const engine={
 // ═══ SAVE STATE (localStorage) ═══
 let wfName='';
 function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').value,wfName,workflowId,workDir:window._currentWorkDir||'',tabId:TAB_ID,appearance:{...appearance},
-  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history,workDir:n.workDir||undefined,
+  nodes:nodes.map(n=>({id:n.id,name:n.name,type:n.type,x:n.x,y:n.y,w:n.w,h:n.h,paneIndex:n.paneIndex,collapsed:n.collapsed,textSize:n.textSize,chatOnly:n.chatOnly,systemPrompt:n.systemPrompt,images:n.images,customImage:n.customImage,inputTemplate:n.inputTemplate,outputCapture:n.outputCapture,accountId:n.accountId||null,provider:providerOfType(n.type),model:n.model||'',status:n.status==='running'?'idle':n.status,history:n.history,workDir:n.workDir||undefined,bgColor:n.bgColor||undefined,
     // 노드 앵커 (문서 노드 등에서 지점별 연결 시작)
     anchors:(Array.isArray(n.anchors)&&n.anchors.length)?n.anchors.map(a=>({id:a.id,dx:a.dx,dy:a.dy,label:a.label||''})):undefined,
     // 다운로더 전용 — URL 리스트 + 옵션 (상태는 저장 시 대기/완료만 유지, 진행중은 대기로 되돌림)
@@ -10833,7 +11114,7 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       pdfPageNumber:(n.doc?.pdfPageNumber)||1,
     }:undefined,
   })),
-  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined,arrowSize:c.arrowSize||undefined,arrowStyle:c.arrowStyle||undefined})),
+  connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),fixedSide:c.fixedSide?true:undefined,labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined,arrowSize:c.arrowSize||undefined,arrowStyle:c.arrowStyle||undefined})),
   // YouTube 검색 탭 (여러 검색을 묶음으로 저장) — 프로젝트에 포함
   youtubeSearchTabs: (_YT.tabs||[]).map(t=>({
     id:t.id, name:t.name||'', query:t.query||'',
@@ -11085,7 +11366,7 @@ function loadState(st){
       mkNode({...nd, collapsed:true});
     }
   });
-  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined}));
+  conns=(st.connections||[]).map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),fixedSide:!!c.fixedSide,labels:(c.labels||[]).map(l=>({id:l.id||('lb'+Date.now()+Math.random().toString(36).slice(2,5)),text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined}));
   // YouTube 검색 탭 복원
   _YT.tabs = (st.youtubeSearchTabs||[]).map(t=>({
     id:t.id||('yttab_'+Date.now()+'_'+Math.random().toString(36).slice(2,5)),
@@ -12735,7 +13016,7 @@ async function dlPasteFromClipboard(){
 }
 function dlRunAll(){
   if(!selectedNode||selectedNode.type!=='downloader')return;
-  engine.executeNode(selectedNode);
+  engine.runManual(selectedNode);
 }
 function dlStopAll(){
   if(!selectedNode||selectedNode.type!=='downloader')return;
