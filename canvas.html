@@ -2228,8 +2228,8 @@ body.focus-mode #canvas-controls{display:none}
     </div>
   </div>
   <div id="memo-editor" style="display:none;position:absolute;inset:0;z-index:50;background:var(--bg-0);flex-direction:column">
-    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0">
-      <input type="text" id="me-name" placeholder="메모 제목" style="flex:1;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:13px">
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-2);flex-shrink:0;flex-wrap:wrap">
+      <input type="text" id="me-name" placeholder="메모 제목" style="flex:1;min-width:160px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:13px">
       <select id="me-folder" style="font-size:11px;padding:3px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:3px"><option value="">메모폴더 없음</option></select>
       <button onclick="saveMemoNow()" title="이름 지정 저장" style="font-size:11px;padding:3px 8px">💾 저장</button>
       <button onclick="toggleCurrentMemoPin()" id="me-pin-btn" title="고정" style="font-size:11px;padding:3px 8px">📌</button>
@@ -2237,12 +2237,23 @@ body.focus-mode #canvas-controls{display:none}
       <button onclick="copyCurrentMemo()" title="이 메모의 전체 내용을 클립보드에 복사" style="font-size:11px;padding:3px 8px;color:#a3e635">📋 복사</button>
       <button onclick="downloadMemo(activeMemoId,document.getElementById('me-name').value)" title=".md 파일로 다운로드" style="font-size:11px;padding:3px 8px;color:#88c0d0">⬇ .md</button>
       <button onclick="memoToNode()" title="이 메모를 캔버스 노드로 생성" style="font-size:11px;padding:3px 8px">→ 노드</button>
+      <button onclick="meToggleRender()" id="me-render-btn" title="텍스트 ↔ 마크다운 렌더 토글" style="font-size:11px;padding:3px 8px;background:rgba(126,207,255,.15);color:#88c0d0;border:1px solid rgba(126,207,255,.35);border-radius:3px">👁 렌더</button>
+      <span style="border-left:1px solid var(--border);height:16px;margin:0 2px"></span>
+      <span style="font-size:10px;color:var(--text-muted)">🎨</span>
+      <input type="color" id="me-bg-color" oninput="meColorChange()" onchange="meColorChange()" title="이 메모 배경색" style="width:24px;height:22px;padding:0;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:transparent">
+      <input type="color" id="me-text-color" oninput="meColorChange()" onchange="meColorChange()" title="이 메모 텍스트색" style="width:24px;height:22px;padding:0;border:1px solid var(--border);border-radius:3px;cursor:pointer;background:transparent">
+      <button onclick="meColorPreset('#fef3c7','#1a1a2e')" title="포스트잇 노랑" style="font-size:10px;padding:2px 5px;background:#fef3c7;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">📒</button>
+      <button onclick="meColorPreset('#dcfce7','#1a1a2e')" title="민트" style="font-size:10px;padding:2px 5px;background:#dcfce7;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">🌿</button>
+      <button onclick="meColorPreset('#dbeafe','#1a1a2e')" title="하늘" style="font-size:10px;padding:2px 5px;background:#dbeafe;color:#1a1a2e;border:1px solid #000;border-radius:3px;cursor:pointer">☁</button>
+      <button onclick="meColorPreset('#1a1a2e','#e0e0e0')" title="네이비 어두운" style="font-size:10px;padding:2px 5px;background:#1a1a2e;color:#e0e0e0;border:1px solid #000;border-radius:3px;cursor:pointer">🌌</button>
+      <button onclick="meColorPreset('','')" title="기본 다크 복원" style="font-size:10px;padding:2px 5px;background:#0d0d14;color:#e0e0e0;border:1px solid #000;border-radius:3px;cursor:pointer">🌙</button>
       <span style="border-left:1px solid var(--border);height:16px;margin:0 2px"></span>
       <button onclick="memoFontSize(-2)" title="글자 축소" style="font-size:11px;padding:3px 6px">A−</button>
       <button onclick="memoFontSize(2)" title="글자 확대" style="font-size:11px;padding:3px 6px">A+</button>
       <span id="me-fontsize-label" style="font-size:9px;color:var(--text-muted)">14px</span>
     </div>
     <textarea id="me-content" style="flex:1;background:var(--bg-0);color:var(--text);border:none;padding:14px;font-family:var(--mono);font-size:14px;line-height:1.7;resize:none;outline:none" placeholder="메모 내용..." oninput="memoAutoSave()"></textarea>
+    <div id="me-rendered" style="display:none;flex:1;overflow-y:auto;padding:14px;background:var(--bg-0);color:var(--text);font-size:14px;line-height:1.7"></div>
   </div>
   <div class="sb hid" id="sb">
     <div class="sb-resize" id="sb-resize"></div>
@@ -4383,6 +4394,8 @@ function drawConns(){
       selectedConn=c.id;
       svg.querySelectorAll('.conn').forEach(el=>el.classList.remove('sel'));
       p.classList.add('sel');
+      // 선택 즉시 endpoint 드래그 핸들 표시 — 다른 conn 의 핸들 정리도 같이 됨
+      drawConns();
       // 🚫 끝점(source/target) 근처에서는 pie menu 억제 — 포트·앵커 드래그로 새 연결 시작과 충돌 방지
       // s, e 는 이미 화면 좌표(cw 기준). 마우스는 clientX/Y — wr 로 보정
       const wr=cw.getBoundingClientRect();
@@ -4485,6 +4498,30 @@ function drawConns(){
           svg.appendChild(arrow);
         }
       }catch(e){ /* path 길이 0 등 엣지케이스 */ }
+    }
+    // ⇆ 끝점 드래그 핸들 — 선택된 연결선에만 표시. 시작/끝 동그라미를 잡아서 다른 포트/노드로 끌어 재부착.
+    if(isSel){
+      const _mkEndHandle = (px,py,which)=>{
+        const h=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        h.setAttribute('cx',px); h.setAttribute('cy',py); h.setAttribute('r',7);
+        h.setAttribute('fill','#fff');
+        h.setAttribute('stroke', effColor);
+        h.setAttribute('stroke-width','2.5');
+        h.setAttribute('class','conn-end-handle');
+        h.style.cursor='grab';
+        h.style.pointerEvents='all';
+        h.dataset.connId=c.id; h.dataset.end=which;
+        h.addEventListener('mousedown',ev=>{
+          ev.stopPropagation(); ev.preventDefault();
+          if(ev.button!==0) return;
+          _startConnEdgeDrag(c, which);
+        });
+        h.addEventListener('mouseenter',()=>{h.setAttribute('r','9')});
+        h.addEventListener('mouseleave',()=>{h.setAttribute('r','7')});
+        svg.appendChild(h);
+      };
+      _mkEndHandle(s.x, s.y, 'source');
+      _mkEndHandle(e.x, e.y, 'target');
     }
     // 연결선 중간 라벨 렌더 (HTML, 별도 컨테이너) — getTotalLength/getPointAtLength 활용
     if(lblCt && Array.isArray(c.labels) && c.labels.length){
@@ -4648,6 +4685,110 @@ function drawTmpConn(){
   const d=buildPath([{x:s.x,y:s.y},{x:ex,y:ey}], 0.5, fromSide, tmpToSide);
   t.setAttribute('d', d);
 }
+// ⇆ 연결선 끝점 재부착 — 선택된 연결선의 시작/끝 동그라미를 잡아서 다른 포트/노드로 옮김.
+//    드롭 위치가 빈 캔버스면 변경 취소(원위치 복귀). 드롭 후 fixedSide=true 로 자동 고정.
+let _connEdgeDrag = null;  // {conn, end:'source'|'target'}
+function _startConnEdgeDrag(conn, end){
+  _connEdgeDrag = {conn, end};
+  cw.classList.add('connecting');
+  const onMove = mev => _drawConnEdgePreview(mev.clientX, mev.clientY);
+  const onUp = mev => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    _finishConnEdgeDrag(mev);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+function _drawConnEdgePreview(clientX, clientY){
+  svg.querySelectorAll('.conn-edge-temp').forEach(el=>el.remove());
+  if(!_connEdgeDrag) return;
+  const c = _connEdgeDrag.conn;
+  const end = _connEdgeDrag.end;
+  const sn = findNodeOrCe(c.sid), tn = findNodeOrCe(c.tid);
+  if(!sn || !tn) return;
+  const sSide = _shortSide(c.fromSide||'r');
+  const tSide = _shortSide(c.toSide||'l');
+  // 고정 끝점 좌표 (반대편)
+  let fixed;
+  if(end === 'source'){
+    fixed = (c.targetAnchorId && tn.anchors)
+      ? (anchorScreenPos(tn, c.targetAnchorId) || portPos(tn, tSide))
+      : portPos(tn, tSide);
+  } else {
+    fixed = (c.sourceAnchorId && sn.anchors)
+      ? (anchorScreenPos(sn, c.sourceAnchorId) || portPos(sn, sSide))
+      : portPos(sn, sSide);
+  }
+  const wr = cw.getBoundingClientRect();
+  const mx = clientX - wr.left, my = clientY - wr.top;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('class', 'conn-temp conn-edge-temp');
+  path.setAttribute('d', `M ${fixed.x} ${fixed.y} L ${mx} ${my}`);
+  svg.appendChild(path);
+  // 가까운 포트 강조 (시각 피드백)
+  document.querySelectorAll('.port,.ce-port').forEach(p=>{
+    const r=p.getBoundingClientRect();
+    const dist=Math.hypot(clientX-(r.left+r.width/2), clientY-(r.top+r.height/2));
+    p.classList.toggle('near', dist<60);
+  });
+}
+function _finishConnEdgeDrag(ev){
+  svg.querySelectorAll('.conn-edge-temp').forEach(el=>el.remove());
+  document.querySelectorAll('.port.near,.ce-port.near').forEach(p=>p.classList.remove('near'));
+  cw.classList.remove('connecting');
+  if(!_connEdgeDrag) return;
+  const c = _connEdgeDrag.conn;
+  const end = _connEdgeDrag.end;
+  _connEdgeDrag = null;
+
+  // 드롭 지점 hit-test
+  const tgt = document.elementFromPoint(ev.clientX, ev.clientY);
+  let newNd = null, newSide = null;
+  if(tgt){
+    if(tgt.classList.contains('port') || tgt.classList.contains('ce-port')){
+      newSide = _shortSide(tgt.dataset.side);
+      if(tgt.classList.contains('ce-port')){
+        const ceEl = tgt.closest('.ce');
+        const cid = ceEl ? ceEl.dataset.ceId : null;
+        newNd = canvasEls.find(x=>x.id===cid);
+      } else {
+        const nid = tgt.dataset.node;
+        newNd = nodes.find(n=>n.id===nid);
+      }
+    } else {
+      const ndEl = tgt.closest('.nd, .ce');
+      if(ndEl){
+        if(ndEl.classList.contains('nd')) newNd = nodes.find(n=>n.id===ndEl.dataset.nid);
+        else newNd = canvasEls.find(x=>x.id===ndEl.dataset.ceId);
+        if(newNd) newSide = nearestSide(newNd, ev.clientX, ev.clientY);
+      }
+    }
+  }
+  if(!newNd){ drawConns(); return; }    // 빈 캔버스에 드롭 — 변경 취소
+
+  // self-loop 방지 (반대편과 같은 노드)
+  const otherSideId = (end==='source') ? c.tid : c.sid;
+  if(newNd.id === otherSideId){
+    if(typeof showCopyToast==='function') showCopyToast('⚠ 같은 노드끼리는 연결 불가');
+    drawConns(); return;
+  }
+  // 적용 — 사이드/노드 갱신 + 앵커 무효화 + fixedSide 자동 ON (사용자 명시 위치)
+  if(end === 'source'){
+    c.sid = newNd.id;
+    c.fromSide = newSide || 'r';
+    if(c.sourceAnchorId) c.sourceAnchorId = undefined;
+  } else {
+    c.tid = newNd.id;
+    c.toSide = newSide || 'l';
+    if(c.targetAnchorId) c.targetAnchorId = undefined;
+  }
+  c.fixedSide = true;
+  drawConns();
+  if(typeof autoSave==='function') autoSave();
+  if(typeof showCopyToast==='function') showCopyToast(end==='source'?'⇆ 시작점 이동':'⇆ 끝점 이동');
+}
+
 function addConn(sid,did,fromSide,toSide,extra){
   fromSide=_shortSide(fromSide||'r');
   toSide=_shortSide(toSide||'l');
@@ -18959,9 +19100,74 @@ async function openMemoTab(id){
   // pin button state
   const pinBtn=document.getElementById('me-pin-btn');
   if(pinBtn)pinBtn.style.background=r.memo.pinned?'rgba(245,158,11,.2)':'';
+  // 🎨 색상 복원 — color 필드는 JSON {bg,text} 또는 레거시 hex 문자열
+  _meApplyColorFromRaw(r.memo.color||'');
+  // 렌더 모드 OFF 로 시작
+  _meSetRenderMode(false);
   // show editor, hide canvas
   editor.style.display='flex';
   renderMemoBar();
+}
+// 🎨 메모 색상 — color 필드를 파싱해 picker 와 화면에 적용
+function _meParseColor(raw){
+  if(!raw) return {bg:'', text:''};
+  raw = String(raw).trim();
+  if(raw.startsWith('{')){
+    try{ const o=JSON.parse(raw); return {bg:o.bg||'', text:o.text||''}; }catch(e){}
+  }
+  // 레거시 — 단일 hex 문자열은 배경으로 간주
+  if(raw.startsWith('#')) return {bg:raw, text:''};
+  return {bg:'', text:''};
+}
+function _meApplyColorFromRaw(raw){
+  const {bg, text} = _meParseColor(raw);
+  const bgInp=document.getElementById('me-bg-color');
+  const txInp=document.getElementById('me-text-color');
+  if(bgInp) bgInp.value = bg || '#0d0d14';
+  if(txInp) txInp.value = text || '#e0e0e0';
+  _meApplyColors(bg, text);
+}
+function _meApplyColors(bg, text){
+  const ta=document.getElementById('me-content');
+  const rd=document.getElementById('me-rendered');
+  if(ta){ ta.style.background = bg||''; ta.style.color = text||''; }
+  if(rd){ rd.style.background = bg||''; rd.style.color = text||''; }
+}
+function meColorChange(){
+  if(!activeMemoId) return;
+  const bg=document.getElementById('me-bg-color').value;
+  const text=document.getElementById('me-text-color').value;
+  _meApplyColors(bg, text);
+  // 즉시 저장 (디바운스 없이) — 색은 작은 데이터, 즉각 반영이 자연스러움
+  api('POST','/api/memo/save',{id:activeMemoId, color: JSON.stringify({bg, text})});
+}
+function meColorPreset(bg, text){
+  const bgInp=document.getElementById('me-bg-color');
+  const txInp=document.getElementById('me-text-color');
+  if(bgInp) bgInp.value = bg || '#0d0d14';
+  if(txInp) txInp.value = text || '#e0e0e0';
+  _meApplyColors(bg, text);
+  if(activeMemoId) api('POST','/api/memo/save',{id:activeMemoId, color: (bg||text)?JSON.stringify({bg, text}):''});
+}
+// 👁 렌더 모드 토글 — 텍스트 ↔ 마크다운 렌더
+function _meSetRenderMode(on){
+  const ta=document.getElementById('me-content');
+  const rd=document.getElementById('me-rendered');
+  const btn=document.getElementById('me-render-btn');
+  if(!ta||!rd) return;
+  if(on){
+    rd.innerHTML = (typeof renderMd==='function' ? renderMd(ta.value||'') : escapeHtml(ta.value||''));
+    ta.style.display='none'; rd.style.display='';
+    if(btn){ btn.textContent='✏ 편집'; btn.style.background='rgba(76,175,80,.15)'; btn.style.color='#a3be8c'; btn.style.borderColor='rgba(76,175,80,.35)'; }
+  } else {
+    rd.style.display='none'; ta.style.display='';
+    if(btn){ btn.textContent='👁 렌더'; btn.style.background='rgba(126,207,255,.15)'; btn.style.color='#88c0d0'; btn.style.borderColor='rgba(126,207,255,.35)'; }
+  }
+}
+function meToggleRender(){
+  const rd=document.getElementById('me-rendered');
+  if(!rd) return;
+  _meSetRenderMode(rd.style.display === 'none');
 }
 function closeMemoTab(){
   document.getElementById('memo-editor').style.display='none';
