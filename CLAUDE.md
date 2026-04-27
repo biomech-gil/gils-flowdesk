@@ -61,6 +61,21 @@
 
 ---
 
+## 🛠 시놀로지 배포 함정 (2026-04-27 사고로 발견)
+
+코드를 시놀로지에 새로 배포하거나 인증 트러블슈팅 시 반드시 확인:
+
+1. **`accts-runtime` / `gmini-accts-runtime` 폴더 권한** — 호스트에서 `chown -R 1000:1000 /volume1/FlowDesk/{accts-runtime,gmini-accts-runtime}` + `chmod 700`. Windows SMB로 폴더 만들면 uid 1000이 못 써서 `Permission denied` → OAuth 계정 sync 실패 → 라운드로빈 시 "Not logged in".
+2. **재시작 ≠ 재빌드** — `server.py`/`Dockerfile` 수정 후엔 Container Manager에서 단순 "재시작"이 아닌 **빌드(Build/Rebuild)** 메뉴 선택해야 코드 적용. 단순 재시작은 옛 이미지 그대로.
+3. **DB의 stale OAuth 계정 정리** — 옛 `.credentials.json` 업로드본이 라운드로빈 우선순위로 먼저 시도되어 401 발생. setup-token 활성화 후 다른 모든 OAuth 계정 삭제 권장.
+4. **부팅 로그 sanity check**:
+   - ✅ `Active Claude account is setup-token — env var mode (no global file)` (active이 setup-token)
+   - ✅ `Synced N Claude accounts (preserve-existing)` (새 코드 표식)
+   - ❌ `Sync accounts failed: Permission denied` (폴더 chown 필요)
+   - ❌ `Sync accounts ... to temp dirs` (옛 코드 돌고 있음, 빌드 안 됨)
+
+---
+
 ## 🚫 하지 말 것
 
 1. **불필요한 모듈/프레임워크 도입** (React, Webpack, Vite 등) — 단일 파일 구조 유지.

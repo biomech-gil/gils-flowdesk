@@ -139,7 +139,12 @@ Claude와 Gemini 등 여러 AI CLI를 노드로 배치·연결해 자동 연쇄 
 
 # 1. 필요한 모든 폴더를 uid 1000 권한으로 일괄 생성
 sudo bash setup-synology.sh
-#  → /volume1/FlowDesk/{db, workspace, creds, gemini-creds, uploads, whisper-cache}
+#  → /volume1/FlowDesk/{db, workspace, creds, gemini-creds, uploads, whisper-cache,
+#                       accts-runtime, gmini-accts-runtime}
+# ⚠️ accts-runtime / gmini-accts-runtime 폴더는 반드시 uid 1000 소유여야 함.
+#    Windows SMB 로 만들면 컨테이너에서 Permission denied → 인증 실패. SSH 로 chown 필수:
+#    sudo chown -R 1000:1000 /volume1/FlowDesk/{accts-runtime,gmini-accts-runtime}
+#    sudo chmod 700 /volume1/FlowDesk/{accts-runtime,gmini-accts-runtime}
 
 # 2. 앱 파일 배치
 mkdir -p /volume1/docker/gils-flowdesk
