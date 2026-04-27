@@ -17,9 +17,10 @@
 2. FlowDesk → ⚙️ 시스템 설정 → Claude Code 계정 관리 → **🔑 토큰만 붙여넣기** → 토큰 입력 → 저장 → 활성화
 3. 만료/실패 시 같은 절차 반복 (옛 계정 삭제 후 새 토큰 등록)
 
-### UI에서 보이는 함정
-- "📂 .credentials.json 파일 (권장)" 버튼은 **권장이라고 적혀있지만 멀티디바이스 환경에서 작동 안 함**. 사용자에게 안내할 때 절대 가리키지 말 것.
-- 인증 실패 호소 → 즉시 setup-token 안내. JSON 업로드 옵션 제시 금지.
+### UI 정책 (2026-04-27 정리)
+- Claude 쪽 ⚙️ 시스템 설정에는 **"🔑 setup-token 등록" 단일 버튼만 노출**. JSON 파일 업로드 / JSON 붙여넣기 / 웹 OAuth 버튼은 멀티 디바이스 충돌로 **삭제됨** (커밋 이력 참고).
+- 인증 헬스 배지 상세 팝업의 "📎 인증서 업로드" 버튼은 Claude 의 경우 파일 picker 대신 **setup-token 텍스트 prompt**로 동작.
+- 인증 실패 호소 → 즉시 setup-token 안내. JSON 업로드 절대 권하지 말 것.
 
 ### 코드 동작 (참고)
 - `server.py` `get_claude_env_for_account` — credentials의 `refreshToken`이 빈 값이면 setup-token 모드로 인식, `CLAUDE_CODE_OAUTH_TOKEN` env var만 사용 (파일 안 만듦, `CLAUDE_CONFIG_DIR`/`HOME` 빈 dir 격리).

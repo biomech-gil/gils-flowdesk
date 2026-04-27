@@ -69,10 +69,10 @@ Claude와 Gemini 등 여러 AI CLI를 노드로 배치·연결해 자동 연쇄 
 - **다운로드 노드 📥** — 여러 URL 일괄 mp4/mp3/이미지 + 자막을 프로젝트 폴더에 저장
 
 ### 🔐 인증/계정
-- **Claude 인증은 무조건 setup-token** — 본인 PC에서 `claude setup-token` 실행해 받은 `sk-ant-oat01-...` 토큰을 ⚙️ → "🔑 토큰만 붙여넣기"로 등록. 1년 유효, 다른 PC의 `claude` 일반 OAuth와 충돌 없음.
-- **❌ `.credentials.json` 업로드 비권장** — OAuth refresh 토큰 회전 충돌로 멀티 디바이스 환경에서 인증 실패 사이클이 발생함. UI에 버튼은 남아있지만 사용 금지. 자세한 이유는 [`CLAUDE.md`](CLAUDE.md) 참고.
+- **Claude 인증은 setup-token 단일 방식** — 본인 PC에서 `claude setup-token` 실행해 받은 `sk-ant-oat01-...` 토큰을 ⚙️ → "🔑 setup-token 등록"으로 입력. 1년 유효, 다른 PC의 `claude` 일반 OAuth와 충돌 없음. **OAuth credentials.json 업로드 / 웹 OAuth 로그인 UI는 멀티 디바이스 환경 충돌 사고로 제거됨** (자세한 이유는 [`CLAUDE.md`](CLAUDE.md)).
+- **Gemini 인증은 OAuth JSON 또는 API 키** — `gemini` CLI 로그인의 `~/.gemini/oauth_creds.json`을 업로드하거나, AI Studio API 키. Google 계정 무료 할당량 사용. (Anthropic 만큼 공격적 토큰 회전이 없어 멀티 디바이스에서도 비교적 안정 + 시놀로지 영구 디스크 + DB 역동기화로 갱신본 유지)
 - **다계정 자동 로테이션** — round-robin / 우선순위 / 수동 모드. 토큰 갱신본은 시놀로지 영구 디스크(`/volume1/FlowDesk/accts-runtime`)에 자동 보존되어 컨테이너 재시작에도 살아남음.
-- **Gemini 다계정** — API 키 · OAuth JSON · 격리된 홈 디렉토리
+- **죽은 계정 자동 폴백** — 노드에 옛 삭제된 계정 ID가 묶여 있어도, 서버가 진입 시 DB 검증 → 없으면 살아있는 계정 자동 선택. CLI 응답에서 "Not logged in/401" 감지 시도 다른 계정으로 폴백.
 - **🔄 인증 자동 복구** — 계정 업로드 시 브라우저 IndexedDB에 캐시, 서버 인증 실패 감지 시 조용히 재업로드 후 재점검
 - **YouTube Data API 키** — 설정 UI에서 저장 (DB 우선, env 폴백)
 - **인증 헬스 배지** — 상단 실시간 표시, 클릭하면 상세/재점검

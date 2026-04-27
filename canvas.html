@@ -2774,13 +2774,10 @@ body.focus-mode #canvas-controls{display:none}
         <!-- Account list -->
         <div id="claude-accounts-list" style="margin-bottom:10px"></div>
 
-        <!-- Actions -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="document.getElementById('s-claude-file').click()" style="padding:6px 12px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600" title="가장 권장: claude login 후 파일 업로드">📂 .credentials.json 파일 (권장)</button>
-          <button onclick="showClaudeTokenForm()" style="padding:6px 12px;background:rgba(245,158,11,.2);color:#ebcb8b;border:1px solid rgba(245,158,11,.3);border-radius:4px;cursor:pointer;font-size:12px">🔑 토큰만 붙여넣기</button>
-          <button onclick="showClaudePasteForm()" style="padding:6px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">📋 JSON 붙여넣기</button>
-          <button onclick="startClaudeWebLogin()" style="padding:6px 12px;background:rgba(59,130,246,.15);color:#7ecfff;border:1px solid rgba(59,130,246,.3);border-radius:4px;cursor:pointer;font-size:12px" title="전체 권한 6개 (profile, inference, sessions, mcp, api_key, file_upload)">🌐 웹으로 로그인 (전체 권한)</button>
-          <input type="file" id="s-claude-file" accept=".json" style="display:none">
+        <!-- Actions — setup-token 한 가지만 (멀티디바이스 안전한 유일한 방식) -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button onclick="showClaudeTokenForm()" style="padding:8px 16px;background:linear-gradient(135deg,#4CAF50,#2E7D32);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12.5px;font-weight:700">🔑 setup-token 등록</button>
+          <span style="font-size:10.5px;color:var(--text-muted);line-height:1.45">본인 PC cmd 에서 <code style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px;color:#a7f3d0">claude setup-token</code> 실행 → 받은 <code style="background:rgba(0,0,0,.3);padding:1px 5px;border-radius:3px;color:#a7f3d0">sk-ant-oat01-...</code> 토큰을 등록 (1년 유효, 멀티 디바이스 안전)</span>
         </div>
 
         <!-- 토큰 직접 입력 폼 -->
@@ -2803,15 +2800,6 @@ body.focus-mode #canvas-controls{display:none}
           </div>
         </div>
 
-        <!-- Paste form (hidden by default) -->
-        <div id="claude-paste-form" style="display:none;margin-top:10px">
-          <input type="text" id="claude-name-input" placeholder="계정 이름 (예: 회사용, 개인용)" style="width:100%;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px">
-          <textarea id="claude-creds-input" placeholder='{"claudeAiOauth": {...}}' style="width:100%;height:80px;padding:6px;margin-bottom:6px;background:var(--bg-0);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
-          <div style="display:flex;gap:6px">
-            <button onclick="saveClaudeAccount()" style="padding:5px 12px;background:var(--accent);color:#000;border:none;border-radius:4px;cursor:pointer;font-size:12px">💾 저장</button>
-            <button onclick="document.getElementById('claude-paste-form').style.display='none'" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
-          </div>
-        </div>
       </div>
 
       <!-- Gemini 계정 관리 -->
@@ -18895,6 +18883,36 @@ let _authRecoverInFlight=false;
 // accountId: 기존 실패 계정이면 그 id(덮어쓰기), 빈 값이면 신규
 // hintName: 기존 실패 계정의 이름(사용자에게 확인용). 신규는 빈값
 async function _authUploadFor(provider, accountId, hintName){
+  // Claude 는 setup-token 강제 — 파일 업로드 대신 토큰 텍스트 prompt
+  if(provider==='claude'){
+    const tok=prompt(
+      'Claude setup-token 붙여넣기:\n\n' +
+      '본인 PC cmd 에서 [claude setup-token] 실행 후 받은 sk-ant-oat01-... 토큰\n' +
+      '(JSON 파일 업로드는 멀티 디바이스 충돌로 더 이상 지원하지 않습니다)',
+      ''
+    );
+    if(tok===null || !tok.trim()) return;
+    const m=tok.replace(/[\s\r\n\t]+/g,'').match(/sk-ant-[A-Za-z0-9_\-]+/);
+    if(!m){ alert('올바른 토큰을 찾을 수 없습니다.\nsk-ant-oat01-... 형태여야 합니다.'); return; }
+    if(m[0].length<50){ alert('토큰이 너무 짧습니다 (실제 토큰은 100자 이상)'); return; }
+    const content=JSON.stringify({claudeAiOauth:{accessToken:m[0],refreshToken:'',expiresAt:Date.now()+365*24*60*60*1000}});
+    const name=hintName || (prompt('계정 이름:', 'setup-token')||'').trim() || 'setup-token';
+    const statusEl=document.getElementById('auth-upload-status');
+    const setS=(msg,color)=>{ if(statusEl){statusEl.innerHTML=msg; statusEl.style.color=color||''} };
+    setS(`💾 서버에 저장 중… (${name})`, '#fde68a');
+    const body={name, credentials:content};
+    if(accountId) body.id=parseInt(accountId);
+    const r=await api('POST','/api/claude/accounts/save', body);
+    if(!r || !r.ok){ setS(`❌ 저장 실패: ${(r&&r.error)||'알 수 없는 오류'}`, '#fca5a5'); return; }
+    try{ await authCacheSet('claude', name, 'token', content) }catch(e){}
+    setS(`✅ 저장됨 — 재점검 중…`, '#a3e635');
+    setTimeout(async ()=>{
+      await runAuthHealthCheck(false);
+      const p=document.getElementById('auth-health-popup');
+      if(p){ p.remove(); showAuthHealthDetails(); }
+    }, 400);
+    return;
+  }
   const input=document.createElement('input');
   input.type='file';
   input.accept='.json,application/json,.pem,.key,text/plain';
@@ -18909,13 +18927,6 @@ async function _authUploadFor(provider, accountId, hintName){
     try{
       setS(`📤 ${f.name} 읽는 중…`, '#fde68a');
       const content = await f.text();
-      // 최소 검증: JSON 이면 파싱 가능해야 함 (claude 는 JSON 필수)
-      if(provider==='claude'){
-        try{ JSON.parse(content) }catch(e){
-          setS(`⚠ Claude 인증서는 JSON 형식이어야 합니다: ${e.message}`, '#fca5a5');
-          return;
-        }
-      }
       // 계정 이름 결정 — 기존 실패 계정이면 그대로, 신규면 파일명 또는 사용자 입력
       let name = hintName || f.name.replace(/\.(json|txt|pem|key)$/i,'');
       if(!accountId){
