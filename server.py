@@ -1979,6 +1979,17 @@ def run_claude_safe(cmd_builder_fn, account_id, run_cwd=None, timeout=600, max_f
     """Claude CLI 호출 + rate-limit 자동 폴백.
     cmd_builder_fn() → (cmd, final_prompt). 한도 감지되면 다른 계정으로 재시도.
     Returns (stdout, used_account_id, fallback_log)"""
+    # body 의 accountId 가 옛 삭제된 계정을 가리키면 — DB 에 없거나 credentials 비어 있으면 —
+    # 그대로 쓰면 CLI 가 "Not logged in" 으로 실패하므로 즉시 폴백 후보로 전환.
+    if account_id:
+        try:
+            row = db_exec("SELECT credentials FROM claude_accounts WHERE id=?",
+                          (int(account_id),), fetchone=True)
+            if not row or not (row.get("credentials") or "").strip():
+                log(f"[CLAUDE] account_id={account_id} 가 DB 에 없음 — pick_available_account 로 폴백")
+                account_id = None
+        except Exception:
+            account_id = None
     tried = set()
     last_err = None
     cur_id = account_id
@@ -2006,6 +2017,13 @@ def run_claude_safe(cmd_builder_fn, account_id, run_cwd=None, timeout=600, max_f
                 mark_rate_limited(cur_id, label, hours)
                 last_err = f"계정 {cur_id} → {label} ({hours}h)"
                 log(f"[CLAUDE] rate-limited: {last_err} → 다른 계정 폴백")
+                cur_id = None
+                continue
+            # 인증 실패도 폴백 — 옛 노드가 죽은 OAuth 계정 ID 들고 있을 때 자동 복구
+            if _re_rl.search(r"not\s+logged\s+in|please\s+run\s+/login|invalid\s+authentication\s+credentials|api\s+error:\s*401",
+                             combined, _re_rl.IGNORECASE):
+                last_err = f"계정 {cur_id} 인증 실패 (Not logged in / 401)"
+                log(f"[CLAUDE] auth-fail: {last_err} → 다른 계정 폴백")
                 cur_id = None
                 continue
             return (result.stdout.strip(), cur_id, f"✓ 계정 {cur_id}" + (f" (이전 {len(tried)-1}개 한도 초과로 폴백)" if len(tried)>1 else ""))
