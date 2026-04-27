@@ -7297,6 +7297,8 @@ function buildCeDom(ce){
     // 🔒 잠긴 영역 — 표면 클릭은 캔버스 팬으로 직접 시작 (cw mousedown은 e.target이 cw/cvs일 때만 동작)
     if(ce.type==='region' && ce.locked){
       if(e.target.tagName==='INPUT' || e.target.contentEditable==='true') return;
+      // 이미 다른 상호작용(드래그·연결선·리사이즈 등) 진행 중이면 팬 안 시작 — 노드 휙휙 튀는 사고 방지
+      if(isDrag||isConn||isResize||isCeDrag||isCeResize||isSelBox||isPan||isWpDrag||isDiv) return;
       if(e.button===0 || e.button===1){
         e.stopPropagation();
         isPan=true; panSX=e.clientX-cx; panSY=e.clientY-cy;
