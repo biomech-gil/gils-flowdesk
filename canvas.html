@@ -553,6 +553,23 @@ body.sb-left #fp-panel{left:auto;right:66px}
 .conn-label .cl-del{position:absolute;right:-7px;top:-7px;width:16px;height:16px;border-radius:50%;background:#ef4444;color:#fff;font-size:11px;text-align:center;line-height:14px;cursor:pointer;border:1px solid #fff;display:none}
 .conn-label:hover .cl-del,.conn-label.sel .cl-del{display:block}
 .ce.region.region-scroll{border:2px dashed rgba(139,92,246,.7);box-shadow:inset 0 0 0 2px rgba(139,92,246,.15);cursor:ns-resize}
+/* 📌 잠긴 영역 — 드래그/리사이즈 불가, 표면 클릭은 캔버스로 통과 */
+.ce.region .ce-region-lock-btn{position:absolute;top:-10px;right:46px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fde68a;border:1px solid rgba(253,230,138,.5);cursor:pointer;font-size:10px;line-height:14px;text-align:center;padding:0;z-index:10;display:none;opacity:.85;transition:opacity .12s,background .12s}
+.ce.region:hover .ce-region-lock-btn,.ce.region.sel .ce-region-lock-btn,.ce.region.region-locked .ce-region-lock-btn{display:block}
+.ce.region .ce-region-lock-btn:hover{opacity:1;background:rgba(245,158,11,.4)}
+.ce.region.region-locked{border:2px dashed rgba(245,158,11,.7) !important;box-shadow:inset 0 0 0 1px rgba(245,158,11,.15);cursor:grab !important}
+.ce.region.region-locked:active{cursor:grabbing !important}
+/* 잠금 상태에서도 핀 버튼·라벨은 본래 커서 유지 */
+.ce.region.region-locked .ce-region-lock-btn{cursor:pointer !important}
+.ce.region.region-locked .ce-label{cursor:text !important}
+.ce.region.region-locked .ce-region-lock-btn{background:rgba(245,158,11,.45);box-shadow:0 0 6px rgba(245,158,11,.5);opacity:1}
+.ce.region.region-locked .ce-resize,
+.ce.region.region-locked .ce-resize-e,
+.ce.region.region-locked .ce-resize-w,
+.ce.region.region-locked .ce-resize-s,
+.ce.region.region-locked .ce-resize-n,
+.ce.region.region-locked .ce-del,
+.ce.region.region-locked .ce-style-btn{display:none !important}
 .ce.region.region-scroll::before{content:'';position:absolute;right:2px;top:20px;bottom:20px;width:3px;background:linear-gradient(to bottom, rgba(139,92,246,.1), rgba(139,92,246,.5), rgba(139,92,246,.1));border-radius:2px;pointer-events:none}
 /* 영역 실행 모드 — 번호 부여 / 실행 중 펄싱 */
 body.exec-order-mode .ce.region{outline:2px dashed rgba(255,200,80,.7);outline-offset:2px;cursor:pointer}
@@ -1469,6 +1486,9 @@ body.anchor-connect-mode .nd:hover{outline-color:#f472b6;outline-offset:6px}
   box-sizing:border-box;flex-shrink:0;
 }
 .ts-select:hover{background-color:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)}
+/* OS 기본 드롭다운 옵션 — 흰배경에 흰글씨 묻힘 방지 (검은 텍스트 강제) */
+.ts-select option{background:#ffffff;color:#000000;font-weight:500}
+.ts-select option:hover,.ts-select option:checked{background:#dbeafe;color:#000000}
 .ts-btn{
   height:30px;min-width:30px;padding:0 10px;
   display:inline-flex;align-items:center;justify-content:center;gap:5px;
@@ -1610,6 +1630,10 @@ body.focus-mode #canvas-controls{display:none}
 .landing-item .meta{font-size:10.5px;margin-top:3px;letter-spacing:.2px}
 .landing-preview{background:#0a0a14;border-left:1px solid rgba(255,255,255,.05)}
 .landing-preview-hd{font-size:12px;letter-spacing:.3px}
+/* ⚙️ 시스템 설정 모달 — code 태그 흰 배경 제거 (브라우저 기본 스타일 덮어쓰기, 인라인 color 는 보존) */
+#settings-modal code{background:transparent !important;padding:0;border:0;font-family:var(--mono);font-size:.95em}
+/* readonly 인풋(경로 표시용)도 흰 배경 안 나오게 강제 */
+#settings-modal input[readonly]{background:var(--bg-0) !important;color:var(--text) !important}
 </style>
 </head>
 <body>
@@ -6534,6 +6558,8 @@ function mkCe(opts={}){
     scrollable:opts.scrollable||false,
     scrollOffsetY:opts.scrollOffsetY||0,
     memberIds:Array.isArray(opts.memberIds)?opts.memberIds:[],
+    // 📌 핀 고정 (region 전용) — 잠그면 드래그/리사이즈 불가, 표면 클릭은 캔버스 팬으로 통과
+    locked:!!opts.locked,
     // 영역 실행 오케스트레이션 (region 전용)
     execOrder:(typeof opts.execOrder==='number')?opts.execOrder:null,
     execLabel:opts.execLabel||'',
@@ -6795,7 +6821,8 @@ function buildCeDom(ce){
   if(ce.type==='region'){
     d.style.background=ce.color;
     const labelColor=ce.labelColor||'#ffffff';
-    d.innerHTML=`<input class="ce-label" value="${ce.label||''}" placeholder="영역 이름" style="font-size:${ce.fontSize}px;color:${labelColor}"><button class="ce-style-btn" title="라벨 크기/색상" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
+    d.innerHTML=`<input class="ce-label" value="${ce.label||''}" placeholder="영역 이름" style="font-size:${ce.fontSize}px;color:${labelColor}"><button class="ce-region-lock-btn" data-act="lock-toggle" title="📌 영역 핀 고정 — 잠그면 드래그·리사이즈 불가, 표면 클릭은 캔버스 팬으로 통과">📌</button><button class="ce-style-btn" title="라벨 크기/색상" data-ce-style>A</button><div class="ce-resize"></div><div class="ce-resize-e"></div><div class="ce-resize-w"></div><div class="ce-resize-s"></div><div class="ce-resize-n"></div><div class="ce-del">×</div>`;
+    if(ce.locked) d.classList.add('region-locked');
     // 실행 순서 뱃지 (있으면 표시 — setTimeout으로 el 할당 이후 렌더)
     if(typeof ce.execOrder==='number'){
       setTimeout(()=>_regionRefreshExecBadge(ce), 0);
@@ -7273,6 +7300,23 @@ function buildCeDom(ce){
   }
   // 이벤트
   d.addEventListener('mousedown',e=>{
+    // 📌 핀 고정 토글 버튼 — 잠금/해제 상관없이 항상 작동 (잠금 분기보다 먼저 처리)
+    if(e.target.classList.contains('ce-region-lock-btn')){
+      e.stopPropagation(); e.preventDefault();
+      _toggleRegionLock(ce);
+      return;
+    }
+    // 🔒 잠긴 영역 — 표면 클릭은 캔버스 팬으로 직접 시작 (cw mousedown은 e.target이 cw/cvs일 때만 동작)
+    if(ce.type==='region' && ce.locked){
+      if(e.target.tagName==='INPUT' || e.target.contentEditable==='true') return;
+      if(e.button===0 || e.button===1){
+        e.stopPropagation();
+        isPan=true; panSX=e.clientX-cx; panSY=e.clientY-cy;
+        cw.classList.add('grabbing');
+        if(!e.ctrlKey) _deselectAll();
+      }
+      return;
+    }
     const _startCeResize=(dir)=>{
       e.stopPropagation();
       isCeResize=true; ceResNd=ce;
@@ -13735,6 +13779,20 @@ function regionEnableScroll(ce){
   showCopyToast(`🔭 스크롤 박스 모드 ON · 멤버 ${inside.length}개`);
 }
 
+// 📌 영역 핀 고정 토글 — 잠그면 드래그/리사이즈 차단, 표면 클릭은 캔버스로 통과
+function _toggleRegionLock(ce){
+  if(!ce || ce.type!=='region' || !ce.el) return;
+  ce.locked = !ce.locked;
+  ce.el.classList.toggle('region-locked', !!ce.locked);
+  // 잠긴 상태에서 드래그/리사이즈가 진행 중이면 즉시 취소
+  if(ce.locked){
+    if(isCeDrag && ceDragNd===ce){ isCeDrag=false; ceDragNd=null; }
+    if(isCeResize && ceResNd===ce){ isCeResize=false; ceResNd=null; }
+  }
+  autoSave();
+  if(typeof showCopyToast==='function') showCopyToast(ce.locked ? '📌 영역 핀 고정 — 드래그 차단, 표면은 캔버스 팬으로 통과' : '📌 영역 핀 해제');
+}
+
 // 스크롤 박스 모드 끄기 — 멤버 노드들의 DOM 상태 복원
 function regionDisableScroll(ce){
   if(!ce || !ce.scrollable) return;
@@ -17281,6 +17339,7 @@ function showCeCtxMenu(x, y, ce, dx, dy){
   const items=[
     {label:'📍 이 지점에서 연결선 시작', fn:()=>startAnchorConnect(ce, dx, dy)},
     ce.type==='region' ? {label:'🎨 배경색 변경', fn:()=>{const ev={clientX:x,clientY:y};showColorPicker(ev,ce)}} : null,
+    ce.type==='region' ? {label:(ce.locked?'📌 핀 해제 (드래그/리사이즈 가능)':'📌 핀 고정 (드래그 차단, 캔버스 팬 통과)'), fn:()=>_toggleRegionLock(ce)} : null,
     ce.type==='region' && !ce.scrollable ? {label:'🔭 스크롤 박스 모드 켜기', fn:()=>regionEnableScroll(ce)} : null,
     ce.type==='region' && ce.scrollable ? {label:'🔭 스크롤 박스 모드 끄기', fn:()=>regionDisableScroll(ce)} : null,
     ce.type==='region' && ce.scrollable ? {label:'🔄 멤버 재스캔 (세로 컬럼의 모든 노드)', fn:()=>{

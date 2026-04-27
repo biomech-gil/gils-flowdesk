@@ -42,14 +42,21 @@ COPY --chown=flowdesk:flowdesk migrate_to_pg.py setup_pg.sql /app/
 
 # 볼륨 마운트 포인트 (bind mount로 덮어써짐)
 # /app 자체도 chown 해야 server.py가 config.json 등 새 파일 생성 가능
+# accts-runtime, gmini-accts-runtime: 멀티계정 CLI가 토큰 갱신 시 쓰는 영구 디렉터리
+#   - /tmp는 컨테이너 재시작 시 휘발 → 갱신된 토큰 잃어버림 → DB의 stale 토큰으로 인증 실패
+#   - 시놀로지 호스트에 bind mount해서 갱신본 영속화
 RUN mkdir -p /workspace /claude-creds /gemini-creds /app/uploads \
+              /app/accts-runtime /app/gmini-accts-runtime \
     && chown -R flowdesk:flowdesk /app /workspace /claude-creds /gemini-creds \
+                                  /app/accts-runtime /app/gmini-accts-runtime \
     && ln -sf /claude-creds /home/flowdesk/.claude \
     && ln -sf /gemini-creds /home/flowdesk/.gemini
 
 # 비-root 사용자로 전환
 USER flowdesk
 ENV HOME=/home/flowdesk
+ENV CLAUDE_RUNTIME_DIR=/app/accts-runtime
+ENV GEMINI_RUNTIME_DIR=/app/gmini-accts-runtime
 
 EXPOSE 8888
 ENV PYTHONUNBUFFERED=1

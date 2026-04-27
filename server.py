@@ -832,21 +832,42 @@ _create_default_user()
 # ═══════════════════════════════════════
 def _sync_claude_credentials():
     """DB → ~/.claude/.credentials.json 동기화 (서버 시작 시).
-    우선순위: claude_accounts(active=1) → 레거시 system_settings.claude_credentials."""
+    우선순위: claude_accounts(active=1) → 레거시 system_settings.claude_credentials.
+    setup-token (refreshToken 비어있음) 은 글로벌 파일 안 만듦 — CLI가 OAuth 형태로 오해해
+    "Not logged in" 거부하는 사고를 방지하고, 그런 경우 옛 글로벌 파일은 삭제."""
     try:
         # 1) New system: claude_accounts active row
         row = db_exec("SELECT credentials FROM claude_accounts WHERE active=1 LIMIT 1", fetchone=True)
         if row and row.get("credentials"):
+            # setup-token 여부 확인
+            is_setup_token = False
+            try:
+                parsed = json.loads(row["credentials"])
+                oauth = parsed.get("claudeAiOauth", {})
+                if oauth.get("accessToken") and not oauth.get("refreshToken"):
+                    is_setup_token = True
+            except Exception:
+                pass
             claude_dir = os.path.expanduser("~/.claude")
             os.makedirs(claude_dir, exist_ok=True)
             creds_path = os.path.join(claude_dir, ".credentials.json")
+            if is_setup_token:
+                # 글로벌 파일이 있으면 삭제 — CLI 가 그걸 먼저 읽어 인증 실패하는 사고 차단
+                try:
+                    if os.path.exists(creds_path):
+                        os.remove(creds_path)
+                        log("Removed stale global credentials.json (active=setup-token)")
+                except Exception:
+                    pass
+                log("Active Claude account is setup-token — env var mode (no global file)")
+                return
             with open(creds_path, "w", encoding="utf-8") as f:
                 f.write(row["credentials"])
             try:
                 os.chmod(creds_path, 0o600)
             except Exception:
                 pass
-            log("Claude credentials synced from active account")
+            log("Claude credentials synced from active account (OAuth)")
             return
         # 2) Legacy: old system_settings key
         row = db_exec("SELECT value FROM system_settings WHERE key='claude_credentials'", fetchone=True)
@@ -871,15 +892,29 @@ _sync_claude_credentials()
 # ═══════════════════════════════════════
 # Per-account credential directories (multi-account simultaneous use)
 # ═══════════════════════════════════════
+# CLAUDE_RUNTIME_DIR/GEMINI_RUNTIME_DIR 환경변수가 있으면 그쪽을 사용 (영구 디스크 권장).
+# 없으면 컨테이너 /tmp 사용 — 재시작 시 휘발되고 DB stale 문제 발생.
+# Docker 배포는 docker-compose.yml에서 시놀로지 bind mount로 영구화한다.
+CLAUDE_RUNTIME_DIR = os.environ.get("CLAUDE_RUNTIME_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-accts")
+GEMINI_RUNTIME_DIR = os.environ.get("GEMINI_RUNTIME_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-gmini-accts")
+CLAUDE_ENVONLY_DIR = os.environ.get("CLAUDE_ENVONLY_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-envonly")
+try:
+    os.makedirs(CLAUDE_RUNTIME_DIR, exist_ok=True)
+    os.makedirs(GEMINI_RUNTIME_DIR, exist_ok=True)
+    os.makedirs(CLAUDE_ENVONLY_DIR, exist_ok=True)
+except Exception as e:
+    log(f"runtime dir create failed: {e}")
+
 def _get_account_dir(account_id):
     """각 계정의 CLAUDE_CONFIG_DIR 경로 반환. 없으면 생성."""
-    base = os.path.join(tempfile.gettempdir(), "flowdesk-accts", str(account_id))
+    base = os.path.join(CLAUDE_RUNTIME_DIR, str(account_id))
     os.makedirs(base, exist_ok=True)
     return base
 
-def _sync_account_to_dir(account_id, credentials):
+def _sync_account_to_dir(account_id, credentials, force=True):
     """계정 credentials를 전용 디렉토리에 동기화.
-    setup-token 토큰 (refreshToken 없음)은 파일 안 씀 (env var로만 사용)."""
+    setup-token 토큰 (refreshToken 없음)은 파일 안 씀 (env var로만 사용).
+    force=False: 파일이 이미 있으면 덮어쓰지 않음 (CLI가 토큰 갱신해 둔 새 파일 보존)."""
     d = _get_account_dir(account_id)
     creds_path = os.path.join(d, ".credentials.json")
     # setup-token 여부 확인
@@ -900,6 +935,8 @@ def _sync_account_to_dir(account_id, credentials):
         except Exception:
             pass
     else:
+        if not force and os.path.exists(creds_path):
+            return d  # 갱신된 토큰 보존
         with open(creds_path, "w", encoding="utf-8") as f:
             f.write(credentials)
         try:
@@ -908,12 +945,43 @@ def _sync_account_to_dir(account_id, credentials):
             pass
     return d
 
+def _persist_refreshed_claude_creds(account_id):
+    """CLI 호출 후, 디스크의 .credentials.json이 DB와 다르면 DB로 역동기화.
+    Claude CLI가 액세스 토큰 갱신 시 파일을 다시 쓰는 것을 잡아내 영구 보존한다."""
+    if not account_id:
+        return
+    try:
+        creds_path = os.path.join(_get_account_dir(int(account_id)), ".credentials.json")
+        if not os.path.exists(creds_path):
+            return
+        with open(creds_path, "r", encoding="utf-8") as f:
+            disk = f.read()
+        if not disk.strip():
+            return
+        # 유효한 OAuth 구조인지 가볍게 검증 (CLI가 빈 객체로 덮어쓰는 사고 방지)
+        try:
+            parsed = json.loads(disk)
+            if not parsed.get("claudeAiOauth", {}).get("accessToken"):
+                return
+        except Exception:
+            return
+        row = db_exec("SELECT credentials FROM claude_accounts WHERE id=?", (int(account_id),), fetchone=True)
+        if not row:
+            return
+        if (row.get("credentials") or "") == disk:
+            return  # 변화 없음
+        db_exec("UPDATE claude_accounts SET credentials=? WHERE id=?", (disk, int(account_id)))
+        log(f"[CLAUDE] refreshed credentials persisted (account={account_id})")
+    except Exception as e:
+        log(f"[CLAUDE] persist refreshed creds failed: {e}")
+
 def _sync_all_accounts():
     try:
         rows = db_exec("SELECT id, credentials FROM claude_accounts", fetch=True) or []
         for row in rows:
-            _sync_account_to_dir(row["id"], row["credentials"])
-        log(f"Synced {len(rows)} Claude accounts to temp dirs")
+            # 부팅 시는 force=False — 디스크에 살아있는 갱신본 보존, 없을 때만 DB로 채움
+            _sync_account_to_dir(row["id"], row["credentials"], force=False)
+        log(f"Synced {len(rows)} Claude accounts (preserve-existing)")
     except Exception as e:
         log(f"Sync accounts failed: {e}")
 
@@ -997,23 +1065,67 @@ def _sync_gemini_credentials():
 _sync_gemini_credentials()
 
 def _get_gemini_account_dir(account_id):
-    base = os.path.join(tempfile.gettempdir(), "flowdesk-gmini-accts", str(account_id))
+    base = os.path.join(GEMINI_RUNTIME_DIR, str(account_id))
     os.makedirs(base, exist_ok=True)
     return base
 
-def _sync_gemini_account_to_dir(account_id, auth_type, credentials):
-    """계정별 격리 디렉토리. HOME=<dir>, .gemini/ 하위에 기록."""
+def _sync_gemini_account_to_dir(account_id, auth_type, credentials, force=True):
+    """계정별 격리 디렉토리. HOME=<dir>, .gemini/ 하위에 기록.
+    force=False: oauth_creds.json이 이미 있으면 보존 (Gemini CLI가 갱신해 둔 토큰)."""
     d = _get_gemini_account_dir(account_id)
     gemini_sub = os.path.join(d, ".gemini")
+    if not force and auth_type == "oauth":
+        # oauth 모드는 갱신본 보존 — 파일 있으면 settings.json만 보장하고 oauth_creds는 안 건드림
+        oauth_path = os.path.join(gemini_sub, "oauth_creds.json")
+        if os.path.exists(oauth_path):
+            try:
+                os.makedirs(gemini_sub, exist_ok=True)
+                settings_path = os.path.join(gemini_sub, "settings.json")
+                if not os.path.exists(settings_path):
+                    with open(settings_path, "w", encoding="utf-8") as f:
+                        json.dump({"security": {"auth": {"selectedType": "oauth-personal"}}}, f)
+            except Exception:
+                pass
+            return d
     _write_gemini_creds_to_dir(gemini_sub, auth_type, credentials)
     return d
+
+def _persist_refreshed_gemini_creds(account_id):
+    """Gemini CLI가 OAuth 토큰 갱신 시 oauth_creds.json을 다시 쓰는 것을 DB로 역동기화."""
+    if not account_id:
+        return
+    try:
+        row = db_exec("SELECT auth_type, credentials FROM gemini_accounts WHERE id=?",
+                      (int(account_id),), fetchone=True)
+        if not row or (row.get("auth_type") or "apikey") != "oauth":
+            return  # apikey는 갱신 없음
+        oauth_path = os.path.join(_get_gemini_account_dir(int(account_id)), ".gemini", "oauth_creds.json")
+        if not os.path.exists(oauth_path):
+            return
+        with open(oauth_path, "r", encoding="utf-8") as f:
+            disk = f.read()
+        if not disk.strip():
+            return
+        try:
+            parsed = json.loads(disk)
+            if not (parsed.get("access_token") or parsed.get("accessToken")):
+                return
+        except Exception:
+            return
+        if (row.get("credentials") or "") == disk:
+            return
+        db_exec("UPDATE gemini_accounts SET credentials=? WHERE id=?", (disk, int(account_id)))
+        log(f"[GEMINI] refreshed credentials persisted (account={account_id})")
+    except Exception as e:
+        log(f"[GEMINI] persist refreshed creds failed: {e}")
 
 def _sync_all_gemini_accounts():
     try:
         rows = db_exec("SELECT id, auth_type, credentials FROM gemini_accounts", fetch=True) or []
         for row in rows:
-            _sync_gemini_account_to_dir(row["id"], row.get("auth_type") or "apikey", row.get("credentials") or "")
-        log(f"Synced {len(rows)} Gemini accounts to temp dirs")
+            _sync_gemini_account_to_dir(row["id"], row.get("auth_type") or "apikey",
+                                        row.get("credentials") or "", force=False)
+        log(f"Synced {len(rows)} Gemini accounts (preserve-existing)")
     except Exception as e:
         log(f"Sync Gemini accounts failed: {e}")
 
@@ -1714,6 +1826,8 @@ def run_gemini_safe(cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
             timeout=timeout, env=env, cwd=run_cwd,
             encoding="utf-8", errors="replace",
         )
+        # OAuth 토큰 갱신본을 DB로 역동기화
+        _persist_refreshed_gemini_creds(cur_id)
         stdout = result.stdout or ""
         stderr = result.stderr or ""
         if result.returncode != 0 and not stdout.strip():
@@ -1722,10 +1836,12 @@ def run_gemini_safe(cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
         parsed = parse_gemini_output(stdout, output_json=True)
         return (parsed, cur_id, "✓ gemini")
     except subprocess.TimeoutExpired:
+        _persist_refreshed_gemini_creds(cur_id)
         return ("", cur_id, "timeout")
     except FileNotFoundError:
         return ("", cur_id, "gemini CLI 미설치 (npm install -g @google/gemini-cli)")
     except Exception as e:
+        _persist_refreshed_gemini_creds(cur_id)
         log(f"[GEMINI] error: {e}")
         return ("", cur_id, str(e))
 
@@ -1881,6 +1997,8 @@ def run_claude_safe(cmd_builder_fn, account_id, run_cwd=None, timeout=600, max_f
         try:
             result = subprocess.run(cmd, input=final_prompt, capture_output=True, text=True,
                                     timeout=timeout, env=env, cwd=run_cwd)
+            # CLI가 토큰을 갱신했을 수 있으니 디스크 → DB 역동기화 (성공/실패 무관)
+            _persist_refreshed_claude_creds(cur_id)
             combined = (result.stdout or "") + "\n" + (result.stderr or "")
             rl = detect_rate_limit(combined)
             if rl:
@@ -1892,8 +2010,10 @@ def run_claude_safe(cmd_builder_fn, account_id, run_cwd=None, timeout=600, max_f
                 continue
             return (result.stdout.strip(), cur_id, f"✓ 계정 {cur_id}" + (f" (이전 {len(tried)-1}개 한도 초과로 폴백)" if len(tried)>1 else ""))
         except subprocess.TimeoutExpired:
+            _persist_refreshed_claude_creds(cur_id)
             return ("", cur_id, "timeout")
         except Exception as e:
+            _persist_refreshed_claude_creds(cur_id)
             log(f"[CLAUDE] error: {e}")
             return ("", cur_id, str(e))
     return ("", cur_id, f"max retry ({last_err})")
@@ -1929,7 +2049,7 @@ def get_claude_env_for_account(account_id=None):
         refresh = oauth.get("refreshToken", "")
         if token and not refresh:
             # setup-token 토큰 → env var만 사용, credentials.json 없는 빈 dir
-            empty_dir = os.path.join(tempfile.gettempdir(), "flowdesk-envonly", str(account_id))
+            empty_dir = os.path.join(CLAUDE_ENVONLY_DIR, str(account_id))
             os.makedirs(empty_dir, exist_ok=True)
             # 기존 credentials.json이 있으면 삭제 (과거 잘못 저장된 것 포함)
             try:
@@ -6213,8 +6333,15 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             creds_path = os.path.join(claude_dir, ".credentials.json")
 
             if is_setup_token:
-                # setup-token 계정은 global credentials.json 안 만듦 (CLI가 혼동)
-                # 오히려 기존 전체 OAuth 파일이 있다면 보존
+                # setup-token 계정은 global credentials.json 안 만듦 — CLI 혼동 방지.
+                # 옛 OAuth 계정에서 활성 전환된 경우 글로벌에 stale 파일이 남아있으면
+                # CLI 가 그걸 먼저 읽어 401 나는 사고가 있어 명시적으로 삭제.
+                try:
+                    if os.path.exists(creds_path):
+                        os.remove(creds_path)
+                        log("Removed stale global credentials.json on setup-token activation")
+                except Exception:
+                    pass
                 log(f"Claude account activated (setup-token, env var only): {row['name']}")
             else:
                 # 전체 OAuth 계정이면 global에 저장

@@ -41,6 +41,10 @@ services:
       - ${GEMINI_CREDS_HOST:-/volume1/FlowDesk/gemini-creds}:/gemini-creds
       - ${UPLOADS_HOST:-/volume1/FlowDesk/uploads}:/app/uploads
       - ${WHISPER_CACHE_HOST:-/volume1/FlowDesk/whisper-cache}:/app/whisper-cache
+      # 멀티계정 CLI 런타임 — Claude/Gemini CLI가 토큰 갱신 시 쓰는 영구 디렉터리
+      # 마운트 안 하면 컨테이너 재시작 시 갱신된 토큰이 휘발돼 인증 실패가 반복됨
+      - ${ACCTS_RUNTIME_HOST:-/volume1/FlowDesk/accts-runtime}:/app/accts-runtime
+      - ${GMINI_RUNTIME_HOST:-/volume1/FlowDesk/gmini-accts-runtime}:/app/gmini-accts-runtime
       # 시놀로지 전체 디스크를 컨테이너에서 접근 (사용자가 임의 폴더 작업 폴더로 지정 가능)
       # 컨테이너 안에서 /synology/... 로 시놀로지 어떤 폴더든 접근 가능
       # 권한 주의: 컨테이너의 flowdesk(uid 1000)가 쓸 수 있는 폴더만 작성 가능
