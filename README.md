@@ -69,7 +69,9 @@ Claude와 Gemini 등 여러 AI CLI를 노드로 배치·연결해 자동 연쇄 
 - **다운로드 노드 📥** — 여러 URL 일괄 mp4/mp3/이미지 + 자막을 프로젝트 폴더에 저장
 
 ### 🔐 인증/계정
-- **Claude 다계정** — `.credentials.json` 파일 업로드 · 토큰 붙여넣기 · 웹 OAuth · 자동 로테이션 (round-robin / 우선순위 / 수동)
+- **Claude 인증은 무조건 setup-token** — 본인 PC에서 `claude setup-token` 실행해 받은 `sk-ant-oat01-...` 토큰을 ⚙️ → "🔑 토큰만 붙여넣기"로 등록. 1년 유효, 다른 PC의 `claude` 일반 OAuth와 충돌 없음.
+- **❌ `.credentials.json` 업로드 비권장** — OAuth refresh 토큰 회전 충돌로 멀티 디바이스 환경에서 인증 실패 사이클이 발생함. UI에 버튼은 남아있지만 사용 금지. 자세한 이유는 [`CLAUDE.md`](CLAUDE.md) 참고.
+- **다계정 자동 로테이션** — round-robin / 우선순위 / 수동 모드. 토큰 갱신본은 시놀로지 영구 디스크(`/volume1/FlowDesk/accts-runtime`)에 자동 보존되어 컨테이너 재시작에도 살아남음.
 - **Gemini 다계정** — API 키 · OAuth JSON · 격리된 홈 디렉토리
 - **🔄 인증 자동 복구** — 계정 업로드 시 브라우저 IndexedDB에 캐시, 서버 인증 실패 감지 시 조용히 재업로드 후 재점검
 - **YouTube Data API 키** — 설정 UI에서 저장 (DB 우선, env 폴백)
@@ -246,7 +248,7 @@ IPv6 해석 문제 · `127.0.0.1:8888` 로 접속.
 라이브러리 초기화 레이스 · 자동 2단계 재주입(600ms/1500ms)이 시도, 실패 시 노드의 🔄 리로드.
 
 ### 인증 실패 배지
-토큰 만료 · ⚙️ 설정 → 🔄 자동 복구 토글 ON 이면 IndexedDB 캐시로 재업로드 시도. 그래도 실패 시 재로그인.
+**setup-token만 사용 권장.** 본인 PC cmd에서 `claude setup-token` → `sk-ant-oat01-...` 받기 → ⚙️ → "🔑 토큰만 붙여넣기"로 등록 → 활성화. 옛 OAuth `.credentials.json`이 DB에 남아 있으면 그것이 먼저 시도되어 401이 반복되므로 모든 옛 계정 삭제 후 setup-token 1개만 남길 것. 자세한 정책은 [`CLAUDE.md`](CLAUDE.md) 참고.
 
 ### 같은 파일 여러 노드 편집 충돌
 한 노드 저장 → 나머지 노드 자동 리로드. 다른 노드도 편집 중이면 그 노드는 스킵 + 경고 토스트 (수동 🔄 로 해결).
