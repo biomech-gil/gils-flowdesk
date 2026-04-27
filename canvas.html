@@ -397,6 +397,9 @@ body.sb-left #fp-panel{left:auto;right:66px}
 .sb-sec .ov{max-height:none;white-space:pre-wrap;word-break:break-all}
 /* sb-input-sec / sb-output-sec — 부모도 격리 + clip 으로 내부 텍스트가 절대 다른 섹션에 침범 못 함 */
 #sb-input-sec, #sb-output-sec{overflow:hidden;contain:content}
+/* 라벨(버튼들 포함) 은 항상 자기 높이만큼 받음 — 섹션이 좁아져도 버튼이 잘려 사라지지 않게.
+   대신 textarea 가 줄어듦. (flex:1 인 textarea 가 자동으로 남는 공간 차지) */
+#sb-input-sec > label, #sb-output-sec > label{flex-shrink:0}
 .sb-sec select,.sb-sec input[type=text]{width:100%;background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:5px 6px;border-radius:var(--radius-sm);font-size:11px}
 .sb-sec input:focus,.sb-sec select:focus{outline:none;border-color:var(--accent)}
 .sb-row{display:flex;gap:4px;margin-bottom:4px;align-items:center}
