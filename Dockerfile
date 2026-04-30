@@ -29,8 +29,8 @@ RUN pip install --no-cache-dir \
 RUN mkdir -p /app/whisper-cache && chown -R 1000:1000 /app/whisper-cache
 ENV WHISPER_CACHE_DIR=/app/whisper-cache
 
-# Claude Code CLI + Gemini CLI
-RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli
+# Claude Code CLI + Gemini CLI + OpenAI Codex CLI
+RUN npm install -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex
 
 # 일반 사용자 생성 (Claude CLI가 root에서 --dangerously-skip-permissions 거부함)
 RUN useradd -m -u 1000 -s /bin/bash flowdesk
@@ -45,18 +45,20 @@ COPY --chown=flowdesk:flowdesk migrate_to_pg.py setup_pg.sql /app/
 # accts-runtime, gmini-accts-runtime: 멀티계정 CLI가 토큰 갱신 시 쓰는 영구 디렉터리
 #   - /tmp는 컨테이너 재시작 시 휘발 → 갱신된 토큰 잃어버림 → DB의 stale 토큰으로 인증 실패
 #   - 시놀로지 호스트에 bind mount해서 갱신본 영속화
-RUN mkdir -p /workspace /claude-creds /gemini-creds /app/uploads \
-              /app/accts-runtime /app/gmini-accts-runtime \
-    && chown -R flowdesk:flowdesk /app /workspace /claude-creds /gemini-creds \
-                                  /app/accts-runtime /app/gmini-accts-runtime \
+RUN mkdir -p /workspace /claude-creds /gemini-creds /codex-creds /app/uploads \
+              /app/accts-runtime /app/gmini-accts-runtime /app/codex-accts-runtime \
+    && chown -R flowdesk:flowdesk /app /workspace /claude-creds /gemini-creds /codex-creds \
+                                  /app/accts-runtime /app/gmini-accts-runtime /app/codex-accts-runtime \
     && ln -sf /claude-creds /home/flowdesk/.claude \
-    && ln -sf /gemini-creds /home/flowdesk/.gemini
+    && ln -sf /gemini-creds /home/flowdesk/.gemini \
+    && ln -sf /codex-creds /home/flowdesk/.codex
 
 # 비-root 사용자로 전환
 USER flowdesk
 ENV HOME=/home/flowdesk
 ENV CLAUDE_RUNTIME_DIR=/app/accts-runtime
 ENV GEMINI_RUNTIME_DIR=/app/gmini-accts-runtime
+ENV CODEX_RUNTIME_DIR=/app/codex-accts-runtime
 
 EXPOSE 8888
 ENV PYTHONUNBUFFERED=1

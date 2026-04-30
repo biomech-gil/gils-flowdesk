@@ -107,12 +107,14 @@ input[type="text"]:focus,input[type="password"]:focus,textarea:focus,select:focu
 /* 🎨 타입별 테두리 색 — 어두운 테마에서도 밝게, 각 성격 구분 */
 .nd[data-type="agent"]         {--node-border-color:#60a5fa}    /* 🤖 Claude — 하늘 */
 .nd[data-type="agent-gemini"]  {--node-border-color:#c4b5fd}    /* ✨ Gemini — 연보라 */
+.nd[data-type="agent-codex"]   {--node-border-color:#34d399}    /* 🟢 Codex — 민트그린 (ChatGPT 브랜드) */
 .nd[data-type="memo"]          {--node-border-color:#fde047}    /* 📝 메모 — 노랑 */
 .nd[data-type="input"]         {--node-border-color:#5eead4}    /* 📎 Input — 민트 */
 .nd[data-type="trigger"]       {--node-border-color:#fb7185}    /* ⚡ Trigger — 핑크 */
 .nd[data-type="document"]      {--node-border-color:#86efac}    /* 📄 Document — 연초록 */
 .nd[data-type="sheet"]         {--node-border-color:#fbbf24}    /* 📊 Sheet — 호박 */
 .nd[data-type="downloader"]    {--node-border-color:#f472b6}    /* ⬇ Downloader — 분홍 */
+.nd[data-type="image-gen"]     {--node-border-color:#c084fc}    /* 🎨 Image Gen — 보라 */
 .nd.sel{
   box-shadow:5px 5px 0 var(--accent), 0 0 0 3px rgba(76,175,80,.35)!important;
   transform:translate(-1px,-1px);
@@ -266,6 +268,7 @@ body.pie-active,body.pie-active *{user-select:none!important;-webkit-user-select
 @keyframes errorPulse{0%,100%{box-shadow:0 0 8px rgba(244,67,54,.4)}50%{box-shadow:0 0 20px rgba(244,67,54,.8)}}
 .nd[data-type="agent"]{border-color:#3B82F6}.nd[data-type="agent"] .nd-hd{background:rgba(59,130,246,.12)}
 .nd[data-type="agent-gemini"]{border-color:#A78BFA}.nd[data-type="agent-gemini"] .nd-hd{background:rgba(167,139,250,.14)}
+.nd[data-type="agent-codex"]{border-color:#10A37F}.nd[data-type="agent-codex"] .nd-hd{background:rgba(16,163,127,.14)}
 .nd[data-type="memo"]{border-color:#F59E0B}.nd[data-type="memo"] .nd-hd{background:rgba(245,158,11,.12)}
 .nd[data-type="input"]{border-color:#06B6D4}.nd[data-type="input"] .nd-hd{background:rgba(6,182,212,.12)}
 .nd[data-type="trigger"]{border-color:#EF4444}.nd[data-type="trigger"] .nd-hd{background:rgba(239,68,68,.12)}
@@ -286,6 +289,8 @@ body.pie-active,body.pie-active *{user-select:none!important;-webkit-user-select
 .nd.collapsed[data-type="agent"] .coll-badge{background:rgba(59,130,246,.25);color:#3B82F6}
 .nd.collapsed[data-type="agent-gemini"]{background:linear-gradient(135deg,#1a1030,#1a1a2e);border-color:#A78BFA}
 .nd.collapsed[data-type="agent-gemini"] .coll-badge{background:rgba(167,139,250,.28);color:#C4B5FD}
+.nd.collapsed[data-type="agent-codex"]{background:linear-gradient(135deg,#0a2418,#1a1a2e);border-color:#10A37F}
+.nd.collapsed[data-type="agent-codex"] .coll-badge{background:rgba(16,163,127,.25);color:#34D399}
 .nd.collapsed[data-type="memo"]{background:linear-gradient(135deg,#2a2210,#1a1a2e);border-color:#F59E0B}
 .nd.collapsed[data-type="memo"] .coll-badge{background:rgba(245,158,11,.25);color:#F59E0B}
 .nd.collapsed[data-type="input"]{background:linear-gradient(135deg,#0a1a20,#1a1a2e);border-color:#06B6D4}
@@ -320,6 +325,8 @@ body.pie-active,body.pie-active *{user-select:none!important;-webkit-user-select
 /* provider 별 스피너 색상 — Gemini 보라 */
 .nd[data-type="agent-gemini"] .nd-spin,
 .nd[data-type="agent-gemini"] .coll-spin{border-color:rgba(167,139,250,.25);border-top-color:#A78BFA}
+.nd[data-type="agent-codex"] .nd-spin,
+.nd[data-type="agent-codex"] .coll-spin{border-color:rgba(16,163,127,.25);border-top-color:#10A37F}
 /* BODY */
 .nd-body{display:flex;flex-direction:column;flex:1;overflow:hidden}
 .sec-lbl{font-size:9px;color:var(--text-muted);padding:3px 8px 1px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0}
@@ -921,6 +928,7 @@ body.lt-select-mode .landing-item input[type="checkbox"].landing-chk:hover{borde
 .preview-node{position:absolute;background:var(--bg-2);border:1.5px solid var(--border);border-radius:6px;font-size:9px;padding:4px 6px;color:var(--text);overflow:hidden;cursor:pointer;min-width:60px}
 .preview-node[data-type="agent"]{border-color:#3B82F6}
 .preview-node[data-type="agent-gemini"]{border-color:#A78BFA}
+.preview-node[data-type="agent-codex"]{border-color:#10A37F}
 .preview-node[data-type="memo"]{border-color:#F59E0B}
 .preview-node[data-type="input"]{border-color:#06B6D4}
 .preview-node[data-type="trigger"]{border-color:#EF4444}
@@ -2857,6 +2865,38 @@ body.focus-mode #canvas-controls{display:none}
         </div>
       </div>
 
+      <!-- Codex 계정 관리 -->
+      <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
+        <div style="font-weight:600;color:#34d399;margin-bottom:6px">🟢 Codex (ChatGPT 구독) 계정 관리</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">
+          ChatGPT Plus/Pro 구독으로 사용. Device-code 로그인 권장 (멀티 디바이스 안전 — 본인 PC 의 codex 와 토큰 충돌 없음).
+        </div>
+
+        <!-- Account list -->
+        <div id="codex-accounts-list" style="margin-bottom:10px"></div>
+
+        <!-- Actions — 메인은 device-code, 보조는 auth.json 업로드 -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <button onclick="codexDeviceLoginStart()" style="padding:8px 16px;background:linear-gradient(135deg,#10A37F,#0d8568);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12.5px;font-weight:700">🔐 device-code 로그인 (권장)</button>
+          <button onclick="document.getElementById('s-codex-file').click()" style="padding:6px 12px;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);border-radius:4px;cursor:pointer;font-size:12px" title="본인 PC 에서 codex login 후 ~/.codex/auth.json 선택 (보조)">📂 auth.json 업로드 (보조)</button>
+          <input type="file" id="s-codex-file" accept=".json" style="display:none">
+          <span style="font-size:10.5px;color:var(--text-muted);line-height:1.45;flex-basis:100%;margin-top:4px">
+            ⚠ 사전 1회: chatgpt.com → 보안 설정 → "Sign in with Device Code" 활성화 필요. (워크스페이스가 막은 경우 device 로그인 실패함)
+          </span>
+        </div>
+
+        <!-- Device-code 진행 상태 패널 -->
+        <div id="codex-device-panel" style="display:none;margin-top:10px;padding:10px;background:var(--bg-0);border:1px solid rgba(52,211,153,.4);border-radius:4px">
+          <div id="codex-device-msg" style="font-size:11.5px;color:#34d399;margin-bottom:8px;line-height:1.7"></div>
+          <div id="codex-device-code" style="font-size:18px;font-weight:800;font-family:var(--mono);letter-spacing:2px;color:#fff;background:rgba(52,211,153,.18);padding:8px 12px;border-radius:4px;text-align:center;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <a id="codex-device-link" target="_blank" style="padding:5px 12px;background:var(--accent);color:#000;border-radius:4px;font-size:12px;text-decoration:none;font-weight:700">🌐 인증 페이지 열기</a>
+            <button onclick="codexDeviceCancel()" style="padding:5px 12px;background:var(--bg-3);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px">취소</button>
+            <span id="codex-device-status" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px"></span>
+          </div>
+        </div>
+      </div>
+
       <!-- 인증 자동 복구 -->
       <div style="margin-bottom:20px;padding:12px;background:var(--bg-2);border-radius:6px">
         <div style="font-weight:600;color:#a3e635;margin-bottom:6px">🔄 인증 자동 복구 (이 PC 전용)</div>
@@ -3307,9 +3347,9 @@ async function attachAddConvPick(convId){
 const _origFavPickMemo=typeof favPickMemo==='function'?favPickMemo:null;
 async function api(m,p,b){const o={method:m,headers:{'Content-Type':'application/json'},credentials:'include'};if(b)o.body=JSON.stringify(b);try{const r=await fetch(API+p,o);return await r.json()}catch(e){return{ok:false,error:e.message}}}
 
-const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},'agent-gemini':{icon:'✨',color:'#A78BFA',label:'Gemini',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true},downloader:{icon:'⬇️',color:'#10B981',label:'Downloader',hasExec:true},sheet:{icon:'📊',color:'#F472B6',label:'Sheet',hasExec:true},document:{icon:'📄',color:'#FCD34D',label:'Document',hasExec:true}};
-function isAgentType(t){return t==='agent'||t==='agent-gemini'}
-function providerOfType(t){return t==='agent-gemini'?'gemini':'claude'}
+const TYPES={agent:{icon:'🤖',color:'#3B82F6',label:'Agent',hasExec:true},'agent-gemini':{icon:'✨',color:'#A78BFA',label:'Gemini',hasExec:true},'agent-codex':{icon:'🟢',color:'#10A37F',label:'Codex',hasExec:true},memo:{icon:'📝',color:'#F59E0B',label:'Memo'},input:{icon:'📎',color:'#06B6D4',label:'Input'},trigger:{icon:'⚡',color:'#EF4444',label:'Trigger',hasExec:true},downloader:{icon:'⬇️',color:'#10B981',label:'Downloader',hasExec:true},sheet:{icon:'📊',color:'#F472B6',label:'Sheet',hasExec:true},document:{icon:'📄',color:'#FCD34D',label:'Document',hasExec:true},'image-gen':{icon:'🎨',color:'#C084FC',label:'Image Gen',hasExec:true}};
+function isAgentType(t){return t==='agent'||t==='agent-gemini'||t==='agent-codex'}
+function providerOfType(t){return t==='agent-gemini'?'gemini':(t==='agent-codex'?'codex':'claude')}
 
 let nodes=[],conns=[],canvasEls=[],selectedNode=null,selectedCe=null,multiSel=[],multiCeSel=[],workflowId=null,paneList=[];
 let isCeCreate=null,ceCreateSX=0,ceCreateSY=0,ceCreateEl=null;
@@ -4920,9 +4960,10 @@ function finishConn(e){
 // ═══ NODE ═══
 function mkNode(opts={}){
   ncnt++;
-  // Legacy migration: old flows with type='agent' + provider='gemini' → agent-gemini
+  // Legacy migration: old flows with type='agent' + provider=... → agent-<provider>
   let type=opts.type||'agent';
   if(type==='agent' && opts.provider==='gemini') type='agent-gemini';
+  if(type==='agent' && opts.provider==='codex') type='agent-codex';
   const ti=TYPES[type]||TYPES.agent;
   const provider=providerOfType(type);
   // 타입별 기본 크기: Document 는 A4 비율(600×720), 나머지는 280×240
@@ -4943,6 +4984,13 @@ function mkNode(opts={}){
     // 다운로더 전용
     urls:Array.isArray(opts.urls)?opts.urls:[],
     dlOptions:opts.dlOptions||{format:'mp4',quality:'best',audioOnly:false,subtitles:false},
+    // 🎨 image-gen 노드 전용 — 백엔드/모델/생성수/결과 파일 리스트
+    backend:opts.backend||(type==='image-gen'?'codex':''),
+    n:opts.n||(type==='image-gen'?1:undefined),
+    outputFiles:Array.isArray(opts.outputFiles)?opts.outputFiles:[],
+    lastBackend:opts.lastBackend||'',
+    lastModel:opts.lastModel||'',
+    lastElapsed:opts.lastElapsed||0,
     // Sheet 노드 전용
     sheet:opts.sheet||(type==='sheet'?_sheetDefault():null),
     // Document 노드 전용 — {filename, lastSeenMtime, engine('superdoc'|'rhwp')}
@@ -4957,6 +5005,8 @@ function mkNode(opts={}){
   n.el=buildDom(n);cvs.appendChild(n.el);nodes.push(n);
   // 메모/인풋 노드 — 사용자 지정 배경색 적용 (텍스트색은 luminance 기반 자동)
   if((n.type==='memo'||n.type==='input') && n.bgColor) _applyMemoBg(n);
+  // 🎨 image-gen 노드 — 결과 썸네일 인라인 렌더 (저장된 outputFiles 복원 시 즉시 표시)
+  if(n.type==='image-gen' && n.outputFiles && n.outputFiles.length) setTimeout(()=>renderImageGenInline(n), 30);
   // 앵커 복원
   if(n.anchors && n.anchors.length) setTimeout(()=>renderCeAnchors(n), 50);
   // workDir 지정된 노드는 배지 표시
@@ -4991,7 +5041,7 @@ function buildDom(n){
   d.style.cssText=`left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${n.h}px`;
   if(n.customImage)d.style.backgroundImage=`url('${n.customImage}')`;
   d.dataset.nid=n.id;d.dataset.type=n.type;
-  const showOut=isAgentType(n.type);const showBody=n.type!=='trigger';
+  const showOut=isAgentType(n.type)||n.type==='image-gen';const showBody=n.type!=='trigger';
   const modeIcon=isAgentType(n.type)?(n.chatOnly?'💬':'🔧'):'';
   const isSheetType=n.type==='sheet';
   const isDocType=n.type==='document';
@@ -5021,7 +5071,7 @@ function buildDom(n){
           </div>
           <div class="doc-inline-editor" data-doc-editor></div>
         </div>`
-      : `<div class="nd-body"><div class="sec-lbl" style="display:flex;align-items:center;gap:4px">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':n.type==='agent-gemini'?'INPUT ✨':'INPUT'}${(n.type==='memo'||n.type==='input')?`<button data-act="render-toggle" title="텍스트 ↔ 렌더(마크다운) 토글" style="margin-left:auto;background:rgba(126,207,255,.15);color:#88c0d0;border:1px solid rgba(126,207,255,.3);font-size:9px;padding:1px 6px;border-radius:3px;cursor:pointer">👁 렌더</button>`:''}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${(n.type==='memo'||n.type==='input')?`<div class="nd-rendered" style="display:none;flex:1;overflow-y:auto;padding:6px 8px;background:var(--bg-0);font-size:${n.textSize}em;line-height:1.45;border-top:1px solid var(--border)"></div>`:''}${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`
+      : `<div class="nd-body"><div class="sec-lbl" style="display:flex;align-items:center;gap:4px">${n.type==='memo'?'MEMO':n.type==='input'?'DATA':n.type==='agent-gemini'?'INPUT ✨':n.type==='image-gen'?'PROMPT 🎨':'INPUT'}${(n.type==='memo'||n.type==='input')?`<button data-act="render-toggle" title="텍스트 ↔ 렌더(마크다운) 토글" style="margin-left:auto;background:rgba(126,207,255,.15);color:#88c0d0;border:1px solid rgba(126,207,255,.3);font-size:9px;padding:1px 6px;border-radius:3px;cursor:pointer">👁 렌더</button>`:''}</div><div class="nd-in"><textarea style="font-size:${n.textSize}em">${n.inputTemplate}</textarea></div>${(n.type==='memo'||n.type==='input')?`<div class="nd-rendered" style="display:none;flex:1;overflow-y:auto;padding:6px 8px;background:var(--bg-0);font-size:${n.textSize}em;line-height:1.45;border-top:1px solid var(--border)"></div>`:''}${showOut?`<div class="nd-div"></div><div class="sec-lbl">OUTPUT</div><div class="nd-out"><div class="out-c" style="font-size:${n.textSize}em">${n.outputCapture||''}</div></div>`:''}</div>`
     ):''}
     <div class="port port-l" data-node="${n.id}" data-side="l"></div>
     <div class="port port-r" data-node="${n.id}" data-side="r"></div>
@@ -5210,12 +5260,16 @@ function buildDom(n){
 
 async function addNode(type='agent',x,y){
   const pos=x!==undefined?{x,y}:s2c(cw.clientWidth/2,cw.clientHeight/2);
-  // 새 노드는 기본 접힌 상태 — 단, Document 는 인라인 편집이 주용도라 펼쳐서 시작
-  const startCollapsed = type!=='document';
+  // 새 노드는 기본 접힌 상태 — 단, Document/image-gen 는 인라인 편집/미리보기가 주용도라 펼쳐서 시작
+  const startCollapsed = type!=='document' && type!=='image-gen';
   const opts={type,x:pos.x-140,y:pos.y-120,collapsed:startCollapsed};
   if(type==='agent'){
     try{const acct=await api('POST','/api/claude/accounts/next',{});if(acct&&acct.ok)opts.accountId=acct.accountId;}catch(e){}
     const r=await api('POST','/api/add-pane',{});if(r.ok)opts.paneIndex=r.paneIndex;
+  }
+  if(type==='image-gen'){
+    // 친절한 starter 프롬프트 — 사용자가 즉시 어떻게 쓰는지 감 잡도록
+    opts.inputTemplate = opts.inputTemplate || '';
   }
   // agent-gemini: 계정 로테이션/tmux pane 불필요 (단일 OAuth 계정, 비대화형 호출)
   const n=mkNode(opts);selNode(n);
@@ -5300,10 +5354,12 @@ function showCtx(x,y,mode,nd){
   if(mode==='canvas'){
     html=`<div class="ctx-item" onclick="addNode('agent',${ctxPos.x},${ctxPos.y})">🤖 Agent (Claude) 추가</div>
       <div class="ctx-item" onclick="addNode('agent-gemini',${ctxPos.x},${ctxPos.y})" style="color:#C4B5FD">✨ Agent (Gemini) 추가</div>
+      <div class="ctx-item" onclick="addNode('agent-codex',${ctxPos.x},${ctxPos.y})" style="color:#34D399">🟢 Agent (Codex) 추가</div>
       <div class="ctx-item" onclick="addNode('memo',${ctxPos.x},${ctxPos.y})">📝 Memo 추가</div>
       <div class="ctx-item" onclick="addNode('input',${ctxPos.x},${ctxPos.y})">📎 Input 추가</div>
       <div class="ctx-item" onclick="addNode('trigger',${ctxPos.x},${ctxPos.y})">⚡ Trigger 추가</div>
       <div class="ctx-item" onclick="addNode('downloader',${ctxPos.x},${ctxPos.y})" style="color:#6ee7b7">⬇️ 다운로더 (YouTube/Instagram/TikTok)</div>
+      <div class="ctx-item" onclick="addNode('image-gen',${ctxPos.x},${ctxPos.y})" style="color:#c084fc">🎨 이미지 생성 (Codex/Nano Banana)</div>
       <div class="ctx-item" onclick="addNode('sheet',${ctxPos.x},${ctxPos.y})" style="color:#f9a8d4">📊 Sheet (엑셀형 표)</div>
       <div class="ctx-item" onclick="addNode('document',${ctxPos.x},${ctxPos.y})" style="color:#fde68a">📄 Document (DOCX·HWP 편집)</div>
       <div class="ctx-sep"></div>
@@ -5387,7 +5443,7 @@ function setArrDir(dir){
 
 // 정렬 가능한 "에이전트류" 노드 판정 — 실행 되는 노드들만 (문서·시트·이미지·비디오 제외)
 function _isArrangeableNode(n){
-  return n && ['agent','agent-gemini','memo','input','trigger','downloader'].includes(n.type);
+  return n && ['agent','agent-gemini','agent-codex','memo','input','trigger','downloader'].includes(n.type);
 }
 
 // 자동 호출용 (slider, collapseAll 등 암묵적 트리거) — 영역 없으면 조용히 스킵
@@ -10295,6 +10351,8 @@ function openSb(n){
   loadExecHistory();loadConvList();populateAccountSelect();renderProviderSelect();renderModelSelect();setupImageInput();setupPdfInput();checkTokenLimit(n);
   // 외부 작업 폴더(workDir) 섹션 렌더 — agent/downloader 등 실행 가능한 타입에만
   _renderSbWorkDirSection(n);
+  // 🎨 image-gen 노드 — 전용 옵션/갤러리 섹션 (image-gen 가 아니면 자동 hide)
+  try{ renderImageGenSidebar(n); }catch(e){ console.warn('[image-gen sidebar]',e); }
   setTimeout(drawConns,30)}
 // 사이드바에 외부 작업 폴더(workDir) 섹션 — 동적 생성/갱신
 function _renderSbWorkDirSection(n){
@@ -10444,8 +10502,12 @@ async function populateAccountSelect(){
   if(!selectedNode || !isAgentType(selectedNode.type)){ sel.style.display='none'; return; }
   sel.style.display='';
   const provider = providerOfType(selectedNode.type);
-  const endpoint = provider === 'gemini' ? '/api/gemini/accounts/list' : '/api/claude/accounts/list';
-  sel.title = provider === 'gemini' ? '이 노드에 사용할 Gemini 계정' : '이 노드에 사용할 Claude 계정';
+  const endpoint = provider === 'gemini' ? '/api/gemini/accounts/list'
+                  : provider === 'codex'  ? '/api/codex/accounts/list'
+                  : '/api/claude/accounts/list';
+  sel.title = provider === 'gemini' ? '이 노드에 사용할 Gemini 계정'
+            : provider === 'codex'  ? '이 노드에 사용할 Codex 계정'
+            : '이 노드에 사용할 Claude 계정';
   const r = await api('GET', endpoint);
   const accounts = (r && r.ok) ? (r.accounts || []) : [];
   sel.innerHTML = '<option value="">(자동)</option>' +
@@ -10477,6 +10539,15 @@ const PROVIDER_MODELS = {
     {v:'gemini-3-flash-preview',label:'gemini-3-flash-preview'},
     {v:'gemini-2.5-pro',label:'gemini-2.5-pro'},
     {v:'gemini-2.5-flash',label:'gemini-2.5-flash'},
+  ],
+  codex: [
+    {v:'',label:'(시스템 기본 = gpt-5.5)'},
+    {v:'gpt-5.5',label:'gpt-5.5 (최신, 기본 권장)'},
+    {v:'gpt-5.4',label:'gpt-5.4'},
+    {v:'gpt-5.4-mini',label:'gpt-5.4-mini (빠름/저비용)'},
+    {v:'gpt-5.3-codex',label:'gpt-5.3-codex (코딩 특화)'},
+    {v:'gpt-5.3-codex-spark',label:'gpt-5.3-codex-spark (Pro 전용 미리보기)'},
+    {v:'gpt-5.2',label:'gpt-5.2'},
   ],
 };
 function renderModelSelect(){
@@ -11172,6 +11243,80 @@ const engine={
       })();
       return;
     }
+    if(nd.type==='image-gen'){
+      // upstream 노드 wait
+      const upstreamIG=this.upstream(nd.id);
+      const isReadyIG=u=>{const runnable=!('nodeType' in u)||u.nodeType;if(!runnable)return true;return u.status==='complete';};
+      const incompleteIG=upstreamIG.filter(u=>!isReadyIG(u));
+      if(incompleteIG.length>0 && retryCount===0 && !options.force){
+        console.log(`[${nd.name}] 상위 노드 미완료 → 대기`);
+        return;
+      }
+      // 프롬프트 = inputTemplate 의 {{변수}} 치환 결과
+      const promptResolved=await this.resolve(nd);
+      if(!promptResolved.trim()){
+        nd.outputCapture='❌ 프롬프트가 비어있습니다';
+        this.setSt(nd,'error');
+        const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+        autoSave();return;
+      }
+      // 참조 이미지 자동 수집 (upstream image CE.src + image-gen 노드의 outputFiles + 본 노드 n.images)
+      const upRefImgs=[];
+      upstreamIG.forEach(u=>{
+        if(u.type==='image' && u.src) upRefImgs.push(u.src);
+        if(u.type==='image-gen' && Array.isArray(u.outputFiles)) u.outputFiles.forEach(f=>{if(f.path)upRefImgs.push(f.path)});
+      });
+      const refImages=[...new Set([...(nd.images||[]),...upRefImgs])];
+
+      this.setSt(nd,'running');
+      console.log(`[${nd.name}] 🎨 이미지 생성 시작 (backend=${nd.backend||'codex'}, n=${nd.n||1})`);
+      try{
+        if(!workflowId && !window._tempKey)window._tempKey='tk_'+(TAB_ID||'')+'_'+Date.now().toString(36);
+        const tempKey = workflowId ? '' : window._tempKey;
+        const canvasState = workflowId ? null : getState();
+        const r=await api('POST','/api/image-gen',{
+          backend:nd.backend||'codex',
+          prompt:promptResolved,
+          model:nd.model||'',
+          n:Math.max(1,Math.min(4,parseInt(nd.n||1)||1)),
+          refImages,
+          projectId:workflowId||'',
+          projectName:wfName||'',
+          nodeId:nd.id, nodeName:nd.name||'imagegen',
+          tempKey, canvasState,
+        });
+        if(!r||!r.ok){
+          nd.outputCapture='❌ '+((r&&r.error)||'이미지 생성 실패')+(r&&r.stdout?'\n\n'+r.stdout:'');
+          this.setSt(nd,'error');
+          const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+          if(selectedNode===nd){const out=document.getElementById('sb-output');if(out)out.textContent=nd.outputCapture;}
+          autoSave();return;
+        }
+        nd.outputFiles=r.files||[];
+        // outputCapture = 파일 경로 줄바꿈 리스트 (다른 노드 변수 치환용 텍스트)
+        nd.outputCapture=(r.files||[]).map(f=>f.path).join('\n');
+        nd.lastBackend=r.backend||'';
+        nd.lastModel=r.model||'';
+        nd.lastElapsed=r.elapsed||0;
+        console.log(`[${nd.name}] ✓ ${r.count}개 생성 (${r.elapsed||0}s)`);
+        renderImageGenInline(nd);
+        // 노드 박스의 .out-c 도 path 리스트 텍스트로 갱신 (변수 치환 미리보기용)
+        const _oc=nd.el.querySelector('.out-c');if(_oc)_oc.textContent=nd.outputCapture;
+        if(selectedNode===nd){
+          renderImageGenSidebar(nd);
+          const out=document.getElementById('sb-output');if(out)out.textContent=nd.outputCapture||'';
+        }
+        nd.history.push({timestamp:new Date().toISOString(),input:nd.inputResolved,output:nd.outputCapture});
+        this.setSt(nd,'complete');autoSave();
+        this.downstream(nd.id).forEach(dn=>{checkTokenLimit(dn);_chain(dn);});
+      }catch(e){
+        nd.outputCapture='❌ '+e.message;
+        this.setSt(nd,'error');
+        const oc=nd.el.querySelector('.out-c');if(oc)oc.textContent=nd.outputCapture;
+        autoSave();
+      }
+      return;
+    }
 
     // 다중 upstream 대기 — canExec 와 동일 규칙 (runnable 은 반드시 complete).
     // options.force 가 켜져 있으면 이 가드를 통과시켜 낡은 출력으로라도 실행한다.
@@ -11187,8 +11332,12 @@ const engine={
       return;
     }
 
-    // upstream 이미지 canvasEl의 src를 nd.images에 자동 병합 (중복 제거)
-    const upstreamImages=upstream.filter(u=>u.type==='image'&&u.src).map(u=>u.src);
+    // upstream 이미지 자동 병합 — image CE.src + image-gen 노드의 outputFiles 모두 포함 (중복 제거)
+    const upstreamImages=[];
+    upstream.forEach(u=>{
+      if(u.type==='image' && u.src) upstreamImages.push(u.src);
+      if(u.type==='image-gen' && Array.isArray(u.outputFiles)) u.outputFiles.forEach(f=>{if(f.path)upstreamImages.push(f.path)});
+    });
     const mergedImages=[...new Set([...(nd.images||[]),...upstreamImages])];
 
     const input=await this.resolve(nd);
@@ -11291,6 +11440,13 @@ function getState(){return{cx,cy,zoom,cwd:document.getElementById('wf-cwd').valu
       pdfPageMode:(n.doc?.pdfPageMode)||'all',
       pdfPageNumber:(n.doc?.pdfPageNumber)||1,
     }:undefined,
+    // 🎨 image-gen 전용 — 백엔드/모델/생성수/결과 파일 리스트
+    backend:n.type==='image-gen'?(n.backend||'gemini'):undefined,
+    n:n.type==='image-gen'?(n.n||1):undefined,
+    outputFiles:n.type==='image-gen'?(n.outputFiles||[]).map(f=>({path:f.path,name:f.name,url:f.url||'',size:f.size||0,mime:f.mime||''})):undefined,
+    lastBackend:n.type==='image-gen'?(n.lastBackend||''):undefined,
+    lastModel:n.type==='image-gen'?(n.lastModel||''):undefined,
+    lastElapsed:n.type==='image-gen'?(n.lastElapsed||0):undefined,
   })),
   connections:conns.map(c=>({id:c.id,sid:c.sid,tid:c.tid,waypoints:c.waypoints||[],curve:c.curve||0.5,sourceAnchorId:c.sourceAnchorId||null,targetAnchorId:c.targetAnchorId||null,fromSide:_shortSide(c.fromSide||'r'),toSide:_shortSide(c.toSide||'l'),fixedSide:c.fixedSide?true:undefined,labels:(c.labels||[]).map(l=>({id:l.id,text:l.text||'',t:(typeof l.t==='number')?l.t:0.5,fontSize:l.fontSize||undefined,color:l.color||undefined,bgColor:l.bgColor||undefined,borderColor:l.borderColor||undefined})),strokeWidth:c.strokeWidth||undefined,strokeStyle:c.strokeStyle||undefined,color:c.color||undefined,arrowSize:c.arrowSize||undefined,arrowStyle:c.arrowStyle||undefined})),
   // YouTube 검색 탭 (여러 검색을 묶음으로 저장) — 프로젝트에 포함
@@ -13438,6 +13594,125 @@ document.addEventListener('click',(e)=>{
 });
 
 // ═══════════════════════════════════════════════
+// 🎨 이미지 생성 노드 — Gemini Nano Banana 등 이미지 생성 API 전용
+// ═══════════════════════════════════════════════
+// 데이터 모델: nd.outputFiles = [{path, name, url, size, mime}], nd.backend, nd.n, nd.model, nd.lastModel
+// 결과 PNG는 server.py의 /api/image-gen 가 프로젝트 work_dir/images/ 에 저장.
+// 다음 노드(agent)가 연결되면 mergedImages 자동 wiring 으로 path 가 첨부됨 (base64 안 씀).
+
+function _imageGenSrcFor(f){
+  // file 객체 → 미리보기 URL (저장된 프로젝트일 때만 작동)
+  if(!f) return '';
+  if(f.url) return f.url;
+  if(workflowId && f.name) return `/api/project/file?projectId=${encodeURIComponent(workflowId)}&path=${encodeURIComponent('images/'+f.name)}`;
+  return '';
+}
+
+function renderImageGenInline(nd){
+  if(!nd || nd.type!=='image-gen' || !nd.el) return;
+  const out = nd.el.querySelector('.nd-out');
+  if(!out) return;
+  const files = nd.outputFiles || [];
+  let thumbs = out.querySelector('.imagegen-thumbs');
+  if(!files.length){if(thumbs)thumbs.remove();return;}
+  if(!thumbs){
+    thumbs = document.createElement('div');
+    thumbs.className = 'imagegen-thumbs';
+    thumbs.style.cssText='display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:4px;padding:4px;background:rgba(192,132,252,.06);border-bottom:1px solid rgba(192,132,252,.18)';
+    out.insertBefore(thumbs, out.firstChild);
+  }
+  thumbs.innerHTML = files.map(f=>{
+    const src = _imageGenSrcFor(f);
+    if(!src){
+      return `<div title="${escapeHtml(f.path||'')}" style="aspect-ratio:1;background:rgba(192,132,252,.18);color:#c084fc;border:1px dashed rgba(192,132,252,.4);display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;padding:2px">📎<br>${escapeHtml(f.name||'')}</div>`;
+    }
+    const safeSrc=src.replace(/'/g,"\\'");
+    const safeName=(f.name||'').replace(/'/g,"\\'");
+    return `<img src="${src}" alt="${escapeHtml(f.name||'')}" title="${escapeHtml(f.path||'')}" loading="lazy" style="width:100%;aspect-ratio:1;object-fit:cover;background:#000;border:1px solid rgba(192,132,252,.4);border-radius:3px;cursor:zoom-in" onclick="event.stopPropagation();imageGenOpenViewer('${safeSrc}','${escapeHtml(safeName)}')">`;
+  }).join('');
+}
+
+// 가벼운 풀스크린 미리보기 — ESC/배경 클릭으로 닫음
+function imageGenOpenViewer(src, name){
+  let m = document.getElementById('imagegen-viewer');
+  if(!m){
+    m = document.createElement('div');
+    m.id='imagegen-viewer';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:10000;display:none;align-items:center;justify-content:center;cursor:zoom-out';
+    m.addEventListener('click',()=>{m.style.display='none'});
+    document.addEventListener('keydown',(e)=>{if(e.key==='Escape' && m.style.display==='flex')m.style.display='none'});
+    document.body.appendChild(m);
+  }
+  m.innerHTML=`<div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);color:#c084fc;font-size:13px;background:rgba(0,0,0,.6);padding:6px 12px;border-radius:6px;border:1px solid rgba(192,132,252,.3)">🎨 ${escapeHtml(name||'')}</div><img src="${src}" style="max-width:92vw;max-height:92vh;object-fit:contain;border:2px solid rgba(192,132,252,.3);border-radius:6px;box-shadow:0 0 60px rgba(192,132,252,.25)">`;
+  m.style.display='flex';
+}
+
+// 사이드바 — selectedNode 가 image-gen 일 때 옵션 + 결과 갤러리 렌더
+function renderImageGenSidebar(nd){
+  const ct = document.querySelector('.sb-ct');
+  if(!ct) return;
+  let sec = document.getElementById('sb-imagegen-sec');
+  if(!nd || nd.type!=='image-gen'){if(sec)sec.style.display='none';return;}
+  if(!sec){
+    sec = document.createElement('div');
+    sec.id='sb-imagegen-sec';
+    sec.className='sb-row';
+    sec.style.cssText='display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(192,132,252,.05);border:1px solid rgba(192,132,252,.18);border-radius:4px;margin:6px 0';
+    sec.innerHTML=`
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#c084fc;font-weight:700">🎨 이미지 생성 옵션</div>
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:6px">
+        <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px">백엔드
+          <select id="sb-ig-backend" style="background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:3px;border-radius:3px;font-size:11px">
+            <option value="codex">🟢 Codex (gpt-image-2)</option>
+            <option value="gemini">✨ Gemini (Nano Banana)</option>
+          </select>
+        </label>
+        <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px">개수
+          <input id="sb-ig-n" type="number" min="1" max="4" value="1" style="background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:3px;border-radius:3px;font-size:11px">
+        </label>
+      </div>
+      <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px">모델 (비우면 백엔드 기본)
+        <input id="sb-ig-model" type="text" placeholder="codex: 자동 / gemini-2.5-flash-image-preview" style="background:var(--bg-0);color:var(--text);border:1px solid var(--border);padding:3px;border-radius:3px;font-size:11px">
+      </label>
+      <button id="sb-ig-run" style="background:#c084fc;color:#1a1a2e;border:none;padding:6px;border-radius:3px;font-weight:700;cursor:pointer;font-size:11px">🎨 그리기 (입력 프롬프트로)</button>
+      <div id="sb-ig-status" style="font-size:10px;color:var(--text-dim);min-height:14px"></div>
+      <div id="sb-ig-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;max-height:50vh;overflow-y:auto"></div>
+    `;
+    // sb-output-sec 직전에 삽입
+    const outSec = document.getElementById('sb-output-sec');
+    if(outSec && outSec.parentNode) outSec.parentNode.insertBefore(sec, outSec);
+    else ct.appendChild(sec);
+    sec.querySelector('#sb-ig-backend').addEventListener('change',e=>{if(selectedNode&&selectedNode.type==='image-gen'){selectedNode.backend=e.target.value;autoSave();}});
+    sec.querySelector('#sb-ig-n').addEventListener('change',e=>{if(selectedNode&&selectedNode.type==='image-gen'){selectedNode.n=Math.max(1,Math.min(4,parseInt(e.target.value)||1));autoSave();}});
+    sec.querySelector('#sb-ig-model').addEventListener('change',e=>{if(selectedNode&&selectedNode.type==='image-gen'){selectedNode.model=e.target.value.trim();autoSave();}});
+    sec.querySelector('#sb-ig-run').addEventListener('click',()=>{if(selectedNode&&selectedNode.type==='image-gen'){engine.runManual(selectedNode);}});
+  }
+  sec.style.display='flex';
+  sec.querySelector('#sb-ig-backend').value = nd.backend || 'codex';
+  sec.querySelector('#sb-ig-n').value = nd.n || 1;
+  sec.querySelector('#sb-ig-model').value = nd.model || '';
+  const stat = sec.querySelector('#sb-ig-status');
+  if(stat){
+    if(nd.lastBackend) stat.textContent = `최근: ${nd.lastBackend} · ${nd.lastModel||'기본'} · ${nd.lastElapsed||0}s · ${(nd.outputFiles||[]).length}장`;
+    else stat.textContent = '입력란에 프롬프트를 적고 ▶ 또는 위 버튼을 누르세요';
+  }
+  const gal = sec.querySelector('#sb-ig-gallery');
+  if(gal){
+    const files = nd.outputFiles || [];
+    if(!files.length) gal.innerHTML = '<div style="grid-column:1/-1;color:var(--text-dim);font-size:11px;text-align:center;padding:18px">결과 없음</div>';
+    else gal.innerHTML = files.map(f=>{
+      const src = _imageGenSrcFor(f);
+      if(!src){
+        return `<div style="aspect-ratio:1;background:rgba(192,132,252,.15);color:#c084fc;border:1px dashed rgba(192,132,252,.4);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;padding:6px;text-align:center"><span style="font-size:18px">📎</span>${escapeHtml(f.name||'')}<small style="color:var(--text-dim);font-size:9px;margin-top:4px">미리보기는 프로젝트 저장 후</small></div>`;
+      }
+      const safeSrc=src.replace(/'/g,"\\'");
+      const safeName=(f.name||'').replace(/'/g,"\\'");
+      return `<div style="position:relative;aspect-ratio:1;border:1px solid rgba(192,132,252,.3);border-radius:4px;overflow:hidden;cursor:zoom-in;background:#000" onclick="imageGenOpenViewer('${safeSrc}','${escapeHtml(safeName)}')"><img src="${src}" style="width:100%;height:100%;object-fit:cover" loading="lazy"><div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));color:#fff;font-size:9px;padding:8px 4px 3px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(f.name||'')}</div></div>`;
+    }).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════
 // 📄 Document 노드 — DOCX(SuperDoc) / HWP(rhwp) 편집 + Time Machine 버전관리
 // ═══════════════════════════════════════════════
 // 데이터 모델: nd.doc = {filename, lastSeenMtime, engine}
@@ -14072,7 +14347,7 @@ async function executeRegion(ce){
   // 실행 전 멤버 상태 초기화 (이 영역 실행 = 새 run)
   members.forEach(n=>{
     // 문서/메모/트리거/이미지CE는 초기화 안 하는게 자연스러움 — 정적 노드
-    if(n.type==='agent' || n.type==='agent-gemini' || n.type==='downloader'){
+    if(n.type==='agent' || n.type==='agent-gemini' || n.type==='agent-codex' || n.type==='downloader'){
       n.outputCapture=''; n.inputResolved=''; n.status='idle';
       const oc=n.el.querySelector('.out-c'); if(oc) oc.textContent='';
       engine.setSt(n,'idle');
@@ -18877,6 +19152,21 @@ async function tryAutoRecoverAuth(h){
       } else attempted.push({name:acc.name,ok:false,reason:(r&&r.error)||'저장 실패'});
     }catch(e){attempted.push({name:acc.name,ok:false,reason:e.message});}
   }
+  // Codex: chatgpt(auth.json) / apikey
+  const failedCodex=(h.codex&&h.codex.accounts||[]).filter(a=>!a.ok);
+  for(const acc of failedCodex){
+    const cached=await authCacheGet('codex',acc.name);
+    if(!cached||!cached.content){attempted.push({name:acc.name,ok:false,reason:'캐시 없음'});continue;}
+    const auth_type = cached.type==='apikey' ? 'apikey' : 'chatgpt';
+    try{
+      const body={id:acc.id,name:acc.name,auth_type,credentials:cached.content};
+      const r=await api('POST','/api/codex/accounts/save',body);
+      if(r&&r.ok){
+        recovered.push({provider:'codex',name:acc.name});
+        attempted.push({name:acc.name,ok:true});
+      } else attempted.push({name:acc.name,ok:false,reason:(r&&r.error)||'저장 실패'});
+    }catch(e){attempted.push({name:acc.name,ok:false,reason:e.message});}
+  }
   return {attempted:attempted.length,recovered:recovered.length,recoveredList:recovered,details:attempted};
 }
 
@@ -18940,8 +19230,10 @@ async function _authUploadFor(provider, accountId, hintName){
         if(n.trim()) name = n.trim();
       }
       setS(`💾 서버에 저장 중… (${name})`, '#fde68a');
-      // 서버 API 호출 — claude/gemini 별로 저장 엔드포인트가 분리돼 있음
-      const ep = provider==='gemini' ? '/api/gemini/accounts/save' : '/api/claude/accounts/save';
+      // 서버 API 호출 — claude/gemini/codex 별 저장 엔드포인트
+      const ep = provider==='gemini' ? '/api/gemini/accounts/save'
+               : provider==='codex'  ? '/api/codex/accounts/save'
+               : '/api/claude/accounts/save';
       const body = {name, credentials: content};
       if(accountId) body.id = parseInt(accountId);
       // gemini 는 auth_type 파라미터 필요 — 내용으로 추정
@@ -18949,6 +19241,8 @@ async function _authUploadFor(provider, accountId, hintName){
         const isApiKey = /^[A-Za-z0-9_\-]{20,}$/.test(content.trim()) && !content.trim().startsWith('{');
         body.auth_type = isApiKey ? 'apikey' : 'oauth';
       }
+      // codex 는 auth.json (chatgpt) 만 허용 — apikey 는 UI 노출 안 함
+      if(provider==='codex'){ body.auth_type = 'chatgpt'; }
       const r = await api('POST', ep, body);
       if(!r || !r.ok){
         setS(`❌ 저장 실패: ${(r&&r.error)||'알 수 없는 오류'}`, '#fca5a5');
@@ -18988,22 +19282,23 @@ async function runAuthHealthCheck(quick){
       return;
     }
     window._authHealth=r;
-    const c=r.claude||{}, g=r.gemini||{};
-    const cTotal=c.count||0, gTotal=g.count||0;
-    const cOk=c.okCount||0, gOk=g.okCount||0;
-    const anyProvider = cTotal||gTotal;
+    const c=r.claude||{}, g=r.gemini||{}, x=r.codex||{};
+    const cTotal=c.count||0, gTotal=g.count||0, xTotal=x.count||0;
+    const cOk=c.okCount||0, gOk=g.okCount||0, xOk=x.okCount||0;
+    const anyProvider = cTotal||gTotal||xTotal;
     if(!anyProvider){
       badge.className='auth-badge auth-warn';
       txt.textContent='⚠ 계정 없음';
-      badge.title='Claude/Gemini 계정 미등록 — 설정에서 추가하세요';
+      badge.title='Claude/Gemini/Codex 계정 미등록 — 설정에서 추가하세요';
       return;
     }
-    // 모든 provider 중 사용 가능 계정이 1개라도 있고 실패 계정이 없으면 ok
+    // 각 provider 가 등록은 됐는데 OK 0 인 경우 = bad
     const claudeBad = cTotal>0 && cOk===0;
     const geminiBad = gTotal>0 && gOk===0;
-    const someBad = cTotal>0 && cOk<cTotal || gTotal>0 && gOk<gTotal;
+    const codexBad  = xTotal>0 && xOk===0;
+    const someBad = (cTotal>0 && cOk<cTotal) || (gTotal>0 && gOk<gTotal) || (xTotal>0 && xOk<xTotal);
     // ── 자동 복구: 설정 ON이고 실패 계정 있고 recovery 진행중 아니면 1회 시도
-    if((claudeBad||geminiBad||someBad) && !_authRecoverInFlight && window._autoRecoverAuth!==false){
+    if((claudeBad||geminiBad||codexBad||someBad) && !_authRecoverInFlight && window._autoRecoverAuth!==false){
       _authRecoverInFlight=true;
       badge.className='auth-badge auth-loading';
       txt.textContent='🔄 내 PC 캐시로 자동 복구 시도…';
@@ -19019,18 +19314,20 @@ async function runAuthHealthCheck(quick){
       }catch(e){console.warn('[auto-recover]',e);}
       _authRecoverInFlight=false;
     }
-    if(claudeBad && geminiBad){
+    const allBad = (cTotal===0||claudeBad) && (gTotal===0||geminiBad) && (xTotal===0||codexBad);
+    if(allBad){
       badge.className='auth-badge auth-fail';
-      txt.textContent=`🔴 모든 인증 실패 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
-    } else if(claudeBad || geminiBad){
+      txt.textContent=`🔴 모든 인증 실패 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal} · X:${xOk}/${xTotal})`;
+    } else if(claudeBad || geminiBad || codexBad){
       badge.className='auth-badge auth-fail';
-      txt.textContent=`🔴 ${claudeBad?'Claude':'Gemini'} 인증 실패`;
+      const bads=[claudeBad&&'Claude', geminiBad&&'Gemini', codexBad&&'Codex'].filter(Boolean);
+      txt.textContent=`🔴 ${bads.join('/')} 인증 실패`;
     } else if(someBad){
       badge.className='auth-badge auth-warn';
-      txt.textContent=`🟡 일부 계정 문제 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
+      txt.textContent=`🟡 일부 계정 문제 (C:${cOk}/${cTotal} · G:${gOk}/${gTotal} · X:${xOk}/${xTotal})`;
     } else {
       badge.className='auth-badge auth-ok';
-      txt.textContent=`✅ 인증 OK (C:${cOk}/${cTotal} · G:${gOk}/${gTotal})`;
+      txt.textContent=`✅ 인증 OK (C:${cOk}/${cTotal} · G:${gOk}/${gTotal} · X:${xOk}/${xTotal})`;
     }
     badge.title=`마지막 점검: ${(r.checkedAt||'').substring(11,19)}${quick?' (빠른 체크)':''}\n클릭해 상세 보기 · 우클릭해 재점검`;
     badge.oncontextmenu=(e)=>{e.preventDefault();runAuthHealthCheck(false);};
@@ -19067,9 +19364,7 @@ function showAuthHealthDetails(){
       </div>
     </div>`;
   };
-  const c=h.claude||{}, g=h.gemini||{};
-  const needClaudeUpload = c.count===0 || (c.count>0 && c.okCount===0);
-  const needGeminiUpload = g.count===0 || (g.count>0 && g.okCount===0);
+  const c=h.claude||{}, g=h.gemini||{}, x=h.codex||{};
   popup.innerHTML=`
     <div style="display:flex;align-items:center;margin-bottom:10px">
       <span style="font-weight:700;font-size:13px;flex:1">🔐 인증 상태 상세</span>
@@ -19082,14 +19377,22 @@ function showAuthHealthDetails(){
         <span style="font-size:11px;font-weight:700;color:#fbbd2c;flex:1">Claude · ${c.okCount||0}/${c.count||0} OK</span>
         <button onclick="_authUploadFor('claude','','')" style="font-size:10px;padding:3px 8px;background:rgba(251,189,44,.15);color:#fde68a;border:1px solid rgba(251,189,44,.4);border-radius:3px;cursor:pointer;font-weight:600">＋ 새 계정 업로드</button>
       </div>
-      ${(c.accounts||[]).length?(c.accounts||[]).map(a=>rowHtml(a,'claude')).join(''):`<div style="font-size:11px;color:var(--text-muted);padding:4px 0">${needClaudeUpload?'(계정 없음 — 위의 ＋ 버튼으로 인증서 업로드)':'(계정 없음)'}</div>`}
+      ${(c.accounts||[]).length?(c.accounts||[]).map(a=>rowHtml(a,'claude')).join(''):`<div style="font-size:11px;color:var(--text-muted);padding:4px 0">(계정 없음 — 위의 ＋ 버튼으로 인증서 업로드)</div>`}
     </div>
-    <div>
+    <div style="margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <span style="font-size:11px;font-weight:700;color:#88c0d0;flex:1">Gemini · ${g.okCount||0}/${g.count||0} OK</span>
         <button onclick="_authUploadFor('gemini','','')" style="font-size:10px;padding:3px 8px;background:rgba(136,192,208,.15);color:#88c0d0;border:1px solid rgba(136,192,208,.4);border-radius:3px;cursor:pointer;font-weight:600">＋ 새 계정 업로드</button>
       </div>
-      ${(g.accounts||[]).length?(g.accounts||[]).map(a=>rowHtml(a,'gemini')).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:4px 0">(계정 없음 — 위의 ＋ 버튼으로 인증서 업로드)</div>'}
+      ${(g.accounts||[]).length?(g.accounts||[]).map(a=>rowHtml(a,'gemini')).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:4px 0">(계정 없음)</div>'}
+    </div>
+    <div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <span style="font-size:11px;font-weight:700;color:#34d399;flex:1">Codex (ChatGPT) · ${x.okCount||0}/${x.count||0} OK</span>
+        <button onclick="codexDeviceLoginStart()" style="font-size:10px;padding:3px 8px;background:rgba(52,211,153,.18);color:#34d399;border:1px solid rgba(52,211,153,.45);border-radius:3px;cursor:pointer;font-weight:700">🔐 device 로그인</button>
+        <button onclick="_authUploadFor('codex','','')" style="font-size:10px;padding:3px 8px;background:rgba(52,211,153,.10);color:#34d399;border:1px solid rgba(52,211,153,.3);border-radius:3px;cursor:pointer;font-weight:600">＋ auth.json 업로드</button>
+      </div>
+      ${(x.accounts||[]).length?(x.accounts||[]).map(a=>rowHtml(a,'codex')).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:4px 0">(계정 없음 — device 로그인 권장: 멀티 디바이스 안전)</div>'}
     </div>
     <div id="auth-upload-status" style="margin-top:10px;font-size:11px;color:var(--text-dim);min-height:16px"></div>`;
   document.body.appendChild(popup);
@@ -20122,6 +20425,7 @@ function renderPreview(){
   const TYPES_P={
     agent:{icon:'🤖',color:'#3B82F6',label:'Claude'},
     'agent-gemini':{icon:'✨',color:'#A78BFA',label:'Gemini'},
+    'agent-codex':{icon:'🟢',color:'#10A37F',label:'Codex'},
     memo:{icon:'📝',color:'#F59E0B',label:'Memo'},
     input:{icon:'📎',color:'#06B6D4',label:'Input'},
     trigger:{icon:'⚡',color:'#EF4444',label:'Trigger'},
@@ -21551,6 +21855,7 @@ document.addEventListener('keydown',function(e){
     'KeyE':()=>addNode&&addNode('input'),                                   // 📎 Input
     'Space':()=>addNode&&addNode('trigger'),                                // ⚡ Trigger (R은 브라우저 충돌로 Space 로 이동)
     'KeyT':()=>addNode&&addNode('agent-gemini'),                            // ✨ Gemini
+    'KeyG':()=>addNode&&addNode('agent-codex'),                             // 🟢 Codex
     // 실행 · 저장 — ASDF
     'KeyA':()=>engine&&engine.startAll&&engine.startAll(),                  // ▶ 전체 실행
     'KeyS':()=>saveWorkflow&&saveWorkflow(),                                // 💾 저장
@@ -22315,9 +22620,11 @@ async function openSettings(){
       else {
         const claudeNames = list.filter(x=>x.provider==='claude').map(x=>x.name);
         const geminiNames = list.filter(x=>x.provider==='gemini').map(x=>x.name);
+        const codexNames  = list.filter(x=>x.provider==='codex').map(x=>x.name);
         const parts=[];
         if(claudeNames.length) parts.push(`🤖 Claude: ${claudeNames.join(', ')}`);
         if(geminiNames.length) parts.push(`✨ Gemini: ${geminiNames.join(', ')}`);
+        if(codexNames.length)  parts.push(`🟢 Codex: ${codexNames.join(', ')}`);
         st.innerHTML = `<span style="color:#a3e635">✓</span> 캐시된 계정: ${parts.join(' · ')}`;
       }
     }
@@ -22339,6 +22646,7 @@ async function openSettings(){
   document.getElementById('settings-modal').style.display = 'flex';
   loadClaudeAccounts();
   loadGeminiAccounts();
+  loadCodexAccounts();
 }
 
 function saveAutoRecoverAuth(on){
@@ -22872,6 +23180,158 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(r && r.ok){
           authCacheSet('gemini',name,'oauth_json',reader.result);
           loadGeminiAccounts();
+          alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
+        } else alert('실패: ' + ((r && r.error) || ''));
+        fi.value = '';
+      };
+      reader.readAsText(f);
+    });
+  }
+});
+
+// ═══════════════════════════════════════
+// Codex multi-account manager (ChatGPT subscription)
+// ═══════════════════════════════════════
+async function loadCodexAccounts(){
+  const r = await api('GET', '/api/codex/accounts/list');
+  const accounts = (r && r.ok) ? (r.accounts || []) : [];
+  window._codexAccountsCache = accounts;
+  const el = document.getElementById('codex-accounts-list');
+  if(!el) return;
+  if(!accounts.length){
+    el.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:11px;text-align:center">저장된 Codex 계정이 없습니다 — device-code 로그인 권장</div>';
+    return;
+  }
+  el.innerHTML = accounts.map((a, i) => {
+    const typeLabel = a.auth_type === 'apikey' ? '🔑 API Key' : '🔐 ChatGPT';
+    const bg = a.active ? 'rgba(52,211,153,.15)' : 'var(--bg-0)';
+    const border = a.active ? 'rgba(52,211,153,.4)' : 'var(--border)';
+    return `
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:${bg};border:1px solid ${border};border-radius:4px;margin-bottom:4px">
+      <span style="color:${a.active?'#34d399':'var(--text)'};flex:1;font-size:12px">${a.active?'★':'○'} ${i+1}. ${escapeHtml(a.name)} <span style="font-size:10px;color:var(--text-dim)">(${typeLabel})</span></span>
+      <span style="color:var(--text-dim);font-size:9px">${(a.created||'').substring(0,10)}</span>
+      ${a.active?'':`<button onclick="activateCodexAccount(${a.id})" title="이 계정으로 활성화" style="font-size:10px;padding:2px 6px;background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);border-radius:3px;cursor:pointer">활성화</button>`}
+      <button onclick="testCodexAccount(${a.id})" title="이 계정으로 인증 테스트" style="font-size:10px;padding:2px 6px;background:rgba(52,211,153,.15);color:#88c0d0;border:1px solid rgba(52,211,153,.3);border-radius:3px;cursor:pointer">🧪 테스트</button>
+      <button onclick="deleteCodexAccount(${a.id})" style="font-size:10px;padding:2px 6px;background:none;color:#bf616a;border:1px solid rgba(244,67,54,.3);border-radius:3px;cursor:pointer">삭제</button>
+    </div>`;
+  }).join('');
+}
+
+async function activateCodexAccount(id){
+  const r = await api('POST','/api/codex/accounts/activate',{id});
+  if(r && r.ok){ loadCodexAccounts(); } else alert('실패: '+((r&&r.error)||''));
+}
+async function deleteCodexAccount(id){
+  if(!confirm('이 Codex 계정을 삭제할까요?')) return;
+  await api('POST','/api/codex/accounts/delete',{id});
+  loadCodexAccounts();
+}
+async function testCodexAccount(id){
+  const btn=event.target;
+  const origText=btn.textContent;
+  btn.textContent='⏳ 테스트 중...';
+  btn.disabled=true;
+  try{
+    const r=await api('POST','/api/codex/accounts/test',{id});
+    alert(r.msg||(r.authenticated?'✅ 성공':'❌ 실패'));
+  }catch(e){
+    alert('❌ 오류: '+e.message);
+  }finally{
+    btn.textContent=origText;
+    btn.disabled=false;
+  }
+}
+
+// ── Codex device-code login (메인 권장 방식) ──
+let _codexDevicePoll=null, _codexDeviceLoginId=null;
+
+async function codexDeviceLoginStart(){
+  // 기존 진행중이면 취소
+  await codexDeviceCancel();
+  const panel=document.getElementById('codex-device-panel');
+  const msg=document.getElementById('codex-device-msg');
+  const code=document.getElementById('codex-device-code');
+  const link=document.getElementById('codex-device-link');
+  const status=document.getElementById('codex-device-status');
+  if(panel) panel.style.display='block';
+  if(msg) msg.textContent='⏳ device-code 발급 요청 중...';
+  if(code) code.textContent='';
+  if(status) status.textContent='';
+
+  const r=await api('POST','/api/codex/login/start',{});
+  if(!r || !r.ok){
+    if(msg) msg.innerHTML=`❌ 시작 실패: ${(r&&r.error)||'알 수 없는 오류'}`;
+    return;
+  }
+  _codexDeviceLoginId=r.loginId;
+  if(msg) msg.innerHTML='1️⃣ 아래 <b>인증 페이지</b> 링크 클릭<br>2️⃣ ChatGPT 로그인<br>3️⃣ 표시된 코드 입력<br>4️⃣ 완료되면 자동으로 저장됨';
+  if(code) code.textContent=r.code || '(코드 추출 중...)';
+  if(link){ link.href = r.authUrl || 'https://auth.openai.com/codex/device'; }
+  if(status) status.textContent='⏳ 사용자 입력 대기 중...';
+
+  // 폴링 시작 (2초마다)
+  let savedName=(prompt('이 계정 이름:', 'Codex (ChatGPT)')||'').trim() || 'Codex (ChatGPT)';
+  _codexDevicePoll=setInterval(async ()=>{
+    if(!_codexDeviceLoginId){ clearInterval(_codexDevicePoll); _codexDevicePoll=null; return; }
+    const s=await api('POST','/api/codex/login/status',{loginId:_codexDeviceLoginId, name:savedName});
+    if(!s || !s.ok) return;
+    if(s.code && code && !code.textContent.includes(s.code)) code.textContent=s.code;
+    if(s.done){
+      clearInterval(_codexDevicePoll); _codexDevicePoll=null; _codexDeviceLoginId=null;
+      if(s.saved){
+        if(status) status.textContent='✅ 저장 완료';
+        if(msg) msg.innerHTML='✅ <b>인증 + 계정 저장 성공!</b> — 활성화 버튼으로 사용하세요';
+        loadCodexAccounts();
+        // 캐시 (자동 복구용 — 차후 stale 시 device 로그인 다시 권장)
+        try{
+          const lastAcc=(await api('GET','/api/codex/accounts/list')||{}).accounts || [];
+          const me=lastAcc.find(a=>a.id===s.accountId);
+          if(me) authCacheSet('codex', me.name, 'chatgpt_device', '__device_recover_only__');
+        }catch(e){}
+        setTimeout(()=>{ const p=document.getElementById('codex-device-panel'); if(p) p.style.display='none'; }, 4000);
+      } else {
+        if(status) status.textContent='❌ 실패';
+        const lines=(s.lines||[]).join('\n');
+        if(msg) msg.innerHTML=`❌ 인증 실패: ${(s.error||'알 수 없음')}<br><pre style="font-size:10px;color:var(--text-dim);max-height:120px;overflow:auto;margin-top:6px">${escapeHtml(lines)}</pre>`;
+      }
+    }
+  }, 2000);
+}
+
+async function codexDeviceCancel(){
+  if(_codexDevicePoll){ clearInterval(_codexDevicePoll); _codexDevicePoll=null; }
+  if(_codexDeviceLoginId){
+    try{ await api('POST','/api/codex/login/cancel',{loginId:_codexDeviceLoginId}); }catch(e){}
+    _codexDeviceLoginId=null;
+  }
+  const panel=document.getElementById('codex-device-panel');
+  if(panel) panel.style.display='none';
+}
+
+// File picker for Codex auth.json (보조)
+document.addEventListener('DOMContentLoaded', ()=>{
+  const fi = document.getElementById('s-codex-file');
+  if(fi){
+    fi.addEventListener('change', e=>{
+      const f = e.target.files[0];
+      if(!f) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const content = reader.result;
+        try {
+          const parsed = JSON.parse(content);
+          const tokens = parsed.tokens || {};
+          if(!(tokens.access_token || tokens.id_token)){
+            alert('auth.json 에 tokens.access_token/id_token 이 없습니다.\n\nauth.json 형식이 맞는지 확인하세요 (codex login 으로 생성된 파일).');
+            fi.value=''; return;
+          }
+        } catch(err){ alert('유효한 JSON 이 아닙니다'); fi.value=''; return; }
+        if(!confirm('⚠ 멀티 디바이스 경고\n\n본인 PC 에서 codex 를 계속 사용하면, 토큰 갱신 시 시놀로지 인증이 무효화될 수 있습니다.\n\ndevice-code 로그인이 더 안전합니다.\n\n그래도 업로드하시겠습니까?')){ fi.value=''; return; }
+        const name = prompt('계정 이름:', f.name.replace('.json','')) || 'Codex (auth.json)';
+        const r = await api('POST', '/api/codex/accounts/save', {name, auth_type:'chatgpt', credentials: content});
+        if(r && r.ok){
+          authCacheSet('codex',name,'chatgpt',content);
+          loadCodexAccounts();
           alert('저장 완료 — 활성화 버튼을 눌러 사용하세요');
         } else alert('실패: ' + ((r && r.error) || ''));
         fi.value = '';

@@ -56,9 +56,32 @@
 
 ## 🧩 멀티계정 인증 영구화 (2026-04-27 추가)
 
-- `CLAUDE_RUNTIME_DIR=/app/accts-runtime` / `GEMINI_RUNTIME_DIR=/app/gmini-accts-runtime` — 시놀로지 호스트에 bind mount해서 CLI가 토큰 갱신 시 쓴 파일을 영구 보존.
-- `run_claude_safe` / `run_gemini_safe` 끝에서 `_persist_refreshed_*_creds`로 디스크의 갱신본을 DB로 역동기화.
+- `CLAUDE_RUNTIME_DIR=/app/accts-runtime` / `GEMINI_RUNTIME_DIR=/app/gmini-accts-runtime` / `CODEX_RUNTIME_DIR=/app/codex-accts-runtime` — 시놀로지 호스트에 bind mount해서 CLI가 토큰 갱신 시 쓴 파일을 영구 보존.
+- `run_claude_safe` / `run_gemini_safe` / `run_codex_safe` 끝에서 `_persist_refreshed_*_creds`로 디스크의 갱신본을 DB로 역동기화.
 - 부팅 시 `_sync_all_*_accounts`는 `force=False`로 호출 — 디스크에 살아있는 갱신본이 있으면 stale DB 토큰으로 덮어쓰지 않음.
+
+## 🟢 Codex (ChatGPT 구독) 인증 규칙 (2026-04-28 추가)
+
+**Codex 인증은 device-code 로그인을 우선한다. auth.json 업로드는 보조.**
+
+### 왜
+- ChatGPT 구독의 `~/.codex/auth.json`을 그대로 업로드하면 Claude credentials.json 사고와 동일한 메커니즘으로 멀티 디바이스 충돌 가능 (refresh_token rotation).
+- `codex login --device-auth`는 컨테이너에서 독립 OAuth 세션을 만듦 → 본인 PC 의 codex 와 토큰 공유 안 함 → 멀티 PC 안전. 사실상 Codex 의 setup-token 등가물.
+
+### 어떻게
+1. **사전 1회**: chatgpt.com → 보안 설정 → "Sign in with Device Code" 활성화 (개인 계정은 본인이 켜면 됨).
+2. FlowDesk → ⚙️ 시스템 설정 → Codex 계정 관리 → **🔐 device-code 로그인** → 표시된 URL/코드를 본인 PC 브라우저에서 입력 → 로그인 완료 → 자동 저장.
+3. 백업: 같은 화면 "📂 auth.json 업로드 (보조)" 버튼 — 본인 PC `codex login` 결과 파일 업로드 (멀티디바이스 경고 표시 후 진행).
+
+### UI 정책
+- Codex 쪽 ⚙️ 시스템 설정에는 device-code 가 메인 버튼, auth.json 업로드는 보조 버튼으로만 노출.
+- 인증 헬스 배지의 Codex 섹션도 device 로그인 버튼이 우선.
+- API key 방식은 의도적으로 UI 노출 안 함 (사용자 정책: ChatGPT 구독만 사용).
+
+### 코드 동작 (참고)
+- `server.py` `_codex_login_start/_codex_login_status` — 임시 `CODEX_HOME` 에서 `codex login --device-auth` subprocess 실행, 완료 시 생성된 auth.json 을 `codex_accounts` 테이블로 영구 저장.
+- `server.py` `get_codex_env_for_account` — 계정별 `CODEX_HOME=<acct>/.codex` 격리, apikey 면 `OPENAI_API_KEY` 도 설정.
+- `build_codex_cmd` — `codex exec --skip-git-repo-check --color never -` (chatOnly: `--sandbox read-only`, 작업: `--full-auto`). 프롬프트는 stdin 전달. `codex exec` 는 비대화형이라 별도 승인 옵션 없음 (sandbox 가 도구 차단/허용 단독 결정).
 
 ---
 

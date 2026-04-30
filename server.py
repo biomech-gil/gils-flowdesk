@@ -346,6 +346,15 @@ def init_db():
                 priority INTEGER DEFAULT 0,
                 created TEXT NOT NULL
             )""",
+            """CREATE TABLE IF NOT EXISTS codex_accounts (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                auth_type TEXT NOT NULL DEFAULT 'chatgpt',
+                credentials TEXT NOT NULL,
+                active INTEGER DEFAULT 0,
+                priority INTEGER DEFAULT 0,
+                created TEXT NOT NULL
+            )""",
             """CREATE TABLE IF NOT EXISTS fav_folders (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -549,6 +558,15 @@ def init_db():
             priority INTEGER DEFAULT 0,
             created TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS codex_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            auth_type TEXT NOT NULL DEFAULT 'chatgpt',
+            credentials TEXT NOT NULL,
+            active INTEGER DEFAULT 0,
+            priority INTEGER DEFAULT 0,
+            created TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS fav_folders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -646,7 +664,7 @@ def db_exec(sql, params=(), fetch=False, fetchone=False):
                 if adapted_sql.strip().upper().startswith("INSERT") and not fetch and not fetchone:
                     # Tables with SERIAL id: temps, memo_folders, memos, messages
                     serial_tables = ("temps", "memo_folders", "memos", "messages", "claude_accounts",
-                                     "gemini_accounts",
+                                     "gemini_accounts", "codex_accounts",
                                      "project_folders", "fav_folders", "fav_items", "project_attachments", "icons")
                     sql_upper = adapted_sql.upper()
                     if any(f"INTO {t.upper()}" in sql_upper for t in serial_tables):
@@ -897,10 +915,12 @@ _sync_claude_credentials()
 # Docker 배포는 docker-compose.yml에서 시놀로지 bind mount로 영구화한다.
 CLAUDE_RUNTIME_DIR = os.environ.get("CLAUDE_RUNTIME_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-accts")
 GEMINI_RUNTIME_DIR = os.environ.get("GEMINI_RUNTIME_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-gmini-accts")
+CODEX_RUNTIME_DIR = os.environ.get("CODEX_RUNTIME_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-codex-accts")
 CLAUDE_ENVONLY_DIR = os.environ.get("CLAUDE_ENVONLY_DIR") or os.path.join(tempfile.gettempdir(), "flowdesk-envonly")
 try:
     os.makedirs(CLAUDE_RUNTIME_DIR, exist_ok=True)
     os.makedirs(GEMINI_RUNTIME_DIR, exist_ok=True)
+    os.makedirs(CODEX_RUNTIME_DIR, exist_ok=True)
     os.makedirs(CLAUDE_ENVONLY_DIR, exist_ok=True)
 except Exception as e:
     log(f"runtime dir create failed: {e}")
@@ -1130,6 +1150,143 @@ def _sync_all_gemini_accounts():
         log(f"Sync Gemini accounts failed: {e}")
 
 _sync_all_gemini_accounts()
+
+# ═══════════════════════════════════════
+# Codex credentials sync (DB → ~/.codex/auth.json)
+# ═══════════════════════════════════════
+# Codex CLI 는 $CODEX_HOME (기본 ~/.codex) 의 auth.json 을 읽음.
+# auth_type='chatgpt': ChatGPT 구독 OAuth (auth_mode=chatgpt + tokens.* + last_refresh)
+#                       — 본인 PC 'codex login' 결과물(auth.json) 업로드 또는 device-code 로그인 결과물.
+# Gemini OAuth 와 동일하게 8일마다 자동 갱신 → 갱신본 파일을 DB로 역동기화하여 보존.
+def _write_codex_creds_to_dir(target_dir, auth_type, credentials):
+    """Codex 계정 creds를 디렉토리에 기록.
+    - auth_type='chatgpt': $target_dir/auth.json 에 OAuth credentials JSON 그대로 기록
+    - auth_type='apikey' : auth.json 에 OPENAI_API_KEY 형태로 기록 (보조용 — UI 에서는 노출 안 함)
+    """
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+    except Exception:
+        pass
+    auth_path = os.path.join(target_dir, "auth.json")
+    if auth_type == "chatgpt":
+        try:
+            # 사용자가 업로드한 원본을 그대로 기록 (auth_mode/tokens/last_refresh 포함)
+            # 빈 JSON 인 경우 (device-code 로그인 직전 placeholder) 파일 생성 안 함 → CLI 가 새로 만들도록
+            parsed = None
+            try:
+                parsed = json.loads(credentials)
+            except Exception:
+                parsed = None
+            if parsed and (parsed.get("tokens") or parsed.get("OPENAI_API_KEY")):
+                with open(auth_path, "w", encoding="utf-8") as f:
+                    f.write(credentials)
+                try:
+                    os.chmod(auth_path, 0o600)
+                except Exception:
+                    pass
+            else:
+                # placeholder — 기존 auth.json 있으면 보존, 없으면 그냥 디렉토리만 보장
+                pass
+        except Exception as e:
+            log(f"[CODEX] write auth.json failed: {e}")
+    elif auth_type == "apikey":
+        try:
+            key = (credentials or "").strip()
+            try:
+                parsed = json.loads(credentials)
+                if isinstance(parsed, dict):
+                    key = parsed.get("OPENAI_API_KEY") or parsed.get("apiKey") or parsed.get("api_key") or key
+            except Exception:
+                pass
+            payload = json.dumps({"OPENAI_API_KEY": key}, indent=2)
+            with open(auth_path, "w", encoding="utf-8") as f:
+                f.write(payload)
+            try:
+                os.chmod(auth_path, 0o600)
+            except Exception:
+                pass
+        except Exception as e:
+            log(f"[CODEX] write apikey auth.json failed: {e}")
+
+def _sync_codex_credentials():
+    """DB active row → ~/.codex/auth.json 동기화 (서버 시작 시 active 계정 1개)."""
+    try:
+        row = db_exec(
+            "SELECT auth_type, credentials FROM codex_accounts WHERE active=1 LIMIT 1",
+            fetchone=True,
+        )
+        if row:
+            codex_dir = os.path.expanduser("~/.codex")
+            _write_codex_creds_to_dir(codex_dir, row.get("auth_type") or "chatgpt", row.get("credentials") or "")
+            log("Codex credentials synced from active account")
+    except Exception as e:
+        log(f"Codex credentials sync failed: {e}")
+
+_sync_codex_credentials()
+
+def _get_codex_account_dir(account_id):
+    base = os.path.join(CODEX_RUNTIME_DIR, str(account_id))
+    os.makedirs(base, exist_ok=True)
+    return base
+
+def _sync_codex_account_to_dir(account_id, auth_type, credentials, force=True):
+    """계정별 격리 디렉토리. CODEX_HOME=<dir>/.codex 하위에 auth.json 기록.
+    force=False: auth.json 이 이미 있으면 보존 (CLI 가 갱신해 둔 토큰)."""
+    d = _get_codex_account_dir(account_id)
+    codex_sub = os.path.join(d, ".codex")
+    if not force and auth_type == "chatgpt":
+        # OAuth 모드는 갱신본 보존 — 파일 있으면 안 건드림
+        auth_path = os.path.join(codex_sub, "auth.json")
+        if os.path.exists(auth_path):
+            try:
+                os.makedirs(codex_sub, exist_ok=True)
+            except Exception:
+                pass
+            return d
+    _write_codex_creds_to_dir(codex_sub, auth_type, credentials)
+    return d
+
+def _persist_refreshed_codex_creds(account_id):
+    """Codex CLI 가 OAuth 토큰 갱신 시 auth.json 을 다시 쓰는 것을 DB 로 역동기화."""
+    if not account_id:
+        return
+    try:
+        row = db_exec("SELECT auth_type, credentials FROM codex_accounts WHERE id=?",
+                      (int(account_id),), fetchone=True)
+        if not row or (row.get("auth_type") or "chatgpt") != "chatgpt":
+            return  # apikey 는 갱신 없음
+        auth_path = os.path.join(_get_codex_account_dir(int(account_id)), ".codex", "auth.json")
+        if not os.path.exists(auth_path):
+            return
+        with open(auth_path, "r", encoding="utf-8") as f:
+            disk = f.read()
+        if not disk.strip():
+            return
+        try:
+            parsed = json.loads(disk)
+            tokens = parsed.get("tokens") or {}
+            if not (tokens.get("access_token") or tokens.get("id_token") or parsed.get("OPENAI_API_KEY")):
+                return
+        except Exception:
+            return
+        if (row.get("credentials") or "") == disk:
+            return
+        db_exec("UPDATE codex_accounts SET credentials=? WHERE id=?", (disk, int(account_id)))
+        log(f"[CODEX] refreshed credentials persisted (account={account_id})")
+    except Exception as e:
+        log(f"[CODEX] persist refreshed creds failed: {e}")
+
+def _sync_all_codex_accounts():
+    try:
+        rows = db_exec("SELECT id, auth_type, credentials FROM codex_accounts", fetch=True) or []
+        for row in rows:
+            _sync_codex_account_to_dir(row["id"], row.get("auth_type") or "chatgpt",
+                                        row.get("credentials") or "", force=False)
+        log(f"Synced {len(rows)} Codex accounts (preserve-existing)")
+    except Exception as e:
+        log(f"Sync Codex accounts failed: {e}")
+
+_sync_all_codex_accounts()
 
 # ═══════════════════════════════════════
 # Recovery slot TTL cleanup (이름 없는 임시 작업 2일 후 제거)
@@ -1847,18 +2004,176 @@ def run_gemini_safe(cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
 
 
 # ═══════════════════════════════════════
+# Codex CLI (provider=codex) — ChatGPT 구독 (auth_mode=chatgpt) 사용
+# ═══════════════════════════════════════
+def build_codex_cmd(prompt, opts=None):
+    """codex CLI 명령 구성. prompt 는 stdin (codex exec -) 으로 전달.
+
+    Claude/Gemini 대비 매핑:
+      - chatOnly=True  → --sandbox read-only --ask-for-approval never (도구 차단 + 비대화)
+      - chatOnly=False → --full-auto (workspace-write + on-request approval)
+      - model          → --model (기본은 CLI 기본값 사용)
+      - systemPrompt   → 프롬프트 앞부분에 [시스템 지시사항] 블록 삽입
+      - jsonSchema     → --output-schema <임시파일> (구조화 출력)
+      - images         → 프롬프트에 파일 경로 텍스트로 추가 (Codex 가 읽도록 안내)
+      - outputJson     → 무시 (codex 기본 stdout=최종 메시지 텍스트로 사용)
+    Returns (cmd, final_prompt). prompt 는 run_codex_safe 가 stdin 으로 흘려 넣음.
+    """
+    opts = opts or {}
+    cmd = ["codex", "exec", "--skip-git-repo-check", "--color", "never"]
+
+    chat_only = opts.get("chatOnly", True)
+    if chat_only:
+        # 대화전용: 도구 사용 차단 (read-only sandbox).
+        # codex exec 는 비대화형이라 승인 옵션 자체가 없음 → sandbox 만 read-only 로 두면 도구 실행 차단됨.
+        cmd += ["--sandbox", "read-only"]
+    else:
+        # 작업 모드: workspace-write + 자동 (--full-auto = workspace-write 자동 실행)
+        cmd += ["--full-auto"]
+
+    model = opts.get("model") or _get_default_model("codex")
+    if model:
+        cmd += ["--model", model]
+
+    json_schema = opts.get("jsonSchema", "")
+    schema_tmp = None
+    if json_schema:
+        try:
+            import tempfile as _tmp
+            fd, schema_tmp = _tmp.mkstemp(suffix=".json", prefix="codex_schema_")
+            os.close(fd)
+            with open(schema_tmp, "w", encoding="utf-8") as f:
+                f.write(json_schema)
+            cmd += ["--output-schema", schema_tmp]
+        except Exception as e:
+            log(f"[CODEX] schema tmp write failed: {e}")
+
+    final_prompt = prompt
+    sys_prompt = opts.get("systemPrompt", "")
+    if sys_prompt:
+        final_prompt = f"[시스템 지시사항]\n{sys_prompt}\n\n[사용자 요청]\n{final_prompt}"
+    images = opts.get("images", [])
+    if images:
+        final_prompt += "\n\n[첨부 이미지 파일 — 경로의 파일을 읽어 분석]:\n" + "\n".join(f"- {img}" for img in images)
+
+    # codex exec - : stdin 으로 prompt 전달
+    cmd += ["-"]
+    return cmd, final_prompt
+
+
+def get_codex_env():
+    """Codex CLI 실행용 env. PATH 만 공유."""
+    env = os.environ.copy()
+    try:
+        env["PATH"] = get_claude_env().get("PATH", env.get("PATH", ""))
+    except Exception:
+        pass
+    return env
+
+
+def pick_available_codex_account():
+    """active=1 계정 우선, 없으면 priority/id 가장 낮은 계정."""
+    try:
+        row = db_exec("SELECT id FROM codex_accounts WHERE active=1 LIMIT 1", fetchone=True)
+        if row:
+            return int(row["id"])
+        row = db_exec("SELECT id FROM codex_accounts ORDER BY priority ASC, id ASC LIMIT 1", fetchone=True)
+        if row:
+            return int(row["id"])
+    except Exception as e:
+        log(f"[CODEX] pick account failed: {e}")
+    return None
+
+
+def get_codex_env_for_account(account_id):
+    """계정별 격리 env: CODEX_HOME=<per-account-dir>/.codex, apikey 면 OPENAI_API_KEY 도 설정."""
+    env = get_codex_env()
+    if not account_id:
+        return env
+    try:
+        row = db_exec(
+            "SELECT auth_type, credentials FROM codex_accounts WHERE id=?",
+            (int(account_id),), fetchone=True,
+        )
+        if not row:
+            return env
+        auth_type = row.get("auth_type") or "chatgpt"
+        creds = row.get("credentials") or ""
+        acct_dir = _sync_codex_account_to_dir(int(account_id), auth_type, creds, force=False)
+        codex_home = os.path.join(acct_dir, ".codex")
+        try:
+            os.makedirs(codex_home, exist_ok=True)
+        except Exception:
+            pass
+        env["CODEX_HOME"] = codex_home
+        if auth_type == "apikey":
+            key = creds.strip()
+            try:
+                parsed = json.loads(creds)
+                if isinstance(parsed, dict):
+                    key = parsed.get("OPENAI_API_KEY") or parsed.get("apiKey") or parsed.get("api_key") or key
+            except Exception:
+                pass
+            if key:
+                env["OPENAI_API_KEY"] = key
+    except Exception as e:
+        log(f"[CODEX] env for account {account_id} failed: {e}")
+    return env
+
+
+def run_codex_safe(cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
+    """Codex CLI 호출. (stdout, used_account_id, fb_msg) 시그니처."""
+    cur_id = account_id
+    if cur_id is None:
+        cur_id = pick_available_codex_account()
+    env = get_codex_env_for_account(cur_id) if cur_id else get_codex_env()
+    try:
+        cmd, final_prompt = cmd_builder_fn()
+    except Exception as e:
+        return ("", cur_id, f"codex cmd build failed: {e}")
+    log(f"[CODEX] account={cur_id} model={cmd[cmd.index('--model')+1] if '--model' in cmd else '(default)'}")
+    try:
+        result = subprocess.run(
+            cmd, input=final_prompt, capture_output=True, text=True,
+            timeout=timeout, env=env, cwd=run_cwd,
+            encoding="utf-8", errors="replace",
+        )
+        # OAuth 토큰 갱신본을 DB 로 역동기화
+        _persist_refreshed_codex_creds(cur_id)
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        if result.returncode != 0 and not stdout.strip():
+            tail = (stderr or "")[-300:]
+            return ("", cur_id, f"codex exit {result.returncode}: {tail}")
+        return ((stdout or "").strip(), cur_id, "✓ codex")
+    except subprocess.TimeoutExpired:
+        _persist_refreshed_codex_creds(cur_id)
+        return ("", cur_id, "timeout")
+    except FileNotFoundError:
+        return ("", cur_id, "codex CLI 미설치 (npm install -g @openai/codex)")
+    except Exception as e:
+        _persist_refreshed_codex_creds(cur_id)
+        log(f"[CODEX] error: {e}")
+        return ("", cur_id, str(e))
+
+
+# ═══════════════════════════════════════
 # Provider Dispatcher (agent 노드 provider 분기)
 # ═══════════════════════════════════════
-SUPPORTED_PROVIDERS = ("claude", "gemini")
+SUPPORTED_PROVIDERS = ("claude", "gemini", "codex")
 
 def build_agent_cmd(provider, prompt, opts=None):
     if provider == "gemini":
         return build_gemini_cmd(prompt, opts)
+    if provider == "codex":
+        return build_codex_cmd(prompt, opts)
     return build_claude_cmd(prompt, opts)
 
 def run_agent_safe(provider, cmd_builder_fn, account_id=None, run_cwd=None, timeout=600):
     if provider == "gemini":
         return run_gemini_safe(cmd_builder_fn, account_id=account_id, run_cwd=run_cwd, timeout=timeout)
+    if provider == "codex":
+        return run_codex_safe(cmd_builder_fn, account_id=account_id, run_cwd=run_cwd, timeout=timeout)
     return run_claude_safe(cmd_builder_fn, account_id, run_cwd=run_cwd, timeout=timeout)
 
 # ═══════════════════════════════════════
@@ -1869,6 +2184,9 @@ _claude_login_url = None
 _claude_login_output = []
 _claude_login_master_fd = None
 _claude_login_lock = threading.Lock()
+
+# Codex device-code login state: {loginId: {proc, home, tmp, lines, auth_url, code, ...}}
+_codex_login_state = {}
 
 def _is_claude_proc_alive():
     global _claude_login_proc
@@ -2155,6 +2473,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
         elif p == "/api/claude/accounts/list": self._json(self._claude_accounts_list())
         elif p == "/api/claude/login/status": self._json(self._claude_login_status())
         elif p == "/api/gemini/accounts/list": self._json(self._gemini_accounts_list())
+        elif p == "/api/codex/accounts/list": self._json(self._codex_accounts_list())
         elif p == "/api/fs/browse": self._json(self._browse_path(params))
         elif p == "/api/fs/browse-system": self._json(self._fs_browse_system(params))
         elif p == "/api/fs/download":
@@ -2208,6 +2527,7 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/project/adopt": self._project_adopt,
             "/api/media/download": self._media_download,
             "/api/media/extract-frame": self._media_extract_frame,
+            "/api/image-gen": self._image_gen,
             "/api/youtube/search": self._youtube_search,
             "/api/media/subtitle": self._media_subtitle,
             "/api/project/delete": self._project_delete,
@@ -2268,6 +2588,13 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "/api/gemini/accounts/delete": self._gemini_account_delete,
             "/api/gemini/accounts/activate": self._gemini_account_activate,
             "/api/gemini/accounts/test": self._gemini_account_test,
+            "/api/codex/accounts/save": self._codex_account_save,
+            "/api/codex/accounts/delete": self._codex_account_delete,
+            "/api/codex/accounts/activate": self._codex_account_activate,
+            "/api/codex/accounts/test": self._codex_account_test,
+            "/api/codex/login/start": self._codex_login_start,
+            "/api/codex/login/status": self._codex_login_status,
+            "/api/codex/login/cancel": self._codex_login_cancel,
             "/api/fs/mkdir": self._fs_mkdir,
             "/api/fs/mkdir-system": self._fs_mkdir_system,
             "/api/fs/delete": self._fs_delete,
@@ -2469,6 +2796,8 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 try:
                     if chat_provider == "gemini":
                         account_id = pick_available_gemini_account()
+                    elif chat_provider == "codex":
+                        account_id = pick_available_codex_account()
                     else:
                         nxt = self._claude_next_account({})
                         if nxt.get("ok"): account_id = nxt.get("accountId")
@@ -3165,6 +3494,365 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 "videoCount": sum(1 for m in moved if m["kind"] == "video"),
                 "imageCount": sum(1 for m in moved if m["kind"] == "image"),
                 "audioCount": sum(1 for m in moved if m["kind"] == "audio")}
+
+    # ═══════════════════════════════════════
+    # 🎨 이미지 생성 노드 — 결과 PNG 를 프로젝트 work_dir/images/ 로 저장
+    # ═══════════════════════════════════════
+    def _image_gen(self, body):
+        """이미지 생성 dispatcher.
+        body:
+          backend     'gemini' (기본) — 향후 'codex'/'openai' 확장 예정
+          prompt      필수
+          model       backend 별 default
+          n           1~4 (기본 1)
+          refImages   참조 이미지 절대경로 리스트 (img2img/편집)
+          projectId   프로젝트 id (work_dir 조회)
+          nodeId/nodeName  파일명 / 추적용
+          tempKey/projectName/canvasState  임시폴더 폴백 (downloader 와 동일 정책)
+        return: {ok, backend, model, files:[{path,name,url,size,mime}], count, elapsed, stdout, workDir}
+        """
+        backend = (body.get("backend") or "codex").strip().lower()
+        prompt = (body.get("prompt") or "").strip()
+        if not prompt:
+            return {"ok": False, "error": "프롬프트가 비어있습니다"}
+        try:
+            n = max(1, min(4, int(body.get("n") or 1)))
+        except Exception:
+            n = 1
+        ref_images = body.get("refImages") or []
+        node_name = (body.get("nodeName") or "imagegen").strip() or "imagegen"
+        node_id = (body.get("nodeId") or "").strip()
+
+        # work_dir 결정 — _media_download 와 동일 정책 (저장 프로젝트 우선, 임시 폴더 폴백)
+        work_dir = None
+        project_id = (body.get("projectId") or "").strip()
+        if project_id:
+            try:
+                row = db_exec("SELECT work_dir FROM projects WHERE id=?", (project_id,), fetchone=True)
+                if row and row.get("work_dir") and os.path.isdir(row["work_dir"]):
+                    work_dir = row["work_dir"]
+            except Exception: pass
+        if not work_dir:
+            temp_key = (body.get("tempKey") or project_id or node_id or f"imagegen_{int(time.time())}")
+            temp_name = body.get("projectName") or "Untitled"
+            try:
+                tdir = get_or_create_temp_dir(temp_key, temp_name)
+            except Exception as e:
+                return {"ok": False, "error": f"임시 폴더 생성 실패: {e}"}
+            if tdir:
+                work_dir = tdir
+                canvas_state = body.get("canvasState")
+                if canvas_state:
+                    try: write_temp_snapshot(tdir, canvas_state)
+                    except Exception: pass
+        if not work_dir:
+            return {"ok": False, "error": "작업 폴더를 결정할 수 없습니다",
+                    "errorKind": "no_workdir"}
+
+        images_dir = os.path.join(work_dir, "images")
+        try:
+            os.makedirs(images_dir, exist_ok=True)
+        except Exception as e:
+            return {"ok": False, "error": f"images 폴더 생성 실패: {e}"}
+
+        # 파일명 prefix — 노드명 sanitize
+        safe_name = re.sub(r"[^\w\-]+", "_", node_name)[:40] or "imagegen"
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+        if backend == "gemini":
+            return self._image_gen_gemini(prompt, n, ref_images, images_dir,
+                                          safe_name, ts, body, project_id)
+        if backend == "codex":
+            return self._image_gen_codex(prompt, n, ref_images, images_dir,
+                                         safe_name, ts, body, project_id)
+        return {"ok": False, "error": f"backend '{backend}' 미지원 (현재: codex, gemini)"}
+
+    def _image_gen_gemini(self, prompt, n, ref_images, images_dir,
+                          safe_name, ts, body, project_id):
+        """Gemini API 직접 호출 — gemini-2.5-flash-image-preview (Nano Banana).
+        REST: POST /v1beta/models/{model}:generateContent?key={KEY}
+        응답: candidates[].content.parts[].inlineData.{mimeType, data:base64}
+        """
+        import urllib.request, urllib.error, urllib.parse, base64
+
+        # apikey 타입 gemini 계정 픽 (active=1 우선 → priority/id ASC)
+        api_key = ""
+        try:
+            row = db_exec(
+                "SELECT credentials FROM gemini_accounts WHERE auth_type='apikey' AND active=1 LIMIT 1",
+                fetchone=True
+            )
+            if not row:
+                row = db_exec(
+                    "SELECT credentials FROM gemini_accounts WHERE auth_type='apikey' ORDER BY priority ASC, id ASC LIMIT 1",
+                    fetchone=True
+                )
+            if row and row.get("credentials"):
+                creds = row["credentials"].strip()
+                api_key = creds
+                try:
+                    parsed = json.loads(creds)
+                    if isinstance(parsed, dict):
+                        api_key = parsed.get("apiKey") or parsed.get("api_key") or creds
+                except Exception: pass
+        except Exception as e:
+            log(f"[IMAGEGEN] gemini account lookup failed: {e}")
+        if not api_key:
+            api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            return {"ok": False, "errorKind": "no_api_key",
+                    "error": "Gemini API 키가 없습니다. ⚙️ → Gemini 계정 관리에서 'apikey' 타입 계정을 추가하세요."}
+
+        model = (body.get("model") or "gemini-2.5-flash-image-preview").strip()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
+        # 요청 parts: 프롬프트 + (옵션) 참조 이미지
+        parts = [{"text": prompt}]
+        for ref in (ref_images or []):
+            try:
+                if not isinstance(ref, str) or not os.path.isfile(ref):
+                    continue
+                ext = os.path.splitext(ref)[1].lower().lstrip(".")
+                mime = {"png":"image/png","jpg":"image/jpeg","jpeg":"image/jpeg",
+                        "webp":"image/webp","gif":"image/gif"}.get(ext, "image/png")
+                with open(ref, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("ascii")
+                parts.append({"inlineData": {"mimeType": mime, "data": b64}})
+            except Exception as e:
+                log(f"[IMAGEGEN] ref image read failed ({ref}): {e}")
+
+        files = []
+        stdout_log = []
+        elapsed_total = 0.0
+        last_error = ""
+        for idx in range(n):
+            req_body = json.dumps({"contents": [{"parts": parts}]}).encode("utf-8")
+            req = urllib.request.Request(
+                url, data=req_body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            t0 = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    raw = resp.read().decode("utf-8")
+            except urllib.error.HTTPError as e:
+                err_body = ""
+                try: err_body = e.read().decode("utf-8", errors="replace")[:500]
+                except Exception: pass
+                last_error = f"HTTP {e.code}: {err_body}"
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+                log(f"[IMAGEGEN] gemini HTTP {e.code}: {err_body[:200]}")
+                continue
+            except Exception as e:
+                last_error = f"네트워크 오류: {e}"
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+                continue
+            elapsed_total += (time.time() - t0)
+
+            try:
+                data = json.loads(raw)
+            except Exception as e:
+                last_error = f"JSON 파싱 실패: {e}"
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+                continue
+
+            cands = data.get("candidates") or []
+            if not cands:
+                pf = data.get("promptFeedback") or data.get("error") or {}
+                last_error = f"응답 없음: {json.dumps(pf, ensure_ascii=False)[:300]}"
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+                continue
+
+            saved = False
+            for cand in cands:
+                cont = cand.get("content") or {}
+                for p in (cont.get("parts") or []):
+                    inline = p.get("inlineData") or p.get("inline_data")
+                    if not inline: continue
+                    b64 = inline.get("data") or ""
+                    mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                    if not b64: continue
+                    ext = "png"
+                    if "jpeg" in mime: ext = "jpg"
+                    elif "webp" in mime: ext = "webp"
+                    elif "gif" in mime: ext = "gif"
+                    suffix = f"_{idx+1}" if n > 1 else ""
+                    fname = f"imagegen_{safe_name}_{ts}{suffix}.{ext}"
+                    fpath = os.path.join(images_dir, fname)
+                    try:
+                        with open(fpath, "wb") as f:
+                            f.write(base64.b64decode(b64))
+                    except Exception as e:
+                        last_error = f"파일 저장 실패: {e}"
+                        stdout_log.append(f"[#{idx+1}] {last_error}")
+                        break
+                    # 프론트 미리보기용 URL — projectId 가 있을 때만 작동, 없으면 path 만 활용
+                    if project_id:
+                        rel = f"images/{fname}"
+                        url_preview = f"/api/project/file?projectId={urllib.parse.quote(project_id)}&path={urllib.parse.quote(rel)}"
+                    else:
+                        url_preview = ""
+                    files.append({
+                        "path": fpath, "name": fname,
+                        "size": os.path.getsize(fpath),
+                        "mime": mime, "url": url_preview,
+                    })
+                    saved = True
+                    stdout_log.append(f"[#{idx+1}] ✓ {fname} ({os.path.getsize(fpath)} bytes)")
+                    log(f"[IMAGEGEN] saved: {fpath}")
+                    break
+                if saved: break
+            if not saved and not last_error:
+                last_error = "응답에 inlineData 이미지 없음 (모델이 텍스트만 반환했을 가능성)"
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+
+        if not files:
+            return {"ok": False, "backend": "gemini", "model": model,
+                    "error": last_error or "이미지 생성 실패",
+                    "stdout": "\n".join(stdout_log)}
+        return {
+            "ok": True, "backend": "gemini", "model": model,
+            "files": files, "count": len(files),
+            "elapsed": round(elapsed_total, 2),
+            "stdout": "\n".join(stdout_log),
+            "workDir": os.path.dirname(images_dir),
+        }
+
+    def _image_gen_codex(self, prompt, n, ref_images, images_dir,
+                         safe_name, ts, body, project_id):
+        """Codex CLI 를 이용한 이미지 생성 — gpt-image-2 ($imagegen 트리거).
+        codex exec --full-auto 로 호출하면 PR #13607 동작에 따라 cwd 루트에 PNG 가 떨어짐.
+        우리는 cwd=work_dir 로 실행 후, 새로 생긴 이미지 파일을 work_dir/images/ 로 정리.
+        Sandbox: --full-auto = workspace-write — cwd 와 그 하위에 쓰기 허용 (read-only 면 못 씀).
+        n>1 은 codex 를 n 회 반복 호출 (한 번에 1장 보장).
+        """
+        import urllib.parse
+        IMG_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+        work_dir = os.path.dirname(images_dir)
+        if not os.path.isdir(work_dir):
+            return {"ok": False, "backend": "codex", "error": "work_dir 없음"}
+
+        model = (body.get("model") or "").strip()
+        # 활성 codex 계정 픽 (없으면 run_codex_safe 가 환경변수로 폴백)
+        try:
+            cur_id = pick_available_codex_account()
+        except Exception:
+            cur_id = None
+        if cur_id is None:
+            return {"ok": False, "backend": "codex", "errorKind": "no_codex_account",
+                    "error": "Codex 계정이 없습니다. ⚙️ → Codex 계정 관리에서 device-code 로그인 또는 auth.json 등록."}
+
+        files = []
+        stdout_log = []
+        elapsed_total = 0.0
+        last_error = ""
+
+        # $imagegen 토큰 자동 prepend (이미 들어있으면 그대로)
+        base_prompt = prompt if "$imagegen" in prompt else f"$imagegen {prompt}"
+
+        for idx in range(n):
+            # baseline: work_dir 루트의 image 파일들 mtime 스냅샷
+            baseline = {}
+            try:
+                for fn in os.listdir(work_dir):
+                    full = os.path.join(work_dir, fn)
+                    if not os.path.isfile(full): continue
+                    if not fn.lower().endswith(IMG_EXT): continue
+                    baseline[fn] = os.path.getmtime(full)
+            except Exception as e:
+                log(f"[IMAGEGEN/codex] baseline scan failed: {e}")
+
+            # cmd 구성 — build_codex_cmd 와 별개 (image-gen 전용 옵션 강제)
+            def _build():
+                cmd = ["codex", "exec", "--skip-git-repo-check", "--color", "never", "--full-auto"]
+                if model:
+                    cmd += ["--model", model]
+                # 참조 이미지 (img2img / 편집): --image 플래그
+                for ref in (ref_images or []):
+                    if isinstance(ref, str) and os.path.isfile(ref):
+                        cmd += ["--image", ref]
+                cmd += ["-"]  # stdin 으로 prompt 전달
+                return cmd, base_prompt
+
+            t0 = time.time()
+            try:
+                stdout, used_acc, fb_msg = run_codex_safe(
+                    _build, account_id=cur_id, run_cwd=work_dir, timeout=300,
+                )
+            except Exception as e:
+                last_error = f"codex 실행 오류: {e}"
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+                log(f"[IMAGEGEN/codex] error: {e}")
+                continue
+            elapsed_total += (time.time() - t0)
+
+            # post-run scan: work_dir 루트의 새/갱신된 image 파일
+            new_files = []
+            try:
+                for fn in os.listdir(work_dir):
+                    full = os.path.join(work_dir, fn)
+                    if not os.path.isfile(full): continue
+                    if not fn.lower().endswith(IMG_EXT): continue
+                    mt = os.path.getmtime(full)
+                    if fn not in baseline or mt > baseline[fn]:
+                        new_files.append((fn, full, mt))
+            except Exception as e:
+                log(f"[IMAGEGEN/codex] post-scan failed: {e}")
+            new_files.sort(key=lambda x: x[2])
+
+            if not new_files:
+                # codex 가 PNG 를 만들지 못했음 — stdout/fb_msg 로 원인 추적
+                tail = (stdout or "")[-300:] if stdout else ""
+                last_error = f"새 이미지 없음 [{fb_msg}] {tail}".strip()
+                stdout_log.append(f"[#{idx+1}] {last_error}")
+                log(f"[IMAGEGEN/codex] no new image after run: {fb_msg}")
+                continue
+
+            # 새 PNG → work_dir/images/imagegen_xxx.png 로 이동
+            for j, (orig_name, full, mt) in enumerate(new_files):
+                if n > 1 and len(new_files) > 1:
+                    suffix = f"_{idx+1}_{j+1}"
+                elif n > 1:
+                    suffix = f"_{idx+1}"
+                elif len(new_files) > 1:
+                    suffix = f"_{j+1}"
+                else:
+                    suffix = ""
+                ext = os.path.splitext(orig_name)[1].lower() or ".png"
+                new_name = f"imagegen_{safe_name}_{ts}{suffix}{ext}"
+                new_path = os.path.join(images_dir, new_name)
+                try:
+                    shutil.move(full, new_path)
+                except Exception as e:
+                    last_error = f"파일 이동 실패: {e}"
+                    stdout_log.append(f"[#{idx+1}] {last_error}")
+                    continue
+                if project_id:
+                    rel = f"images/{new_name}"
+                    url_preview = f"/api/project/file?projectId={urllib.parse.quote(project_id)}&path={urllib.parse.quote(rel)}"
+                else:
+                    url_preview = ""
+                files.append({
+                    "path": new_path, "name": new_name,
+                    "size": os.path.getsize(new_path),
+                    "mime": "image/png",
+                    "url": url_preview,
+                })
+                stdout_log.append(f"[#{idx+1}] ✓ {new_name}  ({orig_name} → images/)")
+                log(f"[IMAGEGEN/codex] moved: {full} → {new_path}")
+
+        if not files:
+            return {"ok": False, "backend": "codex", "model": model or "(default)",
+                    "error": last_error or "codex 이미지 생성 실패 — $imagegen 토큰이 무시됐거나 sandbox 가 차단했을 가능성",
+                    "stdout": "\n".join(stdout_log)}
+        return {
+            "ok": True, "backend": "codex", "model": model or "(default)",
+            "files": files, "count": len(files),
+            "elapsed": round(elapsed_total, 2),
+            "stdout": "\n".join(stdout_log),
+            "workDir": work_dir,
+        }
 
     # ═══════════════════════════════════════
     # 🎥 YouTube 검색 (Data API v3) — hot_score 계산 포함
@@ -6522,6 +7210,248 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             return {"ok": True, "authenticated": False, "msg": f"❌ 오류: {e}"}
 
     # ═══════════════════════════════════════
+    # Codex account handlers (Gemini 패턴 동일 — auth_type='chatgpt'|'apikey')
+    # ═══════════════════════════════════════
+    def _codex_accounts_list(self):
+        try:
+            rows = db_exec(
+                "SELECT id, name, auth_type, active, priority, created FROM codex_accounts ORDER BY priority ASC, created DESC",
+                fetch=True,
+            ) or []
+            return {"ok": True, "accounts": [dict(r) for r in rows]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _codex_account_save(self, body):
+        """name + auth_type('chatgpt'|'apikey') + credentials(문자열). id 있으면 업데이트.
+        chatgpt: ~/.codex/auth.json 의 JSON 원본 (auth_mode=chatgpt + tokens.* + last_refresh).
+        apikey : OPENAI_API_KEY 문자열 (UI 에서 노출 안 함, 백업용)."""
+        name = (body.get("name") or "").strip()
+        auth_type = (body.get("auth_type") or "chatgpt").strip()
+        credentials = (body.get("credentials") or "").strip()
+        aid = body.get("id")
+        if auth_type not in ("chatgpt", "apikey"):
+            return {"ok": False, "error": "auth_type 은 chatgpt 또는 apikey"}
+        if not name or not credentials:
+            return {"ok": False, "error": "name/credentials 필수"}
+        if auth_type == "chatgpt":
+            try:
+                parsed = json.loads(credentials)
+                tokens = parsed.get("tokens") or {}
+                if not (tokens.get("access_token") or tokens.get("id_token")):
+                    return {"ok": False, "error": "auth.json 에 tokens.access_token/id_token 이 없음"}
+            except Exception:
+                return {"ok": False, "error": "auth.json 형식이 올바르지 않음"}
+        try:
+            if aid:
+                db_exec(
+                    "UPDATE codex_accounts SET name=?, auth_type=?, credentials=? WHERE id=?",
+                    (name, auth_type, credentials, int(aid)),
+                )
+                new_id = int(aid)
+            else:
+                new_id = db_exec(
+                    "INSERT INTO codex_accounts (name, auth_type, credentials, active, created) VALUES (?,?,?,?,?)",
+                    (name, auth_type, credentials, 0, datetime.now().isoformat()),
+                )
+            _sync_codex_account_to_dir(new_id, auth_type, credentials)
+            active = db_exec("SELECT id FROM codex_accounts WHERE active=1 LIMIT 1", fetchone=True)
+            if active and int(active["id"]) == int(new_id):
+                _sync_codex_credentials()
+            return {"ok": True, "id": new_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _codex_account_delete(self, body):
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            db_exec("DELETE FROM codex_accounts WHERE id=?", (int(aid),))
+            try:
+                import shutil
+                shutil.rmtree(_get_codex_account_dir(int(aid)), ignore_errors=True)
+            except Exception:
+                pass
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _codex_account_activate(self, body):
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            db_exec("UPDATE codex_accounts SET active=0")
+            db_exec("UPDATE codex_accounts SET active=1 WHERE id=?", (int(aid),))
+            _sync_codex_credentials()
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _codex_account_test(self, body):
+        """계정으로 Codex CLI 간단 호출 테스트 (codex exec - 에 'OK' stdin)."""
+        aid = body.get("id")
+        if not aid: return {"ok": False, "error": "id required"}
+        try:
+            env = get_codex_env_for_account(int(aid))
+            result = subprocess.run(
+                ["codex", "exec", "--skip-git-repo-check", "--color", "never",
+                 "--sandbox", "read-only", "-"],
+                input="Reply only with: OK",
+                capture_output=True, text=True, timeout=45, env=env,
+                encoding="utf-8", errors="replace",
+            )
+            output = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            if result.returncode == 0 and output:
+                return {
+                    "ok": True, "authenticated": True,
+                    "response": output[:200],
+                    "msg": f"✅ 인증 성공! 응답: \"{output[:80]}\"",
+                }
+            err = stderr or output or "(응답 없음)"
+            return {
+                "ok": True, "authenticated": False,
+                "error": err[:300],
+                "msg": f"❌ 인증 실패\n{err[:300]}",
+            }
+        except subprocess.TimeoutExpired:
+            return {"ok": True, "authenticated": False, "msg": "❌ 타임아웃 (45초)"}
+        except FileNotFoundError:
+            return {"ok": True, "authenticated": False, "msg": "❌ codex CLI 미설치 (npm install -g @openai/codex)"}
+        except Exception as e:
+            return {"ok": True, "authenticated": False, "msg": f"❌ 오류: {e}"}
+
+    # ── Codex device-code login (B 메인 — 멀티디바이스 안전) ──
+    # 컨테이너 안에서 'codex login --device-auth' 를 실행해 독립 OAuth 세션을 만듦.
+    # 사용자는 표시된 URL/코드만 본인 PC 브라우저에서 입력하면 됨 (auth.json 파일 이동 불필요).
+
+    def _codex_login_start(self, body):
+        """device-code 로그인 subprocess 시작. 임시 CODEX_HOME 에서 진행 후 결과 auth.json 을 DB 로 영구 보존.
+        Returns: {ok, loginId, authUrl?, code?, msg}."""
+        global _codex_login_state
+        try:
+            import tempfile as _tmp
+            import threading as _thr
+            import time as _time
+            import re as _re
+            login_id = str(uuid.uuid4())[:8]
+            tmp_home = _tmp.mkdtemp(prefix=f"codex-login-{login_id}-")
+            codex_home = os.path.join(tmp_home, ".codex")
+            os.makedirs(codex_home, exist_ok=True)
+            env = get_codex_env()
+            env["CODEX_HOME"] = codex_home
+            # codex login --device-auth 는 stdout 으로 URL/코드를 출력
+            try:
+                proc = subprocess.Popen(
+                    ["codex", "login", "--device-auth"],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    env=env, text=True, encoding="utf-8", errors="replace",
+                    bufsize=1,
+                )
+            except FileNotFoundError:
+                return {"ok": False, "error": "codex CLI 미설치 (Dockerfile 빌드 필요)"}
+            state = {
+                "id": login_id, "proc": proc, "home": codex_home, "tmp": tmp_home,
+                "lines": [], "auth_url": "", "code": "",
+                "started": _time.time(), "done": False, "saved": False,
+            }
+            _codex_login_state[login_id] = state
+
+            def _reader():
+                try:
+                    for line in proc.stdout:
+                        state["lines"].append(line.rstrip())
+                        # URL/코드 추출 (예: https://auth.openai.com/codex/device, code: XXXX-XXXX)
+                        if not state["auth_url"]:
+                            m = _re.search(r"https://[^\s]+", line)
+                            if m: state["auth_url"] = m.group(0)
+                        if not state["code"]:
+                            m = _re.search(r"\b([A-Z0-9]{4}-[A-Z0-9]{4})\b", line)
+                            if m: state["code"] = m.group(1)
+                except Exception:
+                    pass
+                finally:
+                    state["done"] = True
+                    # 성공 시 auth.json 이 생성되어 있어야 함
+            _thr.Thread(target=_reader, daemon=True).start()
+
+            # 최대 8초간 URL/코드가 등장할 때까지 대기 (보통 1~3초)
+            for _ in range(40):
+                if state["auth_url"] and state["code"]:
+                    break
+                if state["done"]:
+                    break
+                _time.sleep(0.2)
+
+            return {
+                "ok": True,
+                "loginId": login_id,
+                "authUrl": state["auth_url"] or "https://auth.openai.com/codex/device",
+                "code": state["code"],
+                "done": state["done"],
+                "msg": "브라우저에서 위 URL 접속 → 코드 입력 → 로그인 완료 후 '확인' 버튼",
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _codex_login_status(self, body):
+        """device-code 로그인 진행 상태 조회 + 완료 시 auth.json 을 codex_accounts 에 저장."""
+        global _codex_login_state
+        login_id = (body or {}).get("loginId")
+        name = ((body or {}).get("name") or "Codex (ChatGPT)").strip()
+        if not login_id or login_id not in _codex_login_state:
+            return {"ok": False, "error": "loginId 없음"}
+        state = _codex_login_state[login_id]
+        proc = state["proc"]
+        # 프로세스 종료 + auth.json 생성됐는지 확인
+        rc = proc.poll()
+        auth_path = os.path.join(state["home"], "auth.json")
+        if rc is not None and os.path.exists(auth_path) and not state["saved"]:
+            try:
+                with open(auth_path, "r", encoding="utf-8") as f:
+                    creds = f.read()
+                json.loads(creds)  # validate
+                # codex_accounts INSERT
+                new_id = db_exec(
+                    "INSERT INTO codex_accounts (name, auth_type, credentials, active, created) VALUES (?,?,?,?,?)",
+                    (name, "chatgpt", creds, 0, datetime.now().isoformat()),
+                )
+                _sync_codex_account_to_dir(new_id, "chatgpt", creds)
+                state["saved"] = True
+                state["accountId"] = new_id
+                # 임시 디렉토리 정리
+                try:
+                    import shutil
+                    shutil.rmtree(state["tmp"], ignore_errors=True)
+                except Exception:
+                    pass
+                return {"ok": True, "done": True, "saved": True, "accountId": new_id,
+                        "msg": "✅ 로그인 성공 — 계정 저장됨"}
+            except Exception as e:
+                return {"ok": True, "done": True, "saved": False, "error": str(e),
+                        "lines": state["lines"][-10:]}
+        if rc is not None and not os.path.exists(auth_path):
+            return {"ok": True, "done": True, "saved": False,
+                    "error": "auth.json 미생성 (인증 실패 또는 취소)",
+                    "lines": state["lines"][-15:]}
+        return {"ok": True, "done": False, "authUrl": state["auth_url"],
+                "code": state["code"], "lines": state["lines"][-5:]}
+
+    def _codex_login_cancel(self, body):
+        global _codex_login_state
+        login_id = (body or {}).get("loginId")
+        if not login_id or login_id not in _codex_login_state:
+            return {"ok": False, "error": "loginId 없음"}
+        state = _codex_login_state.pop(login_id)
+        try: state["proc"].kill()
+        except Exception: pass
+        try:
+            import shutil
+            shutil.rmtree(state["tmp"], ignore_errors=True)
+        except Exception: pass
+        return {"ok": True}
+
+    # ═══════════════════════════════════════
     # Auth health check — 로그인 후 자동 점검 + 상단 배지용
     # ═══════════════════════════════════════
     def _auth_health(self, params=None):
@@ -6644,6 +7574,61 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 return {"provider": "gemini", "id": aid, "name": name, "ok": False,
                         "reason": f"{e}"}
 
+        def _check_codex(acc):
+            aid = acc.get("id")
+            name = acc.get("name") or f"codex#{aid}"
+            try:
+                row = db_exec("SELECT auth_type, credentials FROM codex_accounts WHERE id=?",
+                              (int(aid),), fetchone=True)
+                if not row or not row.get("credentials"):
+                    return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                            "reason": "credentials 없음"}
+                if row.get("auth_type") == "apikey":
+                    key_ok = bool((row.get("credentials") or "").strip())
+                    if not key_ok:
+                        return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                                "reason": "API key 비어있음"}
+                else:
+                    try:
+                        parsed = json.loads(row["credentials"])
+                        tokens = parsed.get("tokens") or {}
+                        if not (tokens.get("access_token") or tokens.get("id_token")):
+                            return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                                    "reason": "auth.json 에 tokens 없음"}
+                        key_ok = True
+                    except Exception:
+                        return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                                "reason": "auth.json JSON 파싱 실패"}
+            except Exception as e:
+                return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                        "reason": f"체크 오류: {e}"}
+            if quick:
+                return {"provider": "codex", "id": aid, "name": name, "ok": bool(key_ok),
+                        "reason": "credentials OK (CLI 호출 생략)" if key_ok else "credentials 비어있음"}
+            try:
+                env = get_codex_env_for_account(int(aid))
+                result = subprocess.run(
+                    ["codex", "exec", "--skip-git-repo-check", "--color", "never",
+                     "--sandbox", "read-only", "-"],
+                    input="OK", capture_output=True, text=True, timeout=30, env=env,
+                    encoding="utf-8", errors="replace",
+                )
+                out = (result.stdout or "").strip()
+                err = (result.stderr or "").strip()
+                if result.returncode == 0 and out:
+                    return {"provider": "codex", "id": aid, "name": name, "ok": True, "reason": "OK"}
+                return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                        "reason": (err or out or "응답 없음")[:160]}
+            except subprocess.TimeoutExpired:
+                return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                        "reason": "타임아웃 (30초)"}
+            except FileNotFoundError:
+                return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                        "reason": "codex CLI 미설치"}
+            except Exception as e:
+                return {"provider": "codex", "id": aid, "name": name, "ok": False,
+                        "reason": f"{e}"}
+
         try:
             claude_rows = db_exec(
                 "SELECT id, name, rate_limited_until FROM claude_accounts ORDER BY priority ASC, id ASC",
@@ -6654,14 +7639,20 @@ class TmuxHandler(SimpleHTTPRequestHandler):
                 "SELECT id, name FROM gemini_accounts ORDER BY priority ASC, id ASC",
                 fetch=True) or []
         except Exception: gemini_rows = []
+        try:
+            codex_rows = db_exec(
+                "SELECT id, name FROM codex_accounts ORDER BY priority ASC, id ASC",
+                fetch=True) or []
+        except Exception: codex_rows = []
 
         # 병렬 실행 (계정마다 thread)
         from concurrent.futures import ThreadPoolExecutor
         results = []
-        pool_size = max(1, len(claude_rows) + len(gemini_rows))
+        pool_size = max(1, len(claude_rows) + len(gemini_rows) + len(codex_rows))
         with ThreadPoolExecutor(max_workers=min(pool_size, 8)) as ex:
             futs = [ex.submit(_check_claude, dict(a)) for a in claude_rows]
             futs += [ex.submit(_check_gemini, dict(a)) for a in gemini_rows]
+            futs += [ex.submit(_check_codex, dict(a)) for a in codex_rows]
             for f in futs:
                 try:
                     results.append(f.result(timeout=35))
@@ -6670,9 +7661,11 @@ class TmuxHandler(SimpleHTTPRequestHandler):
 
         claude_results = [r for r in results if r.get("provider") == "claude"]
         gemini_results = [r for r in results if r.get("provider") == "gemini"]
+        codex_results = [r for r in results if r.get("provider") == "codex"]
         # 전체 요약 — 각 provider 최소 1개 계정이 OK 면 provider OK
         claude_ok = any(r.get("ok") for r in claude_results)
         gemini_ok = any(r.get("ok") for r in gemini_results)
+        codex_ok = any(r.get("ok") for r in codex_results)
         return {
             "ok": True,
             "checkedAt": datetime.now().isoformat(),
@@ -6683,6 +7676,9 @@ class TmuxHandler(SimpleHTTPRequestHandler):
             "gemini": {"ok": gemini_ok, "count": len(gemini_results),
                        "okCount": sum(1 for r in gemini_results if r.get("ok")),
                        "accounts": gemini_results},
+            "codex": {"ok": codex_ok, "count": len(codex_results),
+                      "okCount": sum(1 for r in codex_results if r.get("ok")),
+                      "accounts": codex_results},
         }
 
     def _claude_next_account(self, body):
